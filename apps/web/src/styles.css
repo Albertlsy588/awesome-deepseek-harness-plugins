@@ -388,6 +388,33 @@ main {
   padding-bottom: 68px;
 }
 
+.catalog-intro {
+  max-width: 780px;
+  margin-bottom: 22px;
+}
+
+.catalog-intro h1 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  line-height: 1.18;
+}
+
+.catalog-intro p {
+  max-width: 720px;
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.catalog-content > .notice {
+  margin-bottom: 16px;
+}
+
 .catalog-view-tabs {
   display: inline-flex;
   gap: 4px;
@@ -1609,6 +1636,20 @@ main {
   .catalog-content {
     padding-top: 16px;
     padding-bottom: 40px;
+  }
+
+  .catalog-intro {
+    margin-bottom: 16px;
+  }
+
+  .catalog-intro h1 {
+    font-size: 23px;
+  }
+
+  .catalog-intro p {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.55;
   }
 
   .catalog-view-tabs {

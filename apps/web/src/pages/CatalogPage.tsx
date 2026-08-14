@@ -16,6 +16,7 @@ import {
 } from '../lib/api'
 import { formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
+import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
 const RANKING_MODES: RankingMode[] = [
@@ -130,10 +131,43 @@ export function CatalogPage({ view }: CatalogPageProps) {
   const sourceWarning = catalog?.meta.source === 'stale' ? t('stale') : null
   const catalogHref = query ? `/plugin?q=${encodeURIComponent(query)}` : '/plugin'
   const rankingsHref = query ? `/rankings?q=${encodeURIComponent(query)}` : '/rankings'
+  const canonicalPath = view === 'catalog' ? '/plugin' : '/rankings'
+  const seoTitle = t(view === 'catalog' ? 'catalogSeoTitle' : 'rankingsSeoTitle')
+  const seoDescription = t(
+    view === 'catalog' ? 'catalogSeoDescription' : 'rankingsSeoDescription',
+  )
+  const hasIndexableFilters = Boolean(query || category || requestedSort)
+
+  usePageSeo({
+    title: seoTitle,
+    description: seoDescription,
+    path: canonicalPath,
+    language,
+    robots: hasIndexableFilters ? 'noindex,follow' : 'index,follow',
+    schema: {
+      '@context': 'https://schema.org',
+      '@type': 'CollectionPage',
+      '@id': `${SITE_ORIGIN}${canonicalPath}#webpage`,
+      url: `${SITE_ORIGIN}${canonicalPath}`,
+      name: seoTitle,
+      description: seoDescription,
+      isPartOf: {
+        '@type': 'WebSite',
+        '@id': `${SITE_ORIGIN}/#website`,
+        name: 'DeepSeek Harness Plugin Store',
+        url: `${SITE_ORIGIN}/`,
+      },
+    },
+  })
 
   return (
     <div className={`catalog-page ${view === 'rankings' ? 'rankings-page' : 'directory-page'}`}>
       <div className="page-container catalog-content">
+        <header className="catalog-intro">
+          <h1>{t(view === 'catalog' ? 'catalogHeading' : 'rankingsHeading')}</h1>
+          <p>{t(view === 'catalog' ? 'catalogIntro' : 'rankingsIntro')}</p>
+        </header>
+
         {sourceWarning && (
           <div className="notice notice-warning" role="status">
             <AlertCircle size={17} aria-hidden="true" />

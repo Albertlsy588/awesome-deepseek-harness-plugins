@@ -21,6 +21,7 @@ import { OwnerAvatar } from '../components/OwnerAvatar'
 import { getPackage, repositoryName, type CategoryResult, type PackageDetail } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
+import { fitSeoText, SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 const CATEGORY_LABELS: Record<string, CategoryResult> = {
   ui: { id: 'ui', en: 'UI Enhancements', zh: 'UI 增强', count: 0 },
@@ -51,6 +52,83 @@ export function PackagePage() {
       })
     return () => controller.abort()
   }, [name, owner, reload, t])
+
+  const canonicalOwner = detail?.owner ?? owner
+  const canonicalRepository = detail ? repositoryName(detail) : name
+  const canonicalPath = `/plugin/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`
+  const canonicalUrl = `${SITE_ORIGIN}${canonicalPath}`
+  const seoTitle = detail
+    ? fitSeoText(
+        language === 'zh'
+          ? `${detail.name} DeepSeek Harness 插件 | DSH 插件市场`
+          : `${detail.name} DeepSeek Harness Plugin | DSH Store`,
+        60,
+      )
+    : error
+      ? language === 'zh' ? '插件未找到 | DSH 插件市场' : 'Plugin not found | DSH Store'
+      : language === 'zh' ? 'DeepSeek Harness 插件 | DSH 插件市场' : 'DeepSeek Harness Plugin | DSH Store'
+  const seoDescription = detail
+    ? fitSeoText(
+        language === 'zh'
+          ? `了解由 ${detail.owner} 开发的 DeepSeek Harness 插件 ${detail.name}。${detail.description.zh}`
+          : `Explore ${detail.name}, a DeepSeek Harness plugin by ${detail.owner}. ${detail.description.en}`,
+        160,
+      )
+    : language === 'zh'
+      ? '浏览 DeepSeek Harness 社区插件的功能、安装命令与仓库信息。'
+      : 'Explore features, install commands, and repository details for a DeepSeek Harness community plugin.'
+  const schema = detail
+    ? {
+        '@context': 'https://schema.org',
+        '@graph': [
+          {
+            '@type': 'WebPage',
+            '@id': `${canonicalUrl}#webpage`,
+            url: canonicalUrl,
+            name: seoTitle,
+            description: seoDescription,
+            isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
+            mainEntity: { '@id': `${canonicalUrl}#software` },
+          },
+          {
+            '@type': 'SoftwareSourceCode',
+            '@id': `${canonicalUrl}#software`,
+            name: detail.name,
+            description: detail.description[language],
+            codeRepository: detail.url,
+            runtimePlatform: 'DeepSeek Harness',
+            dateCreated: detail.added,
+            license: detail.manifest?.license ?? detail.github?.license ?? undefined,
+          },
+          {
+            '@type': 'BreadcrumbList',
+            itemListElement: [
+              {
+                '@type': 'ListItem',
+                position: 1,
+                name: t('catalog'),
+                item: `${SITE_ORIGIN}/plugin`,
+              },
+              {
+                '@type': 'ListItem',
+                position: 2,
+                name: detail.name,
+                item: canonicalUrl,
+              },
+            ],
+          },
+        ],
+      }
+    : null
+
+  usePageSeo({
+    title: seoTitle,
+    description: seoDescription,
+    path: canonicalPath,
+    language,
+    robots: detail ? 'index,follow' : 'noindex,follow',
+    schema,
+  })
 
   if (error) {
     return (
@@ -194,6 +272,9 @@ export function PackagePage() {
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
+                    h1: ({ children }) => <h3>{children}</h3>,
+                    h2: ({ children }) => <h3>{children}</h3>,
+                    h3: ({ children }) => <h4>{children}</h4>,
                     a: ({ href, children }) => (
                       <a href={readmeLink(href)} target={href?.startsWith('#') ? undefined : '_blank'} rel="noreferrer">
                         {children}

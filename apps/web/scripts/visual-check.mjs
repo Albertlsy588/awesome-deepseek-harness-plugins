@@ -23,6 +23,27 @@ async function assertNoHorizontalOverflow(page, label) {
   if (overflow) throw new Error(`${label} has horizontal overflow`)
 }
 
+async function assertSeo(page, label, canonicalPath, robots = 'index,follow') {
+  const result = await page.evaluate(() => ({
+    canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
+    description: document.querySelector('meta[name="description"]')?.getAttribute('content'),
+    h1Count: document.querySelectorAll('h1').length,
+    robots: document.querySelector('meta[name="robots"]')?.getAttribute('content'),
+    title: document.title,
+  }))
+  if (result.canonical !== `https://deepseek1024.com${canonicalPath}`) {
+    throw new Error(`${label} has an incorrect canonical URL: ${result.canonical}`)
+  }
+  if (!result.description || result.description.length < 50) {
+    throw new Error(`${label} is missing a useful meta description`)
+  }
+  if (result.h1Count !== 1) throw new Error(`${label} should render exactly one H1`)
+  if (result.robots !== robots) throw new Error(`${label} has incorrect robots metadata`)
+  if (!result.title || result.title === 'DeepSeek Harness Store') {
+    throw new Error(`${label} is missing page-specific title metadata`)
+  }
+}
+
 async function assertLiveStats(page) {
   await page.waitForFunction(
     () => [...document.querySelectorAll('.header-live strong')].every((node) => node.textContent !== '--'),
@@ -48,6 +69,7 @@ try {
     throw new Error('directory sort controls should only contain stars, newest, and active')
   }
   await assertLiveStats(desktop)
+  await assertSeo(desktop, 'desktop catalog', '/plugin')
   await assertNoHorizontalOverflow(desktop, 'desktop catalog')
   await desktop.close()
 
@@ -86,6 +108,7 @@ try {
   if ((await rankings.locator('footer, .reset-button').count()) !== 0) {
     throw new Error('removed footer or refresh control is still rendered')
   }
+  await assertSeo(rankings, 'desktop rankings', '/rankings')
   await rankings.locator('.ranking-section .segmented-control button').last().click()
   await rankings.locator('.ranking-section .package-row').first().waitFor()
   const rankingSearchResponse = rankings.waitForResponse(
@@ -114,6 +137,7 @@ try {
   )
   await mobile.locator('input[type="search"]').fill('crosstalk')
   await searchResponse
+  await assertSeo(mobile, 'filtered mobile catalog', '/plugin', 'noindex,follow')
   if ((await mobile.locator('.directory-section .package-row').count()) === 0) {
     throw new Error('search returned no package rows')
   }
@@ -126,6 +150,7 @@ try {
 
   const detail = await openPage({ width: 1440, height: 1000 }, '/plugin/openma-ai/deepseek-harness-tui')
   await detail.locator('.detail-header').waitFor()
+  await assertSeo(detail, 'desktop detail', '/plugin/openma-ai/deepseek-harness-tui')
   await assertNoHorizontalOverflow(detail, 'desktop detail')
   await detail.locator('.brand-mark').click()
   await detail.waitForURL('**/rankings')
