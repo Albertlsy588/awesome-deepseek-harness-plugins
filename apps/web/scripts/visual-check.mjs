@@ -46,7 +46,7 @@ async function assertSeo(page, label, canonicalPath, robots = 'index,follow') {
 
 async function assertLiveStats(page) {
   await page.waitForFunction(
-    () => [...document.querySelectorAll('.header-live strong')].every((node) => node.textContent !== '--'),
+    () => [...document.querySelectorAll('.hero-live dd')].every((node) => node.textContent !== '--'),
     undefined,
     { timeout: 10_000 },
   )
@@ -93,14 +93,17 @@ try {
   if (!(await rankings.locator('.site-bottom-link p').textContent())?.includes('DeepSeek')) {
     throw new Error('unofficial project notice is missing from the page bottom')
   }
-  if ((await rankings.locator('header .github-link[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"]').count()) !== 1) {
-    throw new Error('GitHub repository link is missing from the desktop header')
+  if ((await rankings.locator('.catalog-hero .github-link[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"]').count()) !== 1) {
+    throw new Error('GitHub repository link is missing from the catalog banner')
   }
-  if ((await rankings.locator('header .header-submit[href="/CONTRIBUTING.md"]').count()) !== 1) {
+  if ((await rankings.locator('.catalog-hero .hero-submit[href="/CONTRIBUTING.md"]').count()) !== 1) {
     throw new Error('submit button does not link to the contribution guide')
   }
-  if ((await rankings.locator('header a.brand[href="/"]').count()) !== 1) {
-    throw new Error('header brand does not link to the home page')
+  if ((await rankings.locator('.catalog-hero a.hero-brand[href="/"]').count()) !== 1) {
+    throw new Error('banner brand does not link to the home page')
+  }
+  if ((await rankings.locator('.site-header').count()) !== 0) {
+    throw new Error('the removed standalone site header is still rendered')
   }
   if ((await rankings.locator('a[href^="/plugin/"]').count()) === 0) {
     throw new Error('catalog cards do not use the canonical singular plugin path')
@@ -152,7 +155,7 @@ try {
   await detail.locator('.detail-header').waitFor()
   await assertSeo(detail, 'desktop detail', '/plugin/openma-ai/deepseek-harness-tui')
   await assertNoHorizontalOverflow(detail, 'desktop detail')
-  await detail.locator('.brand-mark').click()
+  await detail.locator('.detail-brand').click()
   await detail.waitForURL('**/rankings')
   await detail.locator('.ranking-section').waitFor()
   await detail.close()
@@ -160,7 +163,7 @@ try {
   const scoped = await openPage({ width: 390, height: 844 }, '/plugin/zhaoolee/notes')
   await scoped.locator('.detail-header').waitFor()
   await assertNoHorizontalOverflow(scoped, 'scoped package detail')
-  await scoped.locator('.brand-copy').click()
+  await scoped.locator('.detail-brand').click()
   await scoped.waitForURL('**/rankings')
   await scoped.locator('.ranking-section').waitFor()
   await scoped.close()

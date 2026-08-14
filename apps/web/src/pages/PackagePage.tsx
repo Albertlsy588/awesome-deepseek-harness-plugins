@@ -17,6 +17,7 @@ import { Link, useParams } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
 import { CategoryTag } from '../components/CategoryTag'
 import { InstallCommand } from '../components/InstallCommand'
+import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
 import { getPackage, repositoryName, type CategoryResult, type PackageDetail } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
@@ -184,6 +185,14 @@ export function PackagePage() {
 
   return (
     <div className="page-container package-detail-page">
+      <div className="detail-utility">
+        <Link className="detail-brand" to="/" aria-label="DeepSeek Harness Store homepage">
+          <img className="brand-mark" src="/deepseek1024-icon.png" alt="" aria-hidden="true" />
+          <span>DeepSeek Harness <strong>{t('market')}</strong></span>
+        </Link>
+        <LanguageSwitch />
+      </div>
+
       <Link className="back-link" to="/plugin">
         <ArrowLeft size={16} aria-hidden="true" />
         {t('back')}
