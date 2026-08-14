@@ -74,11 +74,11 @@ try {
   if ((await rankings.locator('header .github-link[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"]').count()) !== 1) {
     throw new Error('GitHub repository link is missing from the desktop header')
   }
-  if ((await rankings.locator('header .header-submit[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"]').count()) !== 1) {
-    throw new Error('submit button does not link to the GitHub repository homepage')
+  if ((await rankings.locator('header .header-submit[href="/CONTRIBUTING.md"]').count()) !== 1) {
+    throw new Error('submit button does not link to the contribution guide')
   }
-  if ((await rankings.locator('header a[href^="/plugin"], header a[href^="/rankings"]').count()) !== 1) {
-    throw new Error('internal view navigation is duplicated in the header')
+  if ((await rankings.locator('header a.brand[href="/"]').count()) !== 1) {
+    throw new Error('header brand does not link to the home page')
   }
   if ((await rankings.locator('a[href^="/plugin/"]').count()) === 0) {
     throw new Error('catalog cards do not use the canonical singular plugin path')
@@ -127,15 +127,21 @@ try {
   const detail = await openPage({ width: 1440, height: 1000 }, '/plugin/openma-ai/deepseek-harness-tui')
   await detail.locator('.detail-header').waitFor()
   await assertNoHorizontalOverflow(detail, 'desktop detail')
+  await detail.locator('.brand-mark').click()
+  await detail.waitForURL('**/rankings')
+  await detail.locator('.ranking-section').waitFor()
   await detail.close()
 
   const scoped = await openPage({ width: 390, height: 844 }, '/plugin/zhaoolee/notes')
   await scoped.locator('.detail-header').waitFor()
   await assertNoHorizontalOverflow(scoped, 'scoped package detail')
+  await scoped.locator('.brand-copy').click()
+  await scoped.waitForURL('**/rankings')
+  await scoped.locator('.ranking-section').waitFor()
   await scoped.close()
 
   if (errors.length > 0) throw new Error(`browser errors:\n${errors.join('\n')}`)
-  console.log('Visual smoke check passed: separate directory/rankings views, live stats, desktop, mobile, search, and package details.')
+  console.log('Visual smoke check passed: home navigation, separate directory/rankings views, live stats, desktop, mobile, search, and package details.')
 } finally {
   await context.close()
   await browser.close()

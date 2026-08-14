@@ -12,7 +12,7 @@ export function AppShell() {
     <div className="app-shell">
       <header className="site-header">
         <div className="header-inner">
-          <Link className="brand" to="/rankings" aria-label="DeepSeek Harness Store">
+          <Link className="brand" to="/" aria-label="DeepSeek Harness Store homepage">
             <img className="brand-mark" src="/deepseek1024-icon.png" alt="" aria-hidden="true" />
             <span className="brand-copy">
               <strong>
