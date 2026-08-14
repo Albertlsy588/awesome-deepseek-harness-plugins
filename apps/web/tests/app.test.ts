@@ -19,6 +19,19 @@ function testApp() {
 }
 
 describe('market API', () => {
+  it('publishes crawl controls and redirects the root to the canonical rankings page', async () => {
+    const app = testApp()
+    const root = await app.request('https://store.example/')
+    const robots = await app.request('https://store.example/robots.txt')
+    const sitemap = await app.request('https://store.example/sitemap.xml')
+
+    expect(root.status).toBe(301)
+    expect(root.headers.get('Location')).toBe('https://store.example/rankings')
+    expect(await robots.text()).toContain('Sitemap: https://deepseek1024.com/sitemap.xml')
+    expect(sitemap.headers.get('Content-Type')).toContain('application/xml')
+    expect(await sitemap.text()).toContain('<loc>https://deepseek1024.com/plugin</loc>')
+  })
+
   it('reports service health', async () => {
     const response = await testApp().request('/api/health')
     expect(response.status).toBe(200)
@@ -39,6 +52,7 @@ describe('market API', () => {
   it('permanently redirects legacy package URLs to canonical plugin paths', async () => {
     const app = testApp()
     const catalog = await app.request('https://store.example/packages?q=terminal')
+    const trailingCatalog = await app.request('https://store.example/packages/?q=terminal')
     const detail = await app.request(
       'https://store.example/packages/openma-ai/deepseek-harness-tui?source=legacy',
     )
@@ -49,6 +63,8 @@ describe('market API', () => {
 
     expect(catalog.status).toBe(301)
     expect(catalog.headers.get('Location')).toBe('https://store.example/plugin?q=terminal')
+    expect(trailingCatalog.status).toBe(301)
+    expect(trailingCatalog.headers.get('Location')).toBe('https://store.example/plugin?q=terminal')
     expect(detail.status).toBe(301)
     expect(detail.headers.get('Location')).toBe(
       'https://store.example/plugin/openma-ai/deepseek-harness-tui?source=legacy',

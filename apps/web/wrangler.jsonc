@@ -38,8 +38,9 @@
     "crons": ["*/15 * * * *"]
   },
   "assets": {
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/plugins.json", "/packages", "/packages/*"]
+    "run_worker_first": true
   },
   "observability": {
     "enabled": true,

@@ -1,8 +1,36 @@
 import { createApp } from './app'
 import { runScheduledCatalogRefresh } from './lib/catalog-store'
+import { metadataForPath, rewriteHtmlResponse } from './seo'
 
 const STATS_OBJECT_NAME = 'global'
 const app = createApp()
+
+function isWorkerRoute(pathname: string): boolean {
+  return pathname === '/' ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
+    pathname === '/plugins.json' ||
+    pathname === '/packages' ||
+    pathname.startsWith('/packages/') ||
+    pathname.startsWith('/api/')
+}
+
+function isFilteredCollection(url: URL): boolean {
+  if (url.pathname !== '/plugin' && url.pathname !== '/rankings') return false
+  return url.searchParams.has('q') ||
+    url.searchParams.has('category') ||
+    url.searchParams.has('sort')
+}
+
+function canonicalTrailingSlashRedirect(url: URL): Response | null {
+  const shouldRedirect = url.pathname === '/plugin/' ||
+    url.pathname === '/rankings/' ||
+    /^\/plugin\/[^/]+\/[^/]+\/$/.test(url.pathname)
+  if (!shouldRedirect) return null
+  const canonical = new URL(url)
+  canonical.pathname = canonical.pathname.slice(0, -1)
+  return Response.redirect(canonical.toString(), 301)
+}
 
 async function handleLiveStats(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'GET') {
@@ -18,7 +46,16 @@ const worker = {
   fetch(request, env, ctx) {
     const url = new URL(request.url)
     if (url.pathname === '/api/live') return handleLiveStats(request, env)
-    return app.fetch(request, env, ctx)
+    const trailingSlashRedirect = canonicalTrailingSlashRedirect(url)
+    if (trailingSlashRedirect) return trailingSlashRedirect
+    if (isWorkerRoute(url.pathname)) return app.fetch(request, env, ctx)
+
+    return env.ASSETS.fetch(request).then((response) => {
+      if (!response.headers.get('Content-Type')?.includes('text/html')) return response
+      const metadata = metadataForPath(url.pathname)
+      if (isFilteredCollection(url)) metadata.robots = 'noindex,follow'
+      return rewriteHtmlResponse(response, metadata)
+    })
   },
   scheduled(controller, env, ctx) {
     ctx.waitUntil(runScheduledCatalogRefresh(env, controller.scheduledTime))

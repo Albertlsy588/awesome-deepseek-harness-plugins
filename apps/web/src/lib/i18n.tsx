@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Language } from './api'
 
 const messages = {
@@ -12,6 +12,14 @@ const messages = {
     market: 'Plugin Market',
     title: 'DeepSeek Harness Plugin Store',
     subtitle: 'The community package index for DeepSeek Harness.',
+    catalogHeading: 'DeepSeek Harness Plugins',
+    catalogIntro: 'Browse curated plugins and extensions for DeepSeek Harness. Compare GitHub activity, explore capabilities, and copy the install command you need.',
+    catalogSeoTitle: 'DeepSeek Harness Plugins & Extensions | DSH Store',
+    catalogSeoDescription: 'Browse curated DeepSeek Harness plugins and extensions. Compare GitHub activity, explore categories, and copy install commands from the community catalog.',
+    rankingsHeading: 'DeepSeek Harness Plugin Rankings',
+    rankingsIntro: 'Compare community plugins by GitHub stars, recent growth, releases, and repository activity to find established and emerging tools.',
+    rankingsSeoTitle: 'DeepSeek Harness Plugin Rankings | DSH Store',
+    rankingsSeoDescription: 'Compare popular DeepSeek Harness plugins by GitHub stars, recent growth, releases, and repository activity in the community plugin rankings.',
     allPackages: 'All packages',
     search: 'Search packages',
     searchPlaceholder: 'Search by package, author, or capability',
@@ -96,6 +104,14 @@ const messages = {
     market: '插件市场',
     title: 'DeepSeek Harness 插件市场',
     subtitle: 'DeepSeek Harness 的社区插件索引。',
+    catalogHeading: 'DeepSeek Harness 插件目录',
+    catalogIntro: '浏览社区精选的 DeepSeek Harness 插件与扩展，比较 GitHub 活跃度、探索不同能力，并直接复制所需的安装命令。',
+    catalogSeoTitle: 'DeepSeek Harness 插件与扩展 | DSH 插件市场',
+    catalogSeoDescription: '浏览精选 DeepSeek Harness 插件与扩展，按分类探索功能、比较 GitHub 活跃度，并从社区目录中直接复制安装命令。',
+    rankingsHeading: 'DeepSeek Harness 插件排行榜',
+    rankingsIntro: '按 GitHub Star、近期增长、发布记录与仓库活跃度比较社区插件，发现成熟工具与潜力新项目。',
+    rankingsSeoTitle: 'DeepSeek Harness 插件排行榜 | DSH 插件市场',
+    rankingsSeoDescription: '查看 DeepSeek Harness 社区插件排行榜，比较 GitHub Star、近期增长、发布记录与仓库活跃度。',
     allPackages: '全部插件',
     search: '搜索插件',
     searchPlaceholder: '按插件、作者或能力搜索',
@@ -190,6 +206,9 @@ function initialLanguage(): Language {
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, updateLanguage] = useState<Language>(initialLanguage)
+  useEffect(() => {
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en'
+  }, [language])
   const value = useMemo<I18nValue>(
     () => ({
       language,
