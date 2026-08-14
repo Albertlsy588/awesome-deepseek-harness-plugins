@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "zimai233/dsh-wash-calendar",
+  "name": "dsh-wash-calendar",
+  "repository": "https://github.com/zimai233/dsh-wash-calendar",
+  "category": "tools",
+  "description": {
+    "en": "Recurring-habit scheduling from pure date math: next occurrence, range schedules, and overdue advice.",
+    "zh": "基于纯日期数学的周期习惯排程：下次发生日、区间排程与逾期提醒。"
+  },
+  "added": "2026-08-14"
+}

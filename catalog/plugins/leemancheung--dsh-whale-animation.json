@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "LeemanCheung/dsh-whale-animation",
+  "name": "dsh-whale-animation",
+  "repository": "https://github.com/LeemanCheung/dsh-whale-animation",
+  "category": "ui",
+  "description": {
+    "en": "Persistent black whale-dive animation beside the DSH Web turn status, with a reduced-motion fallback and a seamless closed loop.",
+    "zh": "DSH Web 状态文字旁的持久化黑色鲸鱼深潜动画，提供减少动态效果回退与无缝闭环。"
+  },
+  "added": "2026-08-14"
+}

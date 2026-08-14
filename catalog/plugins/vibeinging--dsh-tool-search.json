@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "vibeinging/dsh-tool-search",
+  "name": "dsh-tool-search",
+  "repository": "https://github.com/vibeinging/dsh-tool-search",
+  "category": "tools",
+  "description": {
+    "en": "Per-agent on-demand tool discovery and progressive schema disclosure.",
+    "zh": "按 agent 的按需工具发现与渐进式 schema 披露。"
+  },
+  "added": "2026-08-13"
+}

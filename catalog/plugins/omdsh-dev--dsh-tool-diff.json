@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-tool-diff",
+  "name": "dsh-tool-diff",
+  "repository": "https://github.com/omdsh-dev/dsh-tool-diff",
+  "category": "tools",
+  "description": {
+    "en": "Structured comparison and unified diffs for text/JSON/CSV/Markdown.",
+    "zh": "文本/JSON/CSV/Markdown 结构化比较与 unified diff。"
+  },
+  "added": "2026-08-13"
+}

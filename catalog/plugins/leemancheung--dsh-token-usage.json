@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "LeemanCheung/dsh-token-usage",
+  "name": "dsh-token-usage",
+  "repository": "https://github.com/LeemanCheung/dsh-token-usage",
+  "category": "session",
+  "description": {
+    "en": "Persistent per-session Token usage records and a settings dashboard with provider/model breakdowns and a 52-week activity heatmap.",
+    "zh": "持久化记录每个会话的 Token 用量，在设置页提供 provider/model 统计与最近 52 周活跃度热力图。"
+  },
+  "added": "2026-08-14"
+}

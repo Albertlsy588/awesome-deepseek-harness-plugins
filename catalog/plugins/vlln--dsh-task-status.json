@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "vlln/dsh-task-status",
+  "name": "dsh-task-status",
+  "repository": "https://github.com/vlln/dsh-task-status",
+  "category": "ui",
+  "description": {
+    "en": "Background task status bar: progress plus live output tail on the chat page.",
+    "zh": "后台任务状态条：对话页任务进度 + 实时输出 tail。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "LeemanCheung/dsh-task-dag",
+  "name": "dsh-task-dag",
+  "repository": "https://github.com/LeemanCheung/dsh-task-dag",
+  "category": "ui",
+  "description": {
+    "en": "Displays a Session's subagents and durable workflow runs as a live DAG with status, navigation, and restart-safe history.",
+    "zh": "将会话子代理与持久工作流运行展示为实时 DAG，支持状态展示、节点导航与重启后历史恢复。"
+  },
+  "added": "2026-08-14"
+}

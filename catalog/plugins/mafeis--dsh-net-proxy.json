@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "mafeis/dsh-net-proxy",
+  "name": "dsh-net-proxy",
+  "repository": "https://github.com/mafeis/dsh-net-proxy",
+  "category": "tools",
+  "description": {
+    "en": "Route agent network requests through a local HTTP/CONNECT/SOCKS5 proxy.",
+    "zh": "让 agent 的网络请求走本机 HTTP/CONNECT/SOCKS5 代理。"
+  },
+  "added": "2026-08-14"
+}

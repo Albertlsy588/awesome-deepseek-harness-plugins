@@ -1,0 +1,199 @@
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import type { Language } from './api'
+
+const messages = {
+  en: {
+    catalog: 'Catalog',
+    rankings: 'Rankings',
+    submit: 'Submit package',
+    about: 'Harness',
+    officialHarness: 'DeepSeek Harness official',
+    unofficialNotice: 'Independent community project. Not affiliated with or endorsed by DeepSeek.',
+    market: 'Plugin Market',
+    title: 'DeepSeek Harness Plugin Store',
+    subtitle: 'The community package index for DeepSeek Harness.',
+    allPackages: 'All packages',
+    search: 'Search packages',
+    searchPlaceholder: 'Search by package, author, or capability',
+    category: 'Category',
+    categories: 'Categories',
+    allCategories: 'All',
+    sort: 'Sort packages',
+    sortStars: 'Stars',
+    sortNewest: 'Published',
+    sortActive: 'Active',
+    sortName: 'Name',
+    reset: 'Reset filters',
+    result: 'package',
+    results: 'packages',
+    updated: 'Registry updated',
+    snapshotUpdated: 'Data updated',
+    stale: 'A background refresh is running. Showing the latest stored catalog snapshot.',
+    by: 'by',
+    added: 'Added',
+    install: 'Install',
+    copy: 'Copy install command',
+    copied: 'Copied',
+    details: 'View details',
+    repository: 'Repository',
+    emptyTitle: 'No packages match these filters',
+    emptyBody: 'Try a shorter search or clear the selected category.',
+    retry: 'Try again',
+    loadError: 'The package catalog could not be loaded.',
+    rank: 'Rank',
+    topStars: 'Top stars',
+    latestReleases: 'Latest releases',
+    recentlyActive: 'Recently active',
+    totalPlugins: 'Packages',
+    trackedRepositories: 'Repos tracked',
+    views: 'views',
+    online: 'online',
+    totalViews: 'Total page views',
+    onlineNow: 'Current online visitors',
+    latestRelease: 'Latest release',
+    back: 'Back to catalog',
+    overview: 'Overview',
+    packageInfo: 'Package information',
+    source: 'Source',
+    report: 'Report',
+    stars: 'Stars',
+    forks: 'Forks',
+    issues: 'Issues',
+    lastPush: 'Last push',
+    version: 'Version',
+    license: 'License',
+    bundlePatch: 'Bundle patch',
+    dependencies: 'Dependencies',
+    peerDependencies: 'Peer dependencies',
+    runtime: 'Runtime',
+    unavailable: 'Unavailable',
+    verifiedBundle: 'Bundle manifest found',
+    verifiedBody: 'This repository declares a dsh.bundle.patch entry for Harness profile loading.',
+    unverifiedBundle: 'Bundle manifest not confirmed',
+    unverifiedBody: 'The repository could not be verified or does not declare dsh.bundle.patch.',
+    securityTitle: 'Review before installing',
+    securityBody: 'Community packages run as trusted code on your machine. Inspect the source and pin a revision for sensitive environments.',
+    readme: 'README',
+    noReadme: 'No README was available for this package.',
+    notFound: 'Package not found',
+    notFoundBody: 'This package is not in the curated DSH registry.',
+    footerRegistry: 'Catalog JSON',
+    footerSource: 'Contribute',
+  },
+  zh: {
+    catalog: '插件目录',
+    rankings: '排行榜',
+    submit: '提交插件',
+    about: 'Harness',
+    officialHarness: 'DeepSeek Harness 官网',
+    unofficialNotice: '本站为社区维护的非官方项目，与 DeepSeek 官方无隶属或关联关系。',
+    market: '插件市场',
+    title: 'DeepSeek Harness 插件市场',
+    subtitle: 'DeepSeek Harness 的社区插件索引。',
+    allPackages: '全部插件',
+    search: '搜索插件',
+    searchPlaceholder: '按插件、作者或能力搜索',
+    category: '分类',
+    categories: '全部分类',
+    allCategories: '全部',
+    sort: '插件排序',
+    sortStars: 'Star 数',
+    sortNewest: '最新发布',
+    sortActive: '最近活跃',
+    sortName: '名称',
+    reset: '重置筛选',
+    result: '个插件',
+    results: '个插件',
+    updated: '目录更新于',
+    snapshotUpdated: '数据更新',
+    stale: '后台正在刷新，当前展示最近一次保存的目录数据。',
+    by: '作者',
+    added: '收录于',
+    install: '安装',
+    copy: '复制安装命令',
+    copied: '已复制',
+    details: '查看详情',
+    repository: '代码仓库',
+    emptyTitle: '没有符合条件的插件',
+    emptyBody: '可以缩短关键词，或清除当前分类。',
+    retry: '重试',
+    loadError: '插件目录加载失败。',
+    rank: '排名',
+    topStars: 'Star 榜',
+    latestReleases: '最新发布',
+    recentlyActive: '最近活跃',
+    totalPlugins: '插件总数',
+    trackedRepositories: '已追踪仓库',
+    views: '浏览',
+    online: '在线',
+    totalViews: '页面总浏览量',
+    onlineNow: '当前在线人数',
+    latestRelease: '最新发布',
+    back: '返回插件目录',
+    overview: '概览',
+    packageInfo: '插件信息',
+    source: '源码',
+    report: '反馈问题',
+    stars: 'Stars',
+    forks: 'Forks',
+    issues: 'Issues',
+    lastPush: '最近提交',
+    version: '版本',
+    license: '许可证',
+    bundlePatch: 'Bundle patch',
+    dependencies: '依赖',
+    peerDependencies: 'Peer 依赖',
+    runtime: '运行时',
+    unavailable: '暂无',
+    verifiedBundle: '已识别 Bundle 清单',
+    verifiedBody: '该仓库声明了 dsh.bundle.patch，可由 Harness profile 加载。',
+    unverifiedBundle: '尚未确认 Bundle 清单',
+    unverifiedBody: '仓库暂时无法验证，或没有声明 dsh.bundle.patch。',
+    securityTitle: '安装前请审查源码',
+    securityBody: '社区插件会作为受信任代码在本机运行。敏感环境中请检查源码并固定版本。',
+    readme: 'README',
+    noReadme: '这个插件暂时没有可读取的 README。',
+    notFound: '未找到插件',
+    notFoundBody: '该插件不在 DSH 社区精选目录中。',
+    footerRegistry: '目录 JSON',
+    footerSource: '参与收录',
+  },
+} as const
+
+type MessageKey = keyof (typeof messages)['en']
+
+interface I18nValue {
+  language: Language
+  setLanguage: (language: Language) => void
+  t: (key: MessageKey) => string
+}
+
+const I18nContext = createContext<I18nValue | null>(null)
+
+function initialLanguage(): Language {
+  const stored = window.localStorage.getItem('dsh-store-language')
+  if (stored === 'en' || stored === 'zh') return stored
+  return window.navigator.language.toLocaleLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [language, updateLanguage] = useState<Language>(initialLanguage)
+  const value = useMemo<I18nValue>(
+    () => ({
+      language,
+      setLanguage(nextLanguage) {
+        window.localStorage.setItem('dsh-store-language', nextLanguage)
+        updateLanguage(nextLanguage)
+      },
+      t: (key) => messages[language][key],
+    }),
+    [language],
+  )
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
+}
+
+export function useI18n(): I18nValue {
+  const value = useContext(I18nContext)
+  if (!value) throw new Error('useI18n must be used inside I18nProvider')
+  return value
+}

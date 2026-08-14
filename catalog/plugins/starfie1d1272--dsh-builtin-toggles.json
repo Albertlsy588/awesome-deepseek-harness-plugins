@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Starfie1d1272/dsh-builtin-toggles",
+  "name": "dsh-builtin-toggles",
+  "repository": "https://github.com/Starfie1d1272/dsh-builtin-toggles",
+  "category": "ui",
+  "description": {
+    "en": "Adds a built-in plugin catalog to DSH Web with search, status explanations, and safe toggles for audited UI plugins.",
+    "zh": "为 DSH Web 添加官方内置插件目录、搜索与状态说明，并提供经过审核的安全 UI 插件开关。"
+  },
+  "added": "2026-08-14"
+}

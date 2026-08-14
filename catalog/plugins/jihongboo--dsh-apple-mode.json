@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "jihongboo/dsh-apple-mode",
+  "name": "dsh-apple-mode",
+  "repository": "https://github.com/jihongboo/dsh-apple-mode",
+  "category": "tools",
+  "description": {
+    "en": "Xcode AI integration for DSH: 26 Xcode MCP tools (mcpbridge) + Apple platform skills + Xcode Intelligence-style persona (agent preset or global bundle).",
+    "zh": "DSH 的 Xcode AI 集成：26 个 Xcode MCP 工具（mcpbridge）+ Apple 平台技能 + Xcode Intelligence 风格 persona（agent preset 或全局 bundle）。"
+  },
+  "added": "2026-08-14"
+}

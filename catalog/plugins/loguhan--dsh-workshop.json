@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "loguhan/dsh-workshop",
+  "name": "dsh-workshop",
+  "repository": "https://github.com/loguhan/dsh-workshop",
+  "category": "tools",
+  "description": {
+    "en": "Steam Workshop-style plugin store for the DSH Web UI: browse, search, and one-click install community plugins with mirror acceleration, progress UI, security checks, and Chinese descriptions.",
+    "zh": "DSH Web UI 的 Steam 创意工坊式插件商店：浏览、搜索并一键安装社区插件，支持镜像加速、进度 UI、安全检测与中文描述。"
+  },
+  "added": "2026-08-14"
+}

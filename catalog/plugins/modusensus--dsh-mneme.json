@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "modusensus/dsh-mneme",
+  "name": "dsh-mneme",
+  "repository": "https://github.com/modusensus/dsh-mneme",
+  "category": "memory",
+  "description": {
+    "en": "Cross-session memory: SQLite with a human-editable Markdown mirror, background consolidation (dedup, merge, conflict resolution), and six memory tools.",
+    "zh": "跨会话记忆：SQLite + 可人工编辑的 Markdown 镜像，后台自动巩固（去重/合并/冲突裁决），提供 6 个记忆工具。"
+  },
+  "added": "2026-08-14"
+}

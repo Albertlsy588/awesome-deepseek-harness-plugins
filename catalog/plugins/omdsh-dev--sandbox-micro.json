@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/sandbox-micro",
+  "name": "sandbox-micro",
+  "repository": "https://github.com/omdsh-dev/sandbox-micro",
+  "category": "dev",
+  "description": {
+    "en": "Support for the microsandbox backend.",
+    "zh": "microsandbox 沙箱支持。"
+  },
+  "added": "2026-08-13"
+}

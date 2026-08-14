@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-at-file",
+  "name": "dsh-at-file",
+  "repository": "https://github.com/omdsh-dev/dsh-at-file",
+  "category": "ui",
+  "description": {
+    "en": "Codex-style `@file` mentions: search workspace files in the composer and attach their contents to prompts.",
+    "zh": "Codex 风格的 `@file` 文件引用，输入框里直接搜索并引用工作区文件。"
+  },
+  "added": "2026-08-13"
+}

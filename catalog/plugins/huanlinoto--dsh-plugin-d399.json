@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "HuanLinOTO/dsh-plugin-d399",
+  "name": "dsh-plugin-d399",
+  "repository": "https://github.com/HuanLinOTO/dsh-plugin-d399",
+  "category": "fun",
+  "description": {
+    "en": "Pops up a mini-game menu (wordle, match-3, extensible) while the model generates.",
+    "zh": "模型生成时弹出小游戏菜单（wordle/消消乐，可扩展）。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "lehhair/dsh-diff-viewer",
+  "name": "dsh-diff-viewer",
+  "repository": "https://github.com/lehhair/dsh-diff-viewer",
+  "category": "ui",
+  "description": {
+    "en": "PiUI-style diff viewer replacing the stock DiffBlock for write/edit tool calls.",
+    "zh": "PiUI 风格 diff 查看器，替换 write/edit 工具调用的默认 DiffBlock。"
+  },
+  "added": "2026-08-13"
+}

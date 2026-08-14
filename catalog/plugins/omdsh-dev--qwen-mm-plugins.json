@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/Qwen-MM-Plugins",
+  "name": "Qwen-MM-Plugins",
+  "repository": "https://github.com/omdsh-dev/Qwen-MM-Plugins",
+  "category": "model",
+  "description": {
+    "en": "Qwen multi-modal plugin support.",
+    "zh": "Qwen 多模态插件支持。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "ZSeven-W/dsh-openpencil",
+  "name": "dsh-openpencil",
+  "repository": "https://github.com/ZSeven-W/dsh-openpencil",
+  "category": "ui",
+  "description": {
+    "en": "OpenPencil design preview and editing plugin.",
+    "zh": "OpenPencil 设计预览与编辑插件。"
+  },
+  "added": "2026-08-13"
+}

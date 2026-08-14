@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-annotation",
+  "name": "dsh-annotation",
+  "repository": "https://github.com/omdsh-dev/dsh-annotation",
+  "category": "ui",
+  "description": {
+    "en": "Select text → annotate → send with your message; replies map back to each annotation.",
+    "zh": "选中文字→批注→随消息发送，回复按批注逐条对照。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "flymysql/dsh-remote",
+  "name": "dsh-remote",
+  "repository": "https://github.com/flymysql/dsh-remote",
+  "category": "tools",
+  "description": {
+    "en": "Multi-machine remote workspace: manage many SSH hosts, pick a local or remote workspace in the native Add-workspace flow (system folder chooser / local path / remote dir browse), mirror a remote workspace to a real local folder, and operate it with rw_* tools.",
+    "zh": "多机远程工作区：管理多台 SSH 主机，在原生「添加工作区」流程里选本机系统文件夹或远程目录，把远程工作区镜像成真实本地文件夹并用 rw_* 工具操作。"
+  },
+  "added": "2026-08-14"
+}

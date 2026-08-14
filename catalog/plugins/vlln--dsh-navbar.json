@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "vlln/dsh-navbar",
+  "name": "dsh-navbar",
+  "repository": "https://github.com/vlln/dsh-navbar",
+  "category": "ui",
+  "description": {
+    "en": "Conversation node navigation bar for quick jumps between user messages.",
+    "zh": "对话节点导航条，右缘节点串快速跳转 user 消息。"
+  },
+  "added": "2026-08-13"
+}

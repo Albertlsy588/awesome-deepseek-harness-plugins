@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-toolkit",
+  "name": "dsh-toolkit",
+  "repository": "https://github.com/omdsh-dev/dsh-toolkit",
+  "category": "tools",
+  "description": {
+    "en": "Zero-dependency toolkit: time / encoding / json / calculator / csv / regex / markdown / diff / stat / schema — ten deterministic tools in one install.",
+    "zh": "零依赖工具包：time / encoding / json / calculator / csv / regex / markdown / diff / stat / schema 十件套一键安装。"
+  },
+  "added": "2026-08-13"
+}

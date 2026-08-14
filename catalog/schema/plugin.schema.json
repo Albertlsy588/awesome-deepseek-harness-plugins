@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DeepSeek Harness catalog plugin",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "id",
+    "name",
+    "repository",
+    "category",
+    "description",
+    "added"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "../schema/plugin.schema.json"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "category": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "description": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "zh"],
+      "properties": {
+        "en": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "zh": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      }
+    },
+    "added": {
+      "type": "string",
+      "format": "date"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "ilharp/dsh-tool-approval",
+  "name": "dsh-tool-approval",
+  "repository": "https://github.com/ilharp/dsh-tool-approval",
+  "category": "dev",
+  "description": {
+    "en": "Manual approval mode (\"Manual Mode\" / \"Ask Mode\").",
+    "zh": "手动审批模式（Manual/Ask Mode）。"
+  },
+  "added": "2026-08-13"
+}

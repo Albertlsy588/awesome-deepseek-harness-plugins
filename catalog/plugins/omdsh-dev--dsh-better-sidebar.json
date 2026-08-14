@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/DSH-better-sidebar",
+  "name": "DSH-better-sidebar",
+  "repository": "https://github.com/omdsh-dev/DSH-better-sidebar",
+  "category": "ui",
+  "description": {
+    "en": "Full sidebar workbench with file rendering and editing, terminal, Git, and subagents; third-party plugins can register new tabs.",
+    "zh": "侧边栏完整工作台：内置文件渲染编辑、终端、Git 与子代理，支持三方插件注册新 Tab。"
+  },
+  "added": "2026-08-14"
+}

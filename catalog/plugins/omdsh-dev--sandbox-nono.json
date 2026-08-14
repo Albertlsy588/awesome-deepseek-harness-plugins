@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/sandbox-nono",
+  "name": "sandbox-nono",
+  "repository": "https://github.com/omdsh-dev/sandbox-nono",
+  "category": "dev",
+  "description": {
+    "en": "Support for the nono sandbox backend.",
+    "zh": "nono 沙盒支持。"
+  },
+  "added": "2026-08-13"
+}

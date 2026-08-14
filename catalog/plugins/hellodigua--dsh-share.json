@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "hellodigua/dsh-share",
+  "name": "dsh-share",
+  "repository": "https://github.com/hellodigua/dsh-share",
+  "category": "session",
+  "description": {
+    "en": "Share your conversations with one click.",
+    "zh": "一键分享你的对话。"
+  },
+  "added": "2026-08-13"
+}

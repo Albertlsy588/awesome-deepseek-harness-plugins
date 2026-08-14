@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "yuezengwu/dsh-explain",
+  "name": "dsh-explain",
+  "repository": "https://github.com/yuezengwu/dsh-explain",
+  "category": "session",
+  "description": {
+    "en": "Local-first learning mode: cross-session learning threads with per-source explanations.",
+    "zh": "本地优先学习模式：跨会话全局学习线程、按来源讲解。"
+  },
+  "added": "2026-08-13"
+}

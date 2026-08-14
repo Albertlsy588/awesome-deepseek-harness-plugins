@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Jolly-J/dsh-deepseek-billing",
+  "name": "dsh-deepseek-billing",
+  "repository": "https://github.com/Jolly-J/dsh-deepseek-billing",
+  "category": "ui",
+  "description": {
+    "en": "Displays DeepSeek account balance and estimated per-session cost in the Web UI sidebar.",
+    "zh": "在 Web UI 侧边栏显示 DeepSeek 账户余额和当前会话费用估算。"
+  },
+  "added": "2026-08-14"
+}

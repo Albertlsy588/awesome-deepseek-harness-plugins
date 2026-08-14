@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "lynx-gt/dsh-subagent-tools",
+  "name": "dsh-subagent-tools",
+  "repository": "https://github.com/lynx-gt/dsh-subagent-tools",
+  "category": "tools",
+  "description": {
+    "en": "Per-call model, provider, persona, and toolFilter overrides for subagent delegation, with @preset: references and provider/model composite ids.",
+    "zh": "子代理委派的按调用覆盖：model/provider/persona/toolFilter、@preset: 引用与 provider/model 组合 id。"
+  },
+  "added": "2026-08-14"
+}

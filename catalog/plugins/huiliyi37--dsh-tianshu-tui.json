@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "huiliyi37/dsh-tianshu-tui",
+  "name": "dsh-tianshu-tui",
+  "repository": "https://github.com/huiliyi37/dsh-tianshu-tui",
+  "category": "ui",
+  "description": {
+    "en": "A terminal UI (TUI) for DeepSeek Harness.",
+    "zh": "DeepSeek Harness 的终端 UI（TUI）。"
+  },
+  "added": "2026-08-13"
+}

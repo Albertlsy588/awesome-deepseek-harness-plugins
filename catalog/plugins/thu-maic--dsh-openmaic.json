@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "THU-MAIC/dsh-openmaic",
+  "name": "dsh-openmaic",
+  "repository": "https://github.com/THU-MAIC/dsh-openmaic",
+  "category": "tools",
+  "description": {
+    "en": "OpenMAIC: classrooms, slides, interactive widgets, and Socratic teaching.",
+    "zh": "OpenMAIC 教学：课堂、幻灯片、交互组件与苏格拉底式教学。"
+  },
+  "added": "2026-08-13"
+}

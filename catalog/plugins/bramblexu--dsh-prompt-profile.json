@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "BrambleXu/dsh-prompt-profile",
+  "name": "dsh-prompt-profile",
+  "repository": "https://github.com/BrambleXu/dsh-prompt-profile",
+  "category": "dev",
+  "description": {
+    "en": "Reusable Markdown prompt profiles for DeepSeek Harness with per-turn model selection, argument substitution, and state restoration.",
+    "zh": "DeepSeek Harness 可复用 Markdown Prompt Profile，支持单轮模型选择、参数替换和状态恢复。"
+  },
+  "added": "2026-08-14"
+}

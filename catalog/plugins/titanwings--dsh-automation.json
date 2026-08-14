@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "titanwings/dsh-automation",
+  "name": "dsh-automation",
+  "repository": "https://github.com/titanwings/dsh-automation",
+  "category": "workflow",
+  "description": {
+    "en": "Scheduled coding runs in fresh agent sessions with auditable history.",
+    "zh": "定时任务：让 Coding 任务按计划在全新 Agent Session 中运行，保留可审计历史。"
+  },
+  "added": "2026-08-13"
+}

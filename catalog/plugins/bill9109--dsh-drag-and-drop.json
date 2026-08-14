@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "bill9109/dsh-drag-and-drop",
+  "name": "dsh-drag-and-drop",
+  "repository": "https://github.com/bill9109/dsh-drag-and-drop",
+  "category": "ui",
+  "description": {
+    "en": "Cross-platform file drag-and-drop with raw path insertion, no file copying.",
+    "zh": "跨平台文件拖拽与原始路径插入，无需复制文件。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,56 @@
+# Contributing
+
+## Add a plugin
+
+Catalog entries are maintained as one JSON file per repository in `catalog/plugins/`. A plugin submission pull request must add exactly one new source entry and contain no unrelated changes. Updates or removals of existing entries are maintainer changes and must use a separate code pull request.
+
+1. Confirm a `package.json` in the repository declares a non-empty `dsh.bundle.patch` and that the referenced patch file is committed. Monorepo subpackages are supported.
+2. Test the plugin yourself. Catalog review does not install, build, or execute third-party code; authors remain responsible for runtime compatibility.
+3. Add the `dsh-plugin` GitHub topic so tokenless metric discovery can find it.
+4. Copy an existing plugin JSON file and name it `<owner>--<repository>.json` in lowercase, with non-alphanumeric runs converted to `-`.
+5. Keep both descriptions factual, neutral, and specific. Avoid superlatives, calls to action, and unsupported claims.
+6. Set `added` to the submission date.
+7. Commit only that one new `catalog/plugins/*.json` file. Do not change README files, generated registries, workflows, application code, or any other path in the same pull request.
+
+Example:
+
+```json
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "owner/repository",
+  "name": "repository",
+  "repository": "https://github.com/owner/repository",
+  "category": "tools",
+  "description": {
+    "en": "A concise English description.",
+    "zh": "简洁、客观的中文说明。"
+  },
+  "added": "2026-08-14"
+}
+```
+
+The catalog derives `owner` and the install command from `id`, which prevents duplicated fields from drifting.
+
+Plugin submission pull requests receive two deliberately narrow static checks. The workflow rejects any change other than one new source entry, validates its exact fields, filename, category, descriptions, and date, then reads the target repository through the GitHub API. It finds a root or nested `package.json` with `dsh.bundle.patch` and confirms that the patch path exists in the same revision. It does not install dependencies, run lifecycle scripts, parse the patch, build the project, or assess plugin behavior.
+
+The trusted workflow comments on the pull request with the exact failure reason or confirms that its narrow static checks passed. Passing `Plugin submission review / static-review` and `CI / verify` does not guarantee acceptance: a maintainer reviews every pull request and merges it manually.
+
+Repository owners must protect `main` in GitHub Rules or branch protection:
+
+1. Require changes to be made through a pull request; a maintainer must review each pull request before merging it manually.
+2. Require `Plugin submission review / static-review` and `CI / verify` before merging.
+3. Block force pushes and branch deletion, and leave the ruleset bypass list empty except for an explicit emergency maintainer account.
+
+The workflow runs trusted code from the pull request's base revision and treats the submitted checkout only as data. It can read repository contents and update its pull request review comment, but it has no permission to write repository contents or merge a pull request.
+
+Catalog metadata contributions are provided under CC0-1.0. Code contributions are provided under MIT.
+
+## Change the Web application
+
+1. Create a focused branch from `main`.
+2. Run `npm run cf-typecheck`, `npm run typecheck`, `npm test`, and `npm run build`.
+3. Run `npm run test:visual` and attach screenshots for visible UI changes.
+4. Describe user-visible behavior, data migrations, and Cloudflare binding changes in the pull request.
+5. Avoid unrelated formatting and generated-file churn.
+
+Never commit `.dev.vars`, GitHub tokens, Cloudflare credentials, or other secrets.

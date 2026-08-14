@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "titanwings/dsh-plannotator",
+  "name": "dsh-plannotator",
+  "repository": "https://github.com/titanwings/dsh-plannotator",
+  "category": "workflow",
+  "description": {
+    "en": "Plan review with anchored annotations and structured feedback back to the agent.",
+    "zh": "计划批注：选中计划原文逐条批注，结构化反馈送回 Agent。"
+  },
+  "added": "2026-08-13"
+}

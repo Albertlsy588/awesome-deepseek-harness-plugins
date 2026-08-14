@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "MorGogh/widget-dock",
+  "name": "widget-dock",
+  "repository": "https://github.com/MorGogh/widget-dock",
+  "category": "ui",
+  "description": {
+    "en": "Draggable workbench of mini-cards (API balance, token usage, session stats, goal, cost) on the blank areas beside the conversation, with size tiers and official DeepSeek pricing.",
+    "zh": "对话两侧空白区的可拖动卡片工作台：余额、Token 用量、会话统计、目标、成本估算等小组件，支持 S/M/L/XL 尺寸档位与官方定价成本估算。"
+  },
+  "added": "2026-08-14"
+}

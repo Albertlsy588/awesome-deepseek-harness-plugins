@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Nwflower/dsh-chat-import",
+  "name": "dsh-chat-import",
+  "repository": "https://github.com/Nwflower/dsh-chat-import",
+  "category": "session",
+  "description": {
+    "en": "Import Claude Code / Codex / ChatGPT / Cursor / Gemini / Reasonix / opencode chat histories as resumable DeepSeek Harness sessions.",
+    "zh": "把 Claude Code / Codex / ChatGPT / Cursor / Gemini / Reasonix / opencode 的聊天记录全保真导入为可续聊的 DSH 会话。"
+  },
+  "added": "2026-08-13"
+}

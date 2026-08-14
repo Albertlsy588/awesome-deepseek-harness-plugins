@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Anionex/dsh-turn-rewind",
+  "name": "dsh-turn-rewind",
+  "repository": "https://github.com/Anionex/dsh-turn-rewind",
+  "category": "session",
+  "description": {
+    "en": "Rewind conversation and workspace state, powered by a persistent Change Ledger.",
+    "zh": "对话回退：基于持久 Change Ledger 回滚会话与工作区状态。"
+  },
+  "added": "2026-08-13"
+}

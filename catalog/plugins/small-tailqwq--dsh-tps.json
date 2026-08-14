@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Small-tailqwq/dsh-tps",
+  "name": "dsh-tps",
+  "repository": "https://github.com/Small-tailqwq/dsh-tps",
+  "category": "dev",
+  "description": {
+    "en": "A TPS metrics plugin.",
+    "zh": "TPS 指标插件。"
+  },
+  "added": "2026-08-13"
+}

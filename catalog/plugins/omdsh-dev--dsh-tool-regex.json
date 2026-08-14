@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-tool-regex",
+  "name": "dsh-tool-regex",
+  "repository": "https://github.com/omdsh-dev/dsh-tool-regex",
+  "category": "tools",
+  "description": {
+    "en": "Test/extract/safe-replace/statically explain regexes without executing code.",
+    "zh": "正则测试/提取/安全替换/静态解释（不执行代码）。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "bobleer/dsh-acp-for-bitfun",
+  "name": "dsh-acp-for-bitfun",
+  "repository": "https://github.com/bobleer/dsh-acp-for-bitfun",
+  "category": "notify",
+  "description": {
+    "en": "ACP bridge between BitFun and DSH.",
+    "zh": "BitFun 与 DSH 的 ACP 交互对接。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "xiaoyuyu6420/dsh-backup",
+  "name": "dsh-backup",
+  "repository": "https://github.com/xiaoyuyu6420/dsh-backup",
+  "category": "tools",
+  "description": {
+    "en": "One-command backup of DSH user data: /backup, scheduled auto-backup, sha256 checksums and rotation.",
+    "zh": "一键备份 DSH 用户数据：/backup 命令、定时自动备份、sha256 校验与自动轮换。"
+  },
+  "added": "2026-08-14"
+}

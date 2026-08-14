@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "bill9109/dsh-101",
+  "name": "dsh-101",
+  "repository": "https://github.com/bill9109/dsh-101",
+  "category": "ui",
+  "description": {
+    "en": "Document reading mode for DSH.",
+    "zh": "DSH 文档阅读模式。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-tool-json",
+  "name": "dsh-tool-json",
+  "repository": "https://github.com/omdsh-dev/dsh-tool-json",
+  "category": "tools",
+  "description": {
+    "en": "JSON queries with a JMESPath subset.",
+    "zh": "JMESPath 子集 JSON 查询。"
+  },
+  "added": "2026-08-13"
+}

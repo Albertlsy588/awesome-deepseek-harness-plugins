@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "SnowCrescenter-tech/dsh-milestone",
+  "name": "dsh-milestone",
+  "repository": "https://github.com/SnowCrescenter-tech/dsh-milestone",
+  "category": "ui",
+  "description": {
+    "en": "Right-side dot-timeline rail: jump between user messages.",
+    "zh": "右侧圆点时间轴导航条，点击跳转到任意用户消息。"
+  },
+  "added": "2026-08-13"
+}

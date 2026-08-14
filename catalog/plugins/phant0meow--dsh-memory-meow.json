@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Phant0Meow/dsh-memory-meow",
+  "name": "dsh-memory-meow",
+  "repository": "https://github.com/Phant0Meow/dsh-memory-meow",
+  "category": "memory",
+  "description": {
+    "en": "Project-scoped cross-session memory: PROJECT.md snapshot injected into the first user message, a memory_remember tool, and auto-reflection after ReAct tasks; each project keeps its own memory file.",
+    "zh": "项目级跨会话记忆：PROJECT.md 快照注入首条用户消息（缓存友好）+ memory_remember 工具 + ReAct 任务结束自动反思；各项目独立记忆文件，互不互通。"
+  },
+  "added": "2026-08-14"
+}

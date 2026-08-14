@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "vibeinging/dsh-turn-navigator",
+  "name": "dsh-turn-navigator",
+  "repository": "https://github.com/vibeinging/dsh-turn-navigator",
+  "category": "ui",
+  "description": {
+    "en": "Turn navigation for the DSH Web UI.",
+    "zh": "对话轮次导航。"
+  },
+  "added": "2026-08-13"
+}

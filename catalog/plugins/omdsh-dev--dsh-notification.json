@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-notification",
+  "name": "dsh-notification",
+  "repository": "https://github.com/omdsh-dev/dsh-notification",
+  "category": "notify",
+  "description": {
+    "en": "Desktop notifications for turn completions, with per-outcome controls and keyword rules.",
+    "zh": "回合完成桌面通知，按结果分控 + 关键词过滤。"
+  },
+  "added": "2026-08-13"
+}

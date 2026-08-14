@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-tool-schema",
+  "name": "dsh-tool-schema",
+  "repository": "https://github.com/omdsh-dev/dsh-tool-schema",
+  "category": "tools",
+  "description": {
+    "en": "JSON Schema validation: validate/paths/explain/normalize.",
+    "zh": "JSON Schema 验证：validate/paths/explain/normalize。"
+  },
+  "added": "2026-08-13"
+}

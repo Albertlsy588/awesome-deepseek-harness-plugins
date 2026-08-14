@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "KinGao294/dsh-skin",
+  "name": "dsh-skin",
+  "repository": "https://github.com/KinGao294/dsh-skin",
+  "category": "theme",
+  "description": {
+    "en": "Codex-style skin switcher plus a custom wallpaper layer with opacity and blur controls.",
+    "zh": "Codex 风格皮肤切换器 + 自定义壁纸层，可调透明度与模糊。"
+  },
+  "added": "2026-08-14"
+}

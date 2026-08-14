@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "bill9109/dsh-web-ui-notify",
+  "name": "dsh-web-ui-notify",
+  "repository": "https://github.com/bill9109/dsh-web-ui-notify",
+  "category": "notify",
+  "description": {
+    "en": "Desktop notification reminders.",
+    "zh": "桌面通知提醒。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Ghost011118/dsh-balance-meter",
+  "name": "dsh-balance-meter",
+  "repository": "https://github.com/Ghost011118/dsh-balance-meter",
+  "category": "ui",
+  "description": {
+    "en": "DeepSeek account balance and session cost in the composer dock, with auto-fetched official pricing and peak/off-peak support.",
+    "zh": "输入框 dock 显示 DeepSeek 账户余额与会话花费，自动拉取官方定价，支持高峰/低谷计价。"
+  },
+  "added": "2026-08-14"
+}

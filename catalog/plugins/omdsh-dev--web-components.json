@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/web-components",
+  "name": "web-components",
+  "repository": "https://github.com/omdsh-dev/web-components",
+  "category": "ui",
+  "description": {
+    "en": "Web Components support.",
+    "zh": "Web Components 支持。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "lynx-gt/dsh-subagent-cwd",
+  "name": "dsh-subagent-cwd",
+  "repository": "https://github.com/lynx-gt/dsh-subagent-cwd",
+  "category": "tools",
+  "description": {
+    "en": "Extends dsh-subagent-tools with a per-call cwd for subagents, shipped with the two in-process provider patches it requires.",
+    "zh": "在 dsh-subagent-tools 基础上增加子代理按调用 cwd，附带所需的两个 in-process provider 补丁。"
+  },
+  "added": "2026-08-14"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Flyvhidbwo/dsh-vision-proxy",
+  "name": "dsh-vision-proxy",
+  "repository": "https://github.com/Flyvhidbwo/dsh-vision-proxy",
+  "category": "tools",
+  "description": {
+    "en": "DeepSeek brain + automatic image transcription: attach images in the GUI and each one is transcribed to text via any OpenAI-compatible VLM before reaching the text-only DeepSeek — free anonymous endpoint by default, or a paid fast path (qwen3.7-flash) with your own key (DashScope/Zhipu/Ollama/OpenRouter).",
+    "zh": "DeepSeek 大脑 + 自动识图：GUI 附加的每张图片自动经 OpenAI 兼容 VLM 转译成文字，再交给纯文本的 DeepSeek 作答——默认走免费匿名端点（零配置），填自己的 key 可启用付费快速通道（qwen3.7-flash，支持 DashScope/智谱/Ollama/OpenRouter）。"
+  },
+  "added": "2026-08-14"
+}

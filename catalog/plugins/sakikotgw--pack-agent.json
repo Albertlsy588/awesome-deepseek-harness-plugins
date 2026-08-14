@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "sakikoTGW/pack-agent",
+  "name": "pack-agent",
+  "repository": "https://github.com/sakikoTGW/pack-agent",
+  "category": "tools",
+  "description": {
+    "en": "Project .pack.json/.pack.zip into .agent-pack/modpacks/ and expose skills via a workspace allow-list.",
+    "zh": "把 .pack.json/.pack.zip 投影到 .agent-pack/modpacks/，按工作区白名单暴露 skill。"
+  },
+  "added": "2026-08-14"
+}

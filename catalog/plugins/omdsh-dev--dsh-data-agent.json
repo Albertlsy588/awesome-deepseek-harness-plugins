@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-data-agent",
+  "name": "dsh-data-agent",
+  "repository": "https://github.com/omdsh-dev/dsh-data-agent",
+  "category": "tools",
+  "description": {
+    "en": "Let the AI connect to databases and write SQL for you.",
+    "zh": "让 AI 帮你连数据库、写 SQL。"
+  },
+  "added": "2026-08-13"
+}

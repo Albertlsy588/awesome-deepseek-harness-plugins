@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "AnacondaKC/dsh-douyin",
+  "name": "dsh-douyin",
+  "repository": "https://github.com/AnacondaKC/dsh-douyin",
+  "category": "fun",
+  "description": {
+    "en": "Short-video sidebar: native player, series navigation, precise history replay.",
+    "zh": "侧栏短视频：原生播放器、系列导航、精确历史回放。"
+  },
+  "added": "2026-08-13"
+}

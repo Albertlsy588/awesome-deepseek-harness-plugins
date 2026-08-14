@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "btspoony/dsh-advisor",
+  "name": "dsh-advisor",
+  "repository": "https://github.com/btspoony/dsh-advisor",
+  "category": "workflow",
+  "description": {
+    "en": "Pair a second model that passively reviews each turn and injects notes.",
+    "zh": "搭配一个副模型，每轮被动审查并注入见解。"
+  },
+  "added": "2026-08-13"
+}

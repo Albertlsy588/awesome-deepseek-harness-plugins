@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-tool-markdown",
+  "name": "dsh-tool-markdown",
+  "repository": "https://github.com/omdsh-dev/dsh-tool-markdown",
+  "category": "tools",
+  "description": {
+    "en": "HTML↔Markdown conversion, GFM table normalization, and TOC generation.",
+    "zh": "HTML↔Markdown 转换、GFM 表格规范化、目录生成。"
+  },
+  "added": "2026-08-13"
+}

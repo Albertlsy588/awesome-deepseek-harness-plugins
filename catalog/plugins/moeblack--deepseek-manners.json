@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Moeblack/deepseek-manners",
+  "name": "deepseek-manners",
+  "repository": "https://github.com/Moeblack/deepseek-manners",
+  "category": "fun",
+  "description": {
+    "en": "Append a thank-you note after every message. Mind your manners.",
+    "zh": "给每次消息后注入感谢语，做个有礼貌的人。"
+  },
+  "added": "2026-08-13"
+}

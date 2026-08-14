@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-inspect",
+  "name": "dsh-inspect",
+  "repository": "https://github.com/omdsh-dev/dsh-inspect",
+  "category": "workflow",
+  "description": {
+    "en": "Adversarial checkup → fix → review loop toolset.",
+    "zh": "发现问题→修复交付→质量复查的对抗式闭环工具集。"
+  },
+  "added": "2026-08-13"
+}

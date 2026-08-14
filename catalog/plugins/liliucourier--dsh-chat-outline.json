@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "liliuCourier/dsh-chat-outline",
+  "name": "dsh-chat-outline",
+  "repository": "https://github.com/liliuCourier/dsh-chat-outline",
+  "category": "ui",
+  "description": {
+    "en": "Persistent left-hand conversation outline: questions and final replies per turn, keyword filter, one-click jump.",
+    "zh": "对话栏左侧常驻大纲：按轮次列出提问与最后回复，支持关键词过滤与一键跳转。"
+  },
+  "added": "2026-08-14"
+}

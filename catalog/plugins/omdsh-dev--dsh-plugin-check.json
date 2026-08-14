@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-plugin-check",
+  "name": "dsh-plugin-check",
+  "repository": "https://github.com/omdsh-dev/dsh-plugin-check",
+  "category": "dev",
+  "description": {
+    "en": "Plugin health checks: manifest protocol / patch format / build traps, zero-dependency and read-only.",
+    "zh": "插件健康检查：扫描清单协议/patch 格式/构建陷阱，零依赖只读。"
+  },
+  "added": "2026-08-13"
+}

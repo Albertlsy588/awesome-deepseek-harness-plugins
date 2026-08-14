@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/ex-setting",
+  "name": "ex-setting",
+  "repository": "https://github.com/omdsh-dev/ex-setting",
+  "category": "ui",
+  "description": {
+    "en": "Settings extensions for DSH.",
+    "zh": "DSH 的设置扩展。"
+  },
+  "added": "2026-08-13"
+}

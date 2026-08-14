@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/sandbox-mxc",
+  "name": "sandbox-mxc",
+  "repository": "https://github.com/omdsh-dev/sandbox-mxc",
+  "category": "dev",
+  "description": {
+    "en": "Microsoft cross-platform sandbox support.",
+    "zh": "微软跨平台沙盒支持。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-deep-research",
+  "name": "dsh-deep-research",
+  "repository": "https://github.com/omdsh-dev/dsh-deep-research",
+  "category": "workflow",
+  "description": {
+    "en": "Adaptive deep-research orchestrator built on the official workflow engine.",
+    "zh": "自适应深度研究编排器（基于官方 workflow 引擎）。"
+  },
+  "added": "2026-08-13"
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "LoserFox/distill",
+  "name": "distill",
+  "repository": "https://github.com/LoserFox/distill",
+  "category": "memory",
+  "description": {
+    "en": "Automatic conversation distillation: background subagent reflection + skill create/update.",
+    "zh": "自动对话蒸馏：后台 subagent 反省 + 技能 create/update。"
+  },
+  "added": "2026-08-13"
+}

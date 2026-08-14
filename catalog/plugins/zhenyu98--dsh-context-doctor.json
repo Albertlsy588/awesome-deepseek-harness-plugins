@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Zhenyu98/dsh-context-doctor",
+  "name": "dsh-context-doctor",
+  "repository": "https://github.com/Zhenyu98/dsh-context-doctor",
+  "category": "dev",
+  "description": {
+    "en": "Context injection audit: token costs of instruction chains / skill catalogs / tool schemas, duplicate and conflict detection.",
+    "zh": "上下文注入审计：统计指令链/技能目录/工具 schema 的 token 成本，检测重复与冲突。"
+  },
+  "added": "2026-08-13"
+}

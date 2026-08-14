@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "czm15053/dsh-peer-link",
+  "name": "dsh-peer-link",
+  "repository": "https://github.com/czm15053/dsh-peer-link",
+  "category": "session",
+  "description": {
+    "en": "Let dsh and Claude Code sessions message each other directly; comes with a clickable peer list card (sort/search/send/refresh).",
+    "zh": "让 dsh 和 Claude Code 会话直接互发消息，附带可点击的会话列表卡片（搜索/刷新/弹窗发送）。"
+  },
+  "added": "2026-08-14"
+}

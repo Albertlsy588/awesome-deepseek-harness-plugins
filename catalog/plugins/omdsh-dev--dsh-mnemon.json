@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "omdsh-dev/dsh-mnemon",
+  "name": "dsh-mnemon",
+  "repository": "https://github.com/omdsh-dev/dsh-mnemon",
+  "category": "memory",
+  "description": {
+    "en": "Deep Mnemon integration: local three-tier memory (Runtime Memory, retrievable Documents, supervised Memory Spaces).",
+    "zh": "Mnemon 深度集成：本地三层记忆（Runtime Memory、可检索 Documents、受监督 Memory Spaces）。"
+  },
+  "added": "2026-08-13"
+}

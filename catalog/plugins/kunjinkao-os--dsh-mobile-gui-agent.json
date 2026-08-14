@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "kunjinkao-os/dsh-mobile-gui-agent",
+  "name": "dsh-mobile-gui-agent",
+  "repository": "https://github.com/kunjinkao-os/dsh-mobile-gui-agent",
+  "category": "tools",
+  "description": {
+    "en": "Android GUI Agent with ADB screenshots, compact UI hierarchy grounding, verified iterative actions, approvals, and a Mobile Web view.",
+    "zh": "Android GUI Agent：ADB 截图、压缩 UI hierarchy 定位、逐步动作验证、审批和 Mobile Web 视图。"
+  },
+  "added": "2026-08-14"
+}
