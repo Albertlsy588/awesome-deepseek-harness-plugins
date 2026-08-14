@@ -4,6 +4,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { buildCatalog, findPlugin, parseCatalogQuery } from './lib/catalog'
 import { loadCatalogSnapshot } from './lib/catalog-store'
 import { fetchPackageDetail } from './lib/github'
+import { buildRobotsTxt, buildSitemap } from './seo'
 import type {
   BackgroundContext,
   CatalogSnapshotResult,
@@ -64,7 +65,30 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     })
   })
 
+  app.get('/', (context) => {
+    const canonicalUrl = new URL(context.req.url)
+    canonicalUrl.pathname = '/rankings'
+    return context.redirect(canonicalUrl.toString(), 301)
+  })
+
+  app.get('/robots.txt', (context) => {
+    context.header('Cache-Control', 'public, max-age=3600, s-maxage=86400')
+    return context.text(buildRobotsTxt())
+  })
+
+  app.get('/sitemap.xml', (context) => {
+    context.header('Cache-Control', 'public, max-age=3600, s-maxage=86400')
+    context.header('Content-Type', 'application/xml; charset=UTF-8')
+    return context.body(buildSitemap())
+  })
+
   app.get('/packages', (context) => {
+    const canonicalUrl = new URL(context.req.url)
+    canonicalUrl.pathname = '/plugin'
+    return context.redirect(canonicalUrl.toString(), 301)
+  })
+
+  app.get('/packages/', (context) => {
     const canonicalUrl = new URL(context.req.url)
     canonicalUrl.pathname = '/plugin'
     return context.redirect(canonicalUrl.toString(), 301)

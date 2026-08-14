@@ -1,12 +1,16 @@
 import {
   AlertCircle,
+  ArrowUpRight,
+  Eye,
   ListFilter,
+  PackagePlus,
   Search,
   Trophy,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { LoadingState } from '../components/LoadingState'
+import { LanguageSwitch } from '../components/LanguageSwitch'
 import { PackageRow } from '../components/PackageRow'
 import {
   getCatalog,
@@ -16,6 +20,8 @@ import {
 } from '../lib/api'
 import { formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
+import { useLiveStats } from '../lib/useLiveStats'
+import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
 const RANKING_MODES: RankingMode[] = [
@@ -42,6 +48,7 @@ interface CatalogPageProps {
 
 export function CatalogPage({ view }: CatalogPageProps) {
   const { language, t } = useI18n()
+  const { stats, connected } = useLiveStats()
   const [searchParams, setSearchParams] = useSearchParams()
   const query = searchParams.get('q') ?? ''
   const category = searchParams.get('category') ?? ''
@@ -130,47 +137,142 @@ export function CatalogPage({ view }: CatalogPageProps) {
   const sourceWarning = catalog?.meta.source === 'stale' ? t('stale') : null
   const catalogHref = query ? `/plugin?q=${encodeURIComponent(query)}` : '/plugin'
   const rankingsHref = query ? `/rankings?q=${encodeURIComponent(query)}` : '/rankings'
+  const canonicalPath = view === 'catalog' ? '/plugin' : '/rankings'
+  const seoTitle = t(view === 'catalog' ? 'catalogSeoTitle' : 'rankingsSeoTitle')
+  const seoDescription = t(
+    view === 'catalog' ? 'catalogSeoDescription' : 'rankingsSeoDescription',
+  )
+  const hasIndexableFilters = Boolean(query || category || requestedSort)
+
+  usePageSeo({
+    title: seoTitle,
+    description: seoDescription,
+    path: canonicalPath,
+    language,
+    robots: hasIndexableFilters ? 'noindex,follow' : 'index,follow',
+    schema: {
+      '@context': 'https://schema.org',
+      '@type': 'CollectionPage',
+      '@id': `${SITE_ORIGIN}${canonicalPath}#webpage`,
+      url: `${SITE_ORIGIN}${canonicalPath}`,
+      name: seoTitle,
+      description: seoDescription,
+      isPartOf: {
+        '@type': 'WebSite',
+        '@id': `${SITE_ORIGIN}/#website`,
+        name: 'DeepSeek Harness Plugin Store',
+        url: `${SITE_ORIGIN}/`,
+      },
+    },
+  })
 
   return (
     <div className={`catalog-page ${view === 'rankings' ? 'rankings-page' : 'directory-page'}`}>
-      <div className="page-container catalog-content">
-        {sourceWarning && (
-          <div className="notice notice-warning" role="status">
-            <AlertCircle size={17} aria-hidden="true" />
-            <span>{sourceWarning}</span>
+      <section className="catalog-hero">
+        <div className="page-container catalog-hero-inner">
+          <div className="hero-topline">
+            <Link className="hero-brand" to="/" aria-label="DeepSeek Harness Store homepage">
+              <span className="hero-brand-mark">
+                <img className="brand-mark" src="/deepseek1024-icon.png" alt="" aria-hidden="true" />
+              </span>
+              <span className="hero-brand-copy">
+                <strong>DeepSeek Harness</strong>
+                <small>{t('market')}</small>
+              </span>
+            </Link>
+
+            <div className="hero-actions" aria-label={t('siteActions')}>
+              <a
+                className="hero-action-link github-link"
+                href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <img src="/github-mark.svg" alt="" aria-hidden="true" />
+                <span>GitHub</span>
+                <ArrowUpRight size={12} aria-hidden="true" />
+              </a>
+              <a className="hero-action-link hero-submit" href="/CONTRIBUTING.md">
+                <PackagePlus size={16} aria-hidden="true" />
+                <span>{t('submit')}</span>
+              </a>
+              <LanguageSwitch className="hero-language" />
+            </div>
           </div>
-        )}
 
-        <section className="catalog-toolbar" aria-label={t('search')}>
-          <label className="search-control">
-            <Search size={18} aria-hidden="true" />
-            <span className="visually-hidden">{t('search')}</span>
-            <input
-              type="search"
-              value={draftQuery}
-              onChange={(event) => setDraftQuery(event.target.value)}
-              placeholder={t('searchPlaceholder')}
-            />
-            {catalog && (
-              <small>
-                {catalog.meta.total} {t(catalog.meta.total === 1 ? 'result' : 'results')}
-              </small>
-            )}
-          </label>
-        </section>
+          <header className="hero-stage">
+            <div className="hero-heading">
+              <p className="hero-eyebrow">{t('heroEyebrow')}</p>
+              <h1 aria-label={`DeepSeek Harness ${t(view === 'catalog' ? 'catalog' : 'rankings')}`}>
+                <span>DeepSeek Harness</span>
+                <em>{t(view === 'catalog' ? 'catalog' : 'rankings')}</em>
+              </h1>
+              <p>{t(view === 'catalog' ? 'catalogIntro' : 'rankingsIntro')}</p>
+            </div>
 
-        <nav className="catalog-view-tabs" aria-label={`${t('catalog')} / ${t('rankings')}`}>
-          <Link to={rankingsHref} className={view === 'rankings' ? 'selected' : undefined} aria-current={view === 'rankings' ? 'page' : undefined}>
-            <Trophy size={16} aria-hidden="true" />
-            {t('rankings')}
-          </Link>
-          <Link to={catalogHref} className={view === 'catalog' ? 'selected' : undefined} aria-current={view === 'catalog' ? 'page' : undefined}>
-            <ListFilter size={16} aria-hidden="true" />
-            <span>
-              {t('catalog')}{catalog ? ` (${formatNumber(catalog.meta.catalogTotal, language)})` : ''}
-            </span>
-          </Link>
-        </nav>
+            <dl className="hero-ledger">
+              <div>
+                <dt>{t('totalPlugins')}</dt>
+                <dd>{catalog ? formatNumber(catalog.meta.catalogTotal, language) : '--'}</dd>
+              </div>
+              <div className="hero-live" role="status" aria-live="polite">
+                <dt>
+                  <span className={connected ? 'live-dot is-connected' : 'live-dot'} aria-hidden="true" />
+                  {t('online')}
+                </dt>
+                <dd>{stats ? formatNumber(stats.online, language) : '--'}</dd>
+              </div>
+              <div>
+                <dt><Eye size={13} aria-hidden="true" /> {t('views')}</dt>
+                <dd>{stats ? formatNumber(stats.views, language) : '--'}</dd>
+              </div>
+            </dl>
+          </header>
+
+          {sourceWarning && (
+            <div className="notice notice-warning hero-notice" role="status">
+              <AlertCircle size={17} aria-hidden="true" />
+              <span>{sourceWarning}</span>
+            </div>
+          )}
+
+          <section className="catalog-toolbar" aria-label={t('search')}>
+            <label className="search-control">
+              <Search size={19} aria-hidden="true" />
+              <span className="visually-hidden">{t('search')}</span>
+              <input
+                type="search"
+                value={draftQuery}
+                onChange={(event) => setDraftQuery(event.target.value)}
+                placeholder={t('searchPlaceholder')}
+              />
+              {catalog && (
+                <small>
+                  {catalog.meta.total} {t(catalog.meta.total === 1 ? 'result' : 'results')}
+                </small>
+              )}
+            </label>
+          </section>
+
+          <div className="hero-footer">
+            <nav className="catalog-view-tabs" aria-label={`${t('catalog')} / ${t('rankings')}`}>
+              <Link to={rankingsHref} className={view === 'rankings' ? 'selected' : undefined} aria-current={view === 'rankings' ? 'page' : undefined}>
+                <Trophy size={16} aria-hidden="true" />
+                {t('rankings')}
+              </Link>
+              <Link to={catalogHref} className={view === 'catalog' ? 'selected' : undefined} aria-current={view === 'catalog' ? 'page' : undefined}>
+                <ListFilter size={16} aria-hidden="true" />
+                <span>
+                  {t('catalog')}{catalog ? ` (${formatNumber(catalog.meta.catalogTotal, language)})` : ''}
+                </span>
+              </Link>
+            </nav>
+            <p>{t('heroNote')}</p>
+          </div>
+        </div>
+      </section>
+
+      <div className="page-container catalog-content">
 
         {view === 'catalog' && (
           <section className="category-section" aria-labelledby="categories-heading">

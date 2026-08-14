@@ -12,6 +12,24 @@
 
 ## 提交插件
 
+### 使用 Agent Skill 提交（推荐）
+
+如果你使用 Codex、Claude Code、Cursor 或其他兼容 Agent Skills 的编程助手，可以安装本仓库提供的提交 Skill：
+
+```bash
+npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plugin -g
+```
+
+安装后告诉助手：
+
+```text
+使用 $submit-dsh-plugin 检查并提交我的 DeepSeek Harness 插件。
+```
+
+该 Skill 会检查插件仓库、生成唯一允许提交的目录 JSON、验证变更范围，并在获得授权后创建 PR。贡献者不需要修改 README 或生成的 registry。查看 [Skill 源码](skills/submit-dsh-plugin/SKILL.md)。
+
+### 手动提交
+
 欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置。
 
 安装命令：`dsh plugin --profile web add github:<owner>/<repository>`。
@@ -28,6 +46,7 @@
 ```text
 catalog/plugins/    插件元数据（每个插件一个 JSON）
 catalog/generated/  生成的公开目录数据
+skills/             面向贡献者的可安装 Agent Skills
 apps/web/src/       React + Vite 前端
 apps/web/worker/    Cloudflare Worker API 与数据刷新
 scripts/            插件发现、校验和测试脚本
