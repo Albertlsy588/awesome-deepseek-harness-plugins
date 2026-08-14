@@ -17,10 +17,12 @@ import { Link, useParams } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
 import { CategoryTag } from '../components/CategoryTag'
 import { InstallCommand } from '../components/InstallCommand'
+import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
 import { getPackage, repositoryName, type CategoryResult, type PackageDetail } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
+import { fitSeoText, SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 const CATEGORY_LABELS: Record<string, CategoryResult> = {
   ui: { id: 'ui', en: 'UI Enhancements', zh: 'UI 增强', count: 0 },
@@ -51,6 +53,83 @@ export function PackagePage() {
       })
     return () => controller.abort()
   }, [name, owner, reload, t])
+
+  const canonicalOwner = detail?.owner ?? owner
+  const canonicalRepository = detail ? repositoryName(detail) : name
+  const canonicalPath = `/plugin/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`
+  const canonicalUrl = `${SITE_ORIGIN}${canonicalPath}`
+  const seoTitle = detail
+    ? fitSeoText(
+        language === 'zh'
+          ? `${detail.name} DeepSeek Harness 插件 | DSH 插件市场`
+          : `${detail.name} DeepSeek Harness Plugin | DSH Store`,
+        60,
+      )
+    : error
+      ? language === 'zh' ? '插件未找到 | DSH 插件市场' : 'Plugin not found | DSH Store'
+      : language === 'zh' ? 'DeepSeek Harness 插件 | DSH 插件市场' : 'DeepSeek Harness Plugin | DSH Store'
+  const seoDescription = detail
+    ? fitSeoText(
+        language === 'zh'
+          ? `了解由 ${detail.owner} 开发的 DeepSeek Harness 插件 ${detail.name}。${detail.description.zh}`
+          : `Explore ${detail.name}, a DeepSeek Harness plugin by ${detail.owner}. ${detail.description.en}`,
+        160,
+      )
+    : language === 'zh'
+      ? '浏览 DeepSeek Harness 社区插件的功能、安装命令与仓库信息。'
+      : 'Explore features, install commands, and repository details for a DeepSeek Harness community plugin.'
+  const schema = detail
+    ? {
+        '@context': 'https://schema.org',
+        '@graph': [
+          {
+            '@type': 'WebPage',
+            '@id': `${canonicalUrl}#webpage`,
+            url: canonicalUrl,
+            name: seoTitle,
+            description: seoDescription,
+            isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
+            mainEntity: { '@id': `${canonicalUrl}#software` },
+          },
+          {
+            '@type': 'SoftwareSourceCode',
+            '@id': `${canonicalUrl}#software`,
+            name: detail.name,
+            description: detail.description[language],
+            codeRepository: detail.url,
+            runtimePlatform: 'DeepSeek Harness',
+            dateCreated: detail.added,
+            license: detail.manifest?.license ?? detail.github?.license ?? undefined,
+          },
+          {
+            '@type': 'BreadcrumbList',
+            itemListElement: [
+              {
+                '@type': 'ListItem',
+                position: 1,
+                name: t('catalog'),
+                item: `${SITE_ORIGIN}/plugin`,
+              },
+              {
+                '@type': 'ListItem',
+                position: 2,
+                name: detail.name,
+                item: canonicalUrl,
+              },
+            ],
+          },
+        ],
+      }
+    : null
+
+  usePageSeo({
+    title: seoTitle,
+    description: seoDescription,
+    path: canonicalPath,
+    language,
+    robots: detail ? 'index,follow' : 'noindex,follow',
+    schema,
+  })
 
   if (error) {
     return (
@@ -106,6 +185,14 @@ export function PackagePage() {
 
   return (
     <div className="page-container package-detail-page">
+      <div className="detail-utility">
+        <Link className="detail-brand" to="/" aria-label="DeepSeek Harness Store homepage">
+          <img className="brand-mark" src="/deepseek1024-icon.png" alt="" aria-hidden="true" />
+          <span>DeepSeek Harness <strong>{t('market')}</strong></span>
+        </Link>
+        <LanguageSwitch />
+      </div>
+
       <Link className="back-link" to="/plugin">
         <ArrowLeft size={16} aria-hidden="true" />
         {t('back')}
@@ -161,7 +248,7 @@ export function PackagePage() {
       )}
 
       <div className="detail-layout">
-        <div className="detail-main">
+        <div className="detail-primary">
           <section className="detail-section install-section" aria-labelledby="install-heading">
             <h2 id="install-heading">{t('install')}</h2>
             <InstallCommand command={detail.install} prominent />
@@ -186,29 +273,6 @@ export function PackagePage() {
               <p>{t('securityBody')}</p>
             </div>
           </div>
-
-          <section className="detail-section readme-section" aria-labelledby="readme-heading">
-            <h2 id="readme-heading">{t('readme')}</h2>
-            {detail.readme ? (
-              <div className="markdown-body">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    a: ({ href, children }) => (
-                      <a href={readmeLink(href)} target={href?.startsWith('#') ? undefined : '_blank'} rel="noreferrer">
-                        {children}
-                      </a>
-                    ),
-                    img: ({ src, alt }) => <img src={readmeImage(src)} alt={alt ?? ''} loading="lazy" />,
-                  }}
-                >
-                  {detail.readme}
-                </ReactMarkdown>
-              </div>
-            ) : (
-              <p className="muted-copy">{t('noReadme')}</p>
-            )}
-          </section>
         </div>
 
         <aside className="package-sidebar" aria-labelledby="package-info-heading">
@@ -231,6 +295,32 @@ export function PackagePage() {
             </a>
           )}
         </aside>
+
+        <section className="detail-section readme-section" aria-labelledby="readme-heading">
+          <h2 id="readme-heading">{t('readme')}</h2>
+          {detail.readme ? (
+            <div className="markdown-body">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  h1: ({ children }) => <h3>{children}</h3>,
+                  h2: ({ children }) => <h3>{children}</h3>,
+                  h3: ({ children }) => <h4>{children}</h4>,
+                  a: ({ href, children }) => (
+                    <a href={readmeLink(href)} target={href?.startsWith('#') ? undefined : '_blank'} rel="noreferrer">
+                      {children}
+                    </a>
+                  ),
+                  img: ({ src, alt }) => <img src={readmeImage(src)} alt={alt ?? ''} loading="lazy" />,
+                }}
+              >
+                {detail.readme}
+              </ReactMarkdown>
+            </div>
+          ) : (
+            <p className="muted-copy">{t('noReadme')}</p>
+          )}
+        </section>
       </div>
     </div>
   )

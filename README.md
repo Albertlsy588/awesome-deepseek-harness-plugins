@@ -6,9 +6,29 @@
 
 [在线网站](https://deepseek1024.com/) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md) · [结构化目录数据](catalog/generated/plugins.json)
 
-> 此文件由 `catalog/plugins/*.json` 自动生成，请勿直接编辑。
+[![GitHub Stars](https://img.shields.io/github/stars/imsai-sh/awesome-deepseek-harness-plugins?style=social)](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)
+
+> 如果这个目录帮你找到好用的插件，欢迎点个 [⭐ Star](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)，让更多 DeepSeek Harness 用户看到它。
 
 ## 提交插件
+
+### 使用 Agent Skill 提交（推荐）
+
+如果你使用 Codex、Claude Code、Cursor 或其他兼容 Agent Skills 的编程助手，可以安装本仓库提供的提交 Skill：
+
+```bash
+npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plugin -g
+```
+
+安装后告诉助手：
+
+```text
+使用 $submit-dsh-plugin 检查并提交我的 DeepSeek Harness 插件。
+```
+
+该 Skill 会检查插件仓库、生成唯一允许提交的目录 JSON、验证变更范围，并在获得授权后创建 PR。贡献者不需要修改 README 或生成的 registry。查看 [Skill 源码](skills/submit-dsh-plugin/SKILL.md)。
+
+### 手动提交
 
 欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置。
 
@@ -20,6 +40,41 @@
 
 - **自动发现与校验**：定期扫描 GitHub 上带有 `dsh-plugin` topic 的仓库，校验根目录 `package.json`、`dsh.bundle` 及插件补丁路径，并以结构化 JSON、确定性生成和自动审查维护目录。
 - **在线插件市场**：提供功能较完整的 [deepseek1024.com](https://deepseek1024.com/) 网站，支持搜索、分类筛选、排行榜、插件详情及 GitHub 活跃度数据浏览。
+
+## 项目结构
+
+```text
+catalog/plugins/    插件元数据（每个插件一个 JSON）
+catalog/generated/  生成的公开目录数据
+skills/             面向贡献者的可安装 Agent Skills
+apps/web/src/       React + Vite 前端
+apps/web/worker/    Cloudflare Worker API 与数据刷新
+scripts/            插件发现、校验和测试脚本
+```
+
+## 本地运行与部署
+
+需要 Node.js 22+、npm 10+。本地开发：
+
+```bash
+npm ci
+npm run dev
+```
+
+浏览器访问 <http://127.0.0.1:5173>。如需完整 GitHub 数据，可在 `apps/web/.dev.vars` 中配置 `GITHUB_TOKEN`。
+
+部署到 Cloudflare Workers：
+
+```bash
+cp apps/web/.env.example apps/web/.dev.vars
+# 在 apps/web/.dev.vars 中填写 GITHUB_TOKEN
+npx wrangler login
+npm run build
+cd apps/web
+npx wrangler deploy --secrets-file .dev.vars
+```
+
+`wrangler.jsonc` 已声明 KV、D1、Durable Object、Cron 定时任务和静态资源配置。生产环境要先执行 `npm run db:migrate:remote`，再部署 Worker；完整顺序、GitHub API 限额和费用估算见 [Cloudflare 插件发现运维文档](docs/plugin-discovery.md)。请勿提交 `.dev.vars`。
 
 ## 致谢
 

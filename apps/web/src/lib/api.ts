@@ -17,6 +17,9 @@ export interface CatalogPlugin extends RegistryPlugin {
   pushedAt: string | null
   updatedAt: string | null
   latestReleaseAt: string | null
+  growth24h: number | null
+  growth7d: number | null
+  growth30d: number | null
 }
 
 export interface CategoryResult {
@@ -26,7 +29,14 @@ export interface CategoryResult {
   count: number
 }
 
-export type CatalogSort = 'stars' | 'newest' | 'active' | 'name'
+export type CatalogSort =
+  | 'stars'
+  | 'growth24h'
+  | 'growth7d'
+  | 'growth30d'
+  | 'newest'
+  | 'active'
+  | 'name'
 export type RankingMode = Exclude<CatalogSort, 'name'>
 
 export interface CatalogResponse {

@@ -33,9 +33,19 @@ export const TEST_REGISTRY: Registry = {
 }
 
 const STAR_COUNTS = [42, 120, null, 18, 7, 3, 1]
+const STAR_GROWTH = [
+  { growth24h: 3, growth7d: 12, growth30d: 30 },
+  { growth24h: 2, growth7d: 8, growth30d: 45 },
+  { growth24h: null, growth7d: null, growth30d: null },
+  { growth24h: 8, growth7d: 20, growth30d: 25 },
+  { growth24h: 0, growth7d: 1, growth30d: 4 },
+  { growth24h: -1, growth7d: 0, growth30d: 1 },
+  { growth24h: 1, growth7d: 2, growth30d: 2 },
+]
 
 export const TEST_PLUGINS: CatalogPlugin[] = TEST_REGISTRY.plugins.map((plugin, index) => ({
   ...plugin,
+  ...STAR_GROWTH[index],
   repository: repositoryName(plugin),
   stars: STAR_COUNTS[index] ?? null,
   forks: STAR_COUNTS[index] === null ? null : index + 1,

@@ -21,24 +21,22 @@ describe('catalog snapshot storage', () => {
     expect(fetcher).not.toHaveBeenCalled()
   })
 
-  it('refreshes a KV snapshot from a different catalog revision', async () => {
+  it('accepts a fresh KV snapshot with a D1-generated catalog revision', async () => {
     const snapshot = {
       ...testCatalogResult().snapshot,
       generatedAt: new Date().toISOString(),
       registryRevision: `sha256:${'0'.repeat(64)}`,
     }
-    const put = vi.fn(async () => undefined)
     const env = {
-      CATALOG_CACHE: { get: vi.fn(async () => snapshot), put },
+      CATALOG_CACHE: { get: vi.fn(async () => snapshot) },
       GITHUB_TOKEN: '',
     } as unknown as Env
     const fetcher = vi.fn(async () => Response.json({ items: [] })) as unknown as typeof fetch
 
     const result = await loadCatalogSnapshot(env, undefined, fetcher)
-    expect(result.source).toBe('bundled')
-    expect(result.snapshot.registryRevision).toBe(BUNDLED_REGISTRY.revision)
-    expect(fetcher).toHaveBeenCalledTimes(2)
-    expect(put).toHaveBeenCalledOnce()
+    expect(result.source).toBe('kv')
+    expect(result.snapshot.registryRevision).toBe(`sha256:${'0'.repeat(64)}`)
+    expect(fetcher).not.toHaveBeenCalled()
   })
 
   it('writes the bundled registry and its GitHub metrics to KV', async () => {

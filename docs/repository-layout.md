@@ -15,6 +15,7 @@ plugin source entry -> static review -> maintainer projections -> Worker build -
 | `catalog/plugins/*.json` | Canonical plugin identity, category, bilingual descriptions, and added date | Yes |
 | `catalog/categories.json` | Category IDs, order, and bilingual labels | Yes |
 | `catalog/schema/` | Contributor-facing JSON contract | Yes |
+| `skills/` | Installable Agent Skills for contributor workflows | Yes |
 | `README.md` | Primary Chinese plugin directory | No |
 | `catalog/README.md` | English plugin directory | No |
 | `catalog/generated/` | Stable public registry artifact | No |
@@ -45,12 +46,21 @@ Generated artifacts remain committed for three reasons: GitHub can display the A
 
 ## Runtime data flow
 
-The generated registry is bundled into the Worker. This removes a runtime dependency on another catalog host and ensures that application code and catalog schema deploy together.
+The Cloudflare D1 catalog is the runtime source of truth. A scheduled Worker Cron task discovers and
+validates repositories carrying the `dsh-plugin` GitHub topic. Checked-in PR entries are synced
+into the same database as a secondary source and take precedence only for curated display
+metadata. See [Cloudflare plugin discovery](plugin-discovery.md) for the data model, schedules,
+quota controls, and operations runbook.
 
-The deployment artifact contains curated metadata only. The generator assigns it a SHA-256 content revision, and the Worker rejects KV snapshots from any other revision. A scheduled Worker enriches all repositories with GitHub stars, forks, latest release, and recent activity, then replaces the KV snapshot. API requests use the compatible snapshot and refresh stale data in the background.
+KV stores the derived API snapshot. The generated registry remains bundled into the Worker as
+the disaster-recovery fallback and the import source for checked-in PR metadata. This preserves
+the stable public artifact and keeps the website available if D1 or GitHub is temporarily
+unavailable.
 
 Live presence has a different consistency model, so it stays in the `LiveStats` Durable Object. Catalog changes never migrate or lock the live counter.
 
 ## Growth rules
 
-A shared package should only be introduced when at least two applications need the same runtime code. A database should only replace source-controlled entries when moderation or write volume can no longer be handled through pull requests. Until either threshold is reached, the current layout keeps deployment and contribution mechanics visible and small.
+A shared package should only be introduced when at least two applications need the same runtime
+code. D1 owns automatically discovered runtime records; source-controlled entries continue to
+own human-reviewed metadata and remain independently auditable through pull requests.

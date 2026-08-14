@@ -1,4 +1,4 @@
-import { ArrowUpRight, CalendarDays, GitFork, Star } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, GitFork, Star, TrendingUp } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
 import { packagePath } from '../lib/api'
@@ -17,6 +17,15 @@ interface PackageRowProps {
 
 export function PackageRow({ plugin, category, index, ranking }: PackageRowProps) {
   const { language, t } = useI18n()
+  const growth = ranking === 'growth24h'
+    ? plugin.growth24h
+    : ranking === 'growth7d'
+      ? plugin.growth7d
+      : ranking === 'growth30d'
+        ? plugin.growth30d
+        : null
+  const isGrowthRanking =
+    ranking === 'growth24h' || ranking === 'growth7d' || ranking === 'growth30d'
   const relevantDate = ranking === 'active'
     ? plugin.pushedAt
     : ranking === 'newest'
@@ -42,20 +51,40 @@ export function PackageRow({ plugin, category, index, ranking }: PackageRowProps
       <CategoryTag category={category} />
 
       <div className="row-metrics">
-        <span title={t('stars')}>
-          <Star size={14} aria-hidden="true" />
-          {plugin.stars === null ? '--' : formatNumber(plugin.stars, language)}
-        </span>
+        {isGrowthRanking ? (
+          <span className="growth-metric" title={t('starGrowth')}>
+            <TrendingUp size={14} aria-hidden="true" />
+            {growth === null
+              ? '--'
+              : `${growth >= 0 ? '+' : ''}${formatNumber(growth, language)}`}
+          </span>
+        ) : (
+          <span title={t('stars')}>
+            <Star size={14} aria-hidden="true" />
+            {plugin.stars === null ? '--' : formatNumber(plugin.stars, language)}
+          </span>
+        )}
+        {isGrowthRanking && (
+          <span title={t('stars')}>
+            <Star size={14} aria-hidden="true" />
+            {plugin.stars === null ? '--' : formatNumber(plugin.stars, language)}
+          </span>
+        )}
         {!ranking && (
           <span className="fork-metric" title={t('forks')}>
             <GitFork size={14} aria-hidden="true" />
             {plugin.forks === null ? '--' : formatNumber(plugin.forks, language)}
           </span>
         )}
-        <span className="date-metric" title={ranking === 'newest' ? t('latestRelease') : t('lastPush')}>
-          <CalendarDays size={14} aria-hidden="true" />
-          {relevantDate ? formatDate(relevantDate, language) : '--'}
-        </span>
+        {!isGrowthRanking && (
+          <span
+            className="date-metric"
+            title={ranking === 'newest' ? t('latestRelease') : t('lastPush')}
+          >
+            <CalendarDays size={14} aria-hidden="true" />
+            {relevantDate ? formatDate(relevantDate, language) : '--'}
+          </span>
+        )}
       </div>
 
       {!ranking && <InstallCommand command={plugin.install} compact />}

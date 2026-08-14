@@ -9,6 +9,7 @@ describe('catalog queries', () => {
       category: '',
       sort: 'stars',
     })
+    expect(parseCatalogQuery({ sort: 'growth7d' }).sort).toBe('growth7d')
   })
 
   it('searches localized descriptions, filters categories, and does not paginate', () => {
@@ -30,11 +31,26 @@ describe('catalog queries', () => {
     expect(result.packages).toHaveLength(TEST_PLUGINS.length)
     expect(result.packages[0]?.name).toBe('deepseek-harness-tui')
     expect(result.rankings.stars[0]?.name).toBe('dsh-crosstalk')
+    expect(result.rankings.growth24h[0]?.name).toBe('dsh-agent-teams')
+    expect(result.rankings.growth7d[0]?.name).toBe('dsh-agent-teams')
+    expect(result.rankings.growth30d[0]?.name).toBe('dsh-crosstalk')
     expect(result.rankings.newest[0]?.name).toBe('dsh-agent-teams')
     expect(result.rankings.active[0]?.name).toBe('deepseek-harness-tui')
     expect(result.rankings.stars).toHaveLength(TEST_PLUGINS.length)
     expect(result.rankings.newest).toHaveLength(TEST_PLUGINS.length)
     expect(result.rankings.active).toHaveLength(TEST_PLUGINS.length)
+    expect(result.rankings.growth24h).toHaveLength(TEST_PLUGINS.length - 1)
+  })
+
+  it('sorts growth queries and excludes repositories without a complete baseline', () => {
+    const result = buildCatalog(testCatalogResult(), {
+      q: '',
+      category: '',
+      sort: 'growth24h',
+    })
+
+    expect(result.packages[0]?.name).toBe('dsh-agent-teams')
+    expect(result.packages.map((plugin) => plugin.name)).not.toContain('dsh-bash-terminal')
   })
 
   it('finds owners and repositories case-insensitively', () => {
