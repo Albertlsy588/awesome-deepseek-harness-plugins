@@ -55,7 +55,7 @@ cd apps/web
 npx wrangler deploy --secrets-file .dev.vars
 ```
 
-`wrangler.jsonc` 已声明 KV、Durable Object、定时任务和静态资源配置；首次部署时 Wrangler 会按配置创建所需资源。请勿提交 `.dev.vars`。
+`wrangler.jsonc` 已声明 KV、D1、Durable Object、Cron 定时任务和静态资源配置。生产环境要先执行 `npm run db:migrate:remote`，再部署 Worker；完整顺序、GitHub API 限额和费用估算见 [Cloudflare 插件发现运维文档](docs/plugin-discovery.md)。请勿提交 `.dev.vars`。
 
 ## 致谢
 

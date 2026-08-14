@@ -5,6 +5,7 @@ import type {
   StoredCatalogSnapshot,
 } from '../types'
 import { repositoryName } from './catalog'
+import { loadCatalogSnapshotFromD1, saveCatalogMetrics, syncBundledRegistry } from './catalog-db'
 import { fetchGitHubMetrics, metricKey } from './github-metrics'
 import { BUNDLED_REGISTRY, loadRegistry } from './registry'
 import { emptyStarGrowth, updateStarHistory } from './star-history'
@@ -93,10 +94,65 @@ export async function refreshCatalogSnapshot(
   fetcher: typeof fetch = fetch,
   capturedAt: number = Date.now(),
 ): Promise<CatalogSnapshotResult> {
-  const [registryResult, previousSnapshot] = await Promise.all([
-    loadRegistry(),
-    readStoredSnapshot(env),
-  ])
+  const previousSnapshot = await readStoredSnapshot(env)
+  if (env.CATALOG_DB) {
+    try {
+      const generatedAt = new Date(capturedAt).toISOString()
+      await syncBundledRegistry(env.CATALOG_DB, BUNDLED_REGISTRY, generatedAt)
+      const d1Snapshot = await loadCatalogSnapshotFromD1(
+        env.CATALOG_DB,
+        BUNDLED_REGISTRY,
+        generatedAt,
+      )
+      if (d1Snapshot) {
+        const token = env.GITHUB_TOKEN?.trim() || undefined
+        const metrics = await fetchGitHubMetrics(d1Snapshot.plugins, token, fetcher)
+        const previousByRepository = new Map(
+          previousSnapshot?.plugins.map((plugin) => [metricKey(plugin), plugin]) ?? [],
+        )
+        let plugins = d1Snapshot.plugins.map((plugin) => {
+          const metric = metrics.get(metricKey(plugin))
+          const previous = previousByRepository.get(metricKey(plugin))
+          return {
+            ...plugin,
+            stars: metric?.stars ?? plugin.stars ?? previous?.stars ?? null,
+            forks: metric?.forks ?? plugin.forks ?? previous?.forks ?? null,
+            pushedAt: metric?.pushedAt ?? plugin.pushedAt ?? previous?.pushedAt ?? null,
+            updatedAt: metric?.updatedAt ?? plugin.updatedAt ?? previous?.updatedAt ?? null,
+            latestReleaseAt: metric?.latestReleaseAt ?? previous?.latestReleaseAt ?? null,
+            growth24h: previous?.growth24h ?? null,
+            growth7d: previous?.growth7d ?? null,
+            growth30d: previous?.growth30d ?? null,
+          }
+        })
+        const freshPlugins = plugins.filter((plugin) => metrics.has(metricKey(plugin)))
+        await saveCatalogMetrics(env.CATALOG_DB, freshPlugins, generatedAt)
+        const tracked = plugins.filter((plugin) => plugin.stars !== null)
+        if (tracked.length > 0 && env.CATALOG_DB) {
+          const growth = await updateStarHistory(env.CATALOG_DB, tracked, capturedAt)
+          plugins = plugins.map((plugin) => ({
+            ...plugin,
+            ...(growth.get(metricKey(plugin)) ?? {}),
+          }))
+        }
+        const snapshot = {
+          ...d1Snapshot,
+          metricCoverage: plugins.filter((plugin) => plugin.stars !== null).length,
+          plugins,
+        }
+        try {
+          await env.CATALOG_CACHE.put(SNAPSHOT_KEY, JSON.stringify(snapshot))
+        } catch (error) {
+          logRefreshError(error)
+        }
+        return { snapshot, source: 'd1' }
+      }
+    } catch (error) {
+      logRefreshError(error)
+    }
+  }
+
+  const registryResult = await loadRegistry()
   const token = env.GITHUB_TOKEN?.trim() || undefined
   const metrics = await fetchGitHubMetrics(registryResult.registry.plugins, token, fetcher)
   const previousMetrics = new Map(
@@ -125,9 +181,9 @@ export async function refreshCatalogSnapshot(
   })
 
   const freshPlugins = plugins.filter((plugin) => metrics.has(metricKey(plugin)))
-  if (freshPlugins.length > 0 && env.STAR_HISTORY) {
+  if (freshPlugins.length > 0 && env.CATALOG_DB) {
     try {
-      const growth = await updateStarHistory(env.STAR_HISTORY, freshPlugins, capturedAt)
+      const growth = await updateStarHistory(env.CATALOG_DB, freshPlugins, capturedAt)
       plugins = plugins.map((plugin) => ({
         ...plugin,
         ...(growth.get(metricKey(plugin)) ?? {}),
@@ -164,7 +220,7 @@ export async function loadCatalogSnapshot(
   fetcher: typeof fetch = fetch,
 ): Promise<CatalogSnapshotResult> {
   const stored = await readStoredSnapshot(env)
-  const cached = stored?.registryRevision === BUNDLED_REGISTRY.revision ? stored : null
+  const cached = stored
 
   if (cached) {
     const age = Date.now() - new Date(cached.generatedAt).getTime()

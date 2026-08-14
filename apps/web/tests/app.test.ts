@@ -31,9 +31,11 @@ describe('market API', () => {
     })
     expect(response.status).toBe(200)
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
-    const body = (await response.json()) as { count: number; plugins: unknown[] }
-    expect(body.count).toBeGreaterThan(0)
+    const body = (await response.json()) as { count: number; revision: string; plugins: unknown[] }
+    expect(body.count).toBe(TEST_PLUGINS.length)
     expect(body.plugins).toHaveLength(body.count)
+    expect(body.revision).toBe(testCatalogResult().snapshot.registryRevision)
+    expect(response.headers.get('X-Catalog-Source')).toBe('bundled')
   })
 
   it('permanently redirects legacy package URLs to canonical plugin paths', async () => {

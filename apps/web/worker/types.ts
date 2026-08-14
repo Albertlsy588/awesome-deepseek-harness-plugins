@@ -28,7 +28,7 @@ export interface Registry {
   plugins: RegistryPlugin[]
 }
 
-export type RegistrySource = 'bundled'
+export type RegistrySource = 'bundled' | 'd1'
 
 export interface RegistryResult {
   registry: Registry
@@ -62,7 +62,7 @@ export interface StoredCatalogSnapshot {
   plugins: CatalogPlugin[]
 }
 
-export type CatalogSource = 'bundled' | 'kv' | 'stale'
+export type CatalogSource = 'bundled' | 'd1' | 'kv' | 'stale'
 
 export interface CatalogSnapshotResult {
   snapshot: StoredCatalogSnapshot

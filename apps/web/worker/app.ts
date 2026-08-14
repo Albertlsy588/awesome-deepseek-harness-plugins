@@ -4,7 +4,6 @@ import { secureHeaders } from 'hono/secure-headers'
 import { buildCatalog, findPlugin, parseCatalogQuery } from './lib/catalog'
 import { loadCatalogSnapshot } from './lib/catalog-store'
 import { fetchPackageDetail } from './lib/github'
-import { BUNDLED_REGISTRY } from './lib/registry'
 import type {
   BackgroundContext,
   CatalogSnapshotResult,
@@ -40,9 +39,29 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   app.use('/api/*', cors({ origin: '*', allowMethods: ['GET', 'HEAD', 'OPTIONS'] }))
   app.use('/plugins.json', cors({ origin: '*', allowMethods: ['GET', 'HEAD', 'OPTIONS'] }))
 
-  app.get('/plugins.json', (context) => {
+  app.get('/plugins.json', async (context) => {
+    const result = await dependencies.catalogLoader(
+      context.env,
+      executionContext(context),
+    )
+    const { snapshot } = result
     context.header('Cache-Control', 'public, max-age=300, s-maxage=3600')
-    return context.json(BUNDLED_REGISTRY)
+    context.header('X-Catalog-Source', result.source)
+    return context.json({
+      updated: snapshot.registryUpdated,
+      count: snapshot.plugins.length,
+      revision: snapshot.registryRevision,
+      categories: snapshot.categories,
+      plugins: snapshot.plugins.map((plugin) => ({
+        name: plugin.name,
+        owner: plugin.owner,
+        url: plugin.url,
+        category: plugin.category,
+        description: plugin.description,
+        install: plugin.install,
+        added: plugin.added,
+      })),
+    })
   })
 
   app.get('/packages', (context) => {

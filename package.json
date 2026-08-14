@@ -21,6 +21,8 @@
     "test:visual": "npm run test:visual --workspace @dsh-store/web",
     "cf-typegen": "npm run cf-typegen --workspace @dsh-store/web",
     "cf-typecheck": "npm run cf-typecheck --workspace @dsh-store/web",
+    "db:migrate:local": "npm run db:migrate:local --workspace @dsh-store/web",
+    "db:migrate:remote": "npm run db:migrate:remote --workspace @dsh-store/web",
     "predeploy": "npm run build",
     "deploy": "npm run deploy:worker --workspace @dsh-store/web"
   },
