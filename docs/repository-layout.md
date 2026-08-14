@@ -15,6 +15,7 @@ plugin source entry -> static review -> maintainer projections -> Worker build -
 | `catalog/plugins/*.json` | Canonical plugin identity, category, bilingual descriptions, and added date | Yes |
 | `catalog/categories.json` | Category IDs, order, and bilingual labels | Yes |
 | `catalog/schema/` | Contributor-facing JSON contract | Yes |
+| `skills/` | Installable Agent Skills for contributor workflows | Yes |
 | `README.md` | Primary Chinese plugin directory | No |
 | `catalog/README.md` | English plugin directory | No |
 | `catalog/generated/` | Stable public registry artifact | No |

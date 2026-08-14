@@ -1,0 +1,4 @@
+interface:
+  display_name: "提交 DSH 插件"
+  short_description: "检查插件仓库并创建符合规范的 DSH 社区目录提交 PR"
+  default_prompt: "使用 $submit-dsh-plugin 检查我的 DeepSeek Harness 插件并提交到社区目录。"
