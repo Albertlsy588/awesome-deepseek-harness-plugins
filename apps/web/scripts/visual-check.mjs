@@ -68,8 +68,11 @@ try {
   if (!(await rankings.locator('.site-bottom-link p').textContent())?.includes('DeepSeek')) {
     throw new Error('unofficial project notice is missing from the page bottom')
   }
-  if ((await rankings.locator('header a[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"]').count()) !== 1) {
+  if ((await rankings.locator('header .github-link[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"]').count()) !== 1) {
     throw new Error('GitHub repository link is missing from the desktop header')
+  }
+  if ((await rankings.locator('header .header-submit[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"]').count()) !== 1) {
+    throw new Error('submit button does not link to the GitHub repository homepage')
   }
   if ((await rankings.locator('header a[href^="/plugin"], header a[href^="/rankings"]').count()) !== 1) {
     throw new Error('internal view navigation is duplicated in the header')

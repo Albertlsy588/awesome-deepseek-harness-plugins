@@ -71,7 +71,9 @@ export function AppShell() {
               </div>
               <a
                 className="button button-primary header-submit"
-                href="/CONTRIBUTING.md"
+                href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"
+                target="_blank"
+                rel="noreferrer"
                 title={t('submit')}
               >
                 <PackagePlus size={15} aria-hidden="true" />

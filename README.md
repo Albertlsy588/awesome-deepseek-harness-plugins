@@ -8,7 +8,25 @@
 
 > 此文件由 `catalog/plugins/*.json` 自动生成，请勿直接编辑。
 
+## 提交插件
+
+欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置。
+
 安装命令：`dsh plugin --profile web add github:<owner>/<repository>`。
+
+## 项目定位
+
+本项目与 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 都服务于 DeepSeek Harness 插件生态。在继承其目录数据与社区整理思路的基础上，本项目重点补充两类能力：
+
+- **自动发现与校验**：定期扫描 GitHub 上带有 `dsh-plugin` topic 的仓库，校验根目录 `package.json`、`dsh.bundle` 及插件补丁路径，并以结构化 JSON、确定性生成和自动审查维护目录。
+- **在线插件市场**：提供功能较完整的 [deepseek1024.com](https://deepseek1024.com/) 网站，支持搜索、分类筛选、排行榜、插件详情及 GitHub 活跃度数据浏览。
+
+## 致谢
+
+感谢以下项目为本目录提供基础与参考：
+
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)：提供插件系统、`dsh.bundle` 规范和插件开发文档。
+- [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)：提供初始插件目录数据和社区目录设计参考。
 
 ## 插件分类
 
@@ -341,22 +359,9 @@
 - [dsh-web-search-pro](https://github.com/anweat/dsh-web-search-pro) - 增强型、可持久化的网页搜索：多引擎路由（DeepSeek/Exa/DDG/Bing/Jina + GitHub/B站/YouTube/V2EX/小红书/Twitter/Reddit/RSS）、SQLite+LRU 缓存、userscript 风格抽取、Playwright 渲染。
 - [whale-girl](https://github.com/vlln/whale-girl) - 桌面宠物（QQ 宠物形态）：右下角悬浮、可拖拽/投喂/玩耍。
 
-## 提交插件
-
-请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件。自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置。
-
 ## 免责声明
 
 本项目是社区维护的插件索引。插件由各自作者开发和维护，收录不构成安全、质量或维护状态背书。安装插件会在本机运行第三方代码，请在安装前自行审阅源码和依赖。
-
-## 致谢
-
-感谢以下项目为本目录提供基础与参考：
-
-- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)：提供插件系统、`dsh.bundle` 规范和插件开发文档。
-- [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)：提供初始插件目录数据和社区目录设计参考。
-
-本仓库在此基础上采用一插件一 JSON 的结构化目录、确定性生成和自动审查流程。
 
 ## 许可证
 
