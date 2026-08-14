@@ -8,12 +8,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { LoadingState } from '../components/LoadingState'
 import { PackageRow } from '../components/PackageRow'
+import { SiteToolbar } from '../components/SiteToolbar'
 import {
   getCatalog,
   type CatalogResponse,
   type CatalogSort,
   type RankingMode,
 } from '../lib/api'
+import { formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 
 const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
@@ -121,6 +123,33 @@ export function CatalogPage({ view }: CatalogPageProps) {
             <span>{sourceWarning}</span>
           </div>
         )}
+
+        <header className="catalog-hero">
+          <div className="catalog-hero-toolbar">
+            <SiteToolbar />
+          </div>
+
+          <h1 className="visually-hidden">
+            {t(view === 'rankings' ? 'rankingsTitle' : 'catalogTitle')}
+          </h1>
+
+          <div className="catalog-hero-body">
+            <dl className="catalog-overview" aria-label={t('overview')}>
+              <div>
+                <dt>{t('totalPlugins')}</dt>
+                <dd>{catalog ? formatNumber(catalog.meta.catalogTotal, language) : '—'}</dd>
+              </div>
+              <div>
+                <dt>{t('categoryCount')}</dt>
+                <dd>{catalog ? formatNumber(catalog.categories.length, language) : '—'}</dd>
+              </div>
+              <div>
+                <dt>{t('metricsCoverage')}</dt>
+                <dd>{catalog ? formatNumber(catalog.meta.metricCoverage, language) : '—'}</dd>
+              </div>
+            </dl>
+          </div>
+        </header>
 
         <section className="catalog-toolbar" aria-label={t('search')}>
           <label className="search-control">
