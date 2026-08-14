@@ -11,6 +11,11 @@
 ## Responsive web support
 
 - The website supports both desktop and mobile devices. Treat both layouts as first-class release requirements.
-- For every UI, layout, spacing, or typography change, design and verify both a desktop viewport and a mobile viewport; do not approve a change based on desktop appearance alone.
-- As a minimum visual check, use representative viewports around 1440×900 for desktop and 390×844 for mobile, and confirm there is no unintended horizontal overflow, clipping, overlap, or unreadably small text.
-- Avoid desktop-only assumptions such as fixed content widths, hover-only interactions, or controls that are too small for touch. Preserve readable typography, usable touch targets, and clear information hierarchy at both sizes.
+- Start from the narrow layout and progressively enhance it. Do not rely on fixed desktop widths, hover-only interactions, or desktop-only information hierarchy.
+- For every UI, layout, spacing, or typography change, design and verify both desktop and touch-enabled mobile viewports; do not approve a change based on desktop appearance alone.
+- As a minimum, run `npm run test:visual` and check representative viewports around 1440×900, 390×844, and 320×568. Confirm there is no unintended page-level horizontal overflow, clipping, overlap, or content hidden behind sticky UI or safe areas.
+- Primary buttons, icon buttons, tabs, filters, and other repeated controls must provide at least a 44×44 CSS-pixel touch target on mobile. Inputs must use a 16px or larger font on mobile so iOS does not zoom the page on focus.
+- Keep body and explanatory copy readable on mobile (normally at least 12px for compact metadata and 14px for prose). Prefer reflowing or intentionally scrollable local regions over shrinking text to make desktop layouts fit.
+- Horizontal chip, tab, table, code, and README overflow must stay inside an intentional local scroller with touch panning; the document itself must never scroll horizontally.
+- Preserve task priority when content stacks: primary actions and safety information come before secondary metadata, and long-form content comes afterward.
+- When changing responsive behavior, extend `apps/web/scripts/visual-check.mjs` with a regression assertion for the affected mobile interaction or layout invariant.

@@ -13,4 +13,6 @@ dist/
 coverage/
 playwright-report/
 test-results/
+.playwright-cli/
+output/playwright/
 .DS_Store

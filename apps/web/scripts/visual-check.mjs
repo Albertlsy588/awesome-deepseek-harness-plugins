@@ -2,10 +2,19 @@ import { chromium } from 'playwright'
 
 const baseUrl = process.env.BASE_URL ?? 'http://127.0.0.1:5173'
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
-const context = await browser.newContext({ locale: 'zh-CN' })
+const desktopContext = await browser.newContext({ locale: 'zh-CN' })
+const mobileContext = await browser.newContext({
+  locale: 'zh-CN',
+  viewport: { width: 390, height: 844 },
+  deviceScaleFactor: 3,
+  hasTouch: true,
+  isMobile: true,
+  permissions: ['clipboard-read', 'clipboard-write'],
+})
 const errors = []
 
-async function openPage(viewport, path) {
+async function openPage(viewport, path, { touch = false } = {}) {
+  const context = touch ? mobileContext : desktopContext
   const page = await context.newPage()
   await page.setViewportSize(viewport)
   page.on('pageerror', (error) => errors.push(error.message))
@@ -21,6 +30,59 @@ async function assertNoHorizontalOverflow(page, label) {
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
   )
   if (overflow) throw new Error(`${label} has horizontal overflow`)
+}
+
+async function assertMobileEnvironment(page, label) {
+  const result = await page.evaluate(() => ({
+    maxTouchPoints: navigator.maxTouchPoints,
+    viewport: document.querySelector('meta[name="viewport"]')?.getAttribute('content') ?? '',
+  }))
+  if (result.maxTouchPoints < 1) throw new Error(`${label} is not running with touch input`)
+  if (!result.viewport.includes('width=device-width')) {
+    throw new Error(`${label} is missing a device-width viewport declaration`)
+  }
+}
+
+async function assertMinTouchTargets(page, label, selectors) {
+  const undersized = await page.locator(selectors.join(', ')).evaluateAll((nodes) =>
+    nodes
+      .filter((node) => {
+        const style = getComputedStyle(node)
+        const box = node.getBoundingClientRect()
+        return style.display !== 'none' && style.visibility !== 'hidden' && box.width > 0 && box.height > 0
+      })
+      .map((node) => {
+        const box = node.getBoundingClientRect()
+        return {
+          height: Math.round(box.height),
+          label: node.getAttribute('aria-label') ?? node.textContent?.trim().slice(0, 40) ?? node.tagName,
+          width: Math.round(box.width),
+        }
+      })
+      .filter(({ height, width }) => height < 44 || width < 44),
+  )
+  if (undersized.length > 0) {
+    throw new Error(`${label} has touch targets smaller than 44px: ${JSON.stringify(undersized)}`)
+  }
+}
+
+async function assertMinFontSize(page, label, selector, minimum) {
+  const size = await page.locator(selector).first().evaluate((node) => parseFloat(getComputedStyle(node).fontSize))
+  if (size < minimum) throw new Error(`${label} uses ${size}px text; expected at least ${minimum}px`)
+}
+
+async function assertHorizontalTouchScroller(page, label, selector) {
+  const result = await page.locator(selector).evaluate((node) => ({
+    clientWidth: node.clientWidth,
+    scrollWidth: node.scrollWidth,
+    touchAction: getComputedStyle(node).touchAction,
+  }))
+  if (result.scrollWidth <= result.clientWidth) {
+    throw new Error(`${label} does not expose its overflowing controls through a local scroller`)
+  }
+  if (!result.touchAction.includes('pan-x')) {
+    throw new Error(`${label} is missing horizontal touch panning`)
+  }
 }
 
 async function assertSeo(page, label, canonicalPath, robots = 'index,follow') {
@@ -130,10 +192,34 @@ try {
   await assertNoHorizontalOverflow(rankings, 'desktop rankings')
   await rankings.close()
 
-  const mobile = await openPage({ width: 390, height: 844 }, '/plugin')
+  const mobile = await openPage({ width: 390, height: 844 }, '/plugin', { touch: true })
   await mobile.locator('.directory-section .package-list').waitFor()
   await assertLiveStats(mobile)
+  await assertMobileEnvironment(mobile, 'mobile catalog')
   await assertNoHorizontalOverflow(mobile, 'mobile catalog')
+  await assertMinTouchTargets(mobile, 'mobile catalog', [
+    '.catalog-hero .hero-brand',
+    '.catalog-hero .github-link',
+    '.catalog-hero .hero-submit',
+    '.catalog-hero .hero-language button',
+    '.catalog-view-tabs a',
+    '.category-filter button',
+    '.segmented-control button',
+    '.package-row .icon-button',
+    '.package-row .row-open',
+  ])
+  await assertMinFontSize(mobile, 'mobile search input', 'input[type="search"]', 16)
+  await assertMinFontSize(mobile, 'mobile package title', '.row-title-line a', 14)
+  await assertMinFontSize(mobile, 'mobile package description', '.row-identity p', 12)
+  await assertMinFontSize(mobile, 'mobile package metrics', '.row-metrics > span', 11)
+  await assertMinFontSize(mobile, 'mobile hero description', '.hero-heading > p:last-child', 14)
+  await assertMinFontSize(mobile, 'mobile hero ledger labels', '.hero-ledger dt', 11)
+  await assertHorizontalTouchScroller(mobile, 'mobile category filters', '.category-filter')
+
+  await mobile.locator('.category-filter button').nth(1).click()
+  await mobile.waitForURL((url) => url.searchParams.has('category'))
+  await mobile.locator('.category-filter button').first().click()
+  await mobile.waitForURL((url) => !url.searchParams.has('category'))
 
   const searchResponse = mobile.waitForResponse(
     (response) => response.url().includes('/api/plugin?') && response.url().includes('q=crosstalk'),
@@ -144,11 +230,29 @@ try {
   if ((await mobile.locator('.directory-section .package-row').count()) === 0) {
     throw new Error('search returned no package rows')
   }
+  await mobile.locator('.directory-section .package-row .icon-button').first().click()
+  await mobile.locator('.directory-section .package-row .icon-button[aria-label="已复制"]').waitFor()
+  await mobile.locator('.catalog-hero .language-switch button').last().click()
+  await mobile.waitForFunction(() => document.documentElement.lang === 'en')
+  await assertNoHorizontalOverflow(mobile, 'English mobile catalog')
+  await mobile.locator('.catalog-hero .language-switch button').first().click()
+  await mobile.waitForFunction(() => document.documentElement.lang === 'zh-CN')
   await mobile.close()
 
-  const mobileRankings = await openPage({ width: 390, height: 844 }, '/rankings')
+  const mobileRankings = await openPage({ width: 390, height: 844 }, '/rankings', { touch: true })
   await mobileRankings.locator('.ranking-section .package-list').waitFor()
+  await assertMobileEnvironment(mobileRankings, 'mobile rankings')
   await assertNoHorizontalOverflow(mobileRankings, 'mobile rankings')
+  await assertMinTouchTargets(mobileRankings, 'mobile rankings', [
+    '.catalog-view-tabs a',
+    '.segmented-control button',
+    '.package-row .row-open',
+  ])
+  await assertHorizontalTouchScroller(mobileRankings, 'mobile ranking modes', '.segmented-control')
+  await mobileRankings.locator('.ranking-section .segmented-control button').last().click()
+  if (await mobileRankings.locator('.ranking-section .segmented-control button').last().getAttribute('aria-pressed') !== 'true') {
+    throw new Error('mobile ranking controls could not select an offscreen mode')
+  }
   await mobileRankings.close()
 
   const detail = await openPage({ width: 1440, height: 1000 }, '/plugin/openma-ai/deepseek-harness-tui')
@@ -160,17 +264,60 @@ try {
   await detail.locator('.ranking-section').waitFor()
   await detail.close()
 
-  const scoped = await openPage({ width: 390, height: 844 }, '/plugin/zhaoolee/notes')
+  const scoped = await openPage({ width: 390, height: 844 }, '/plugin/zhaoolee/notes', { touch: true })
   await scoped.locator('.detail-header').waitFor()
+  await assertMobileEnvironment(scoped, 'mobile package detail')
   await assertNoHorizontalOverflow(scoped, 'scoped package detail')
+  await assertMinTouchTargets(scoped, 'mobile package detail', [
+    '.detail-brand',
+    '.detail-utility .language-switch button',
+    '.back-link',
+    '.detail-actions .button',
+    '.install-command-prominent .icon-button',
+    '.site-bottom-link a',
+  ])
+  await assertMinFontSize(scoped, 'mobile detail prose', '.detail-description', 15)
+  await assertMinFontSize(scoped, 'mobile README prose', '.markdown-body', 15)
+  await assertMinFontSize(scoped, 'mobile package facts', '.package-facts dd', 13)
+  const detailOrder = await scoped.evaluate(() => ({
+    primary: document.querySelector('.detail-primary')?.getBoundingClientRect().top,
+    readme: document.querySelector('.readme-section')?.getBoundingClientRect().top,
+    sidebar: document.querySelector('.package-sidebar')?.getBoundingClientRect().top,
+  }))
+  if (
+    detailOrder.primary === undefined
+    || detailOrder.sidebar === undefined
+    || detailOrder.readme === undefined
+    || !(detailOrder.primary < detailOrder.sidebar && detailOrder.sidebar < detailOrder.readme)
+  ) {
+    throw new Error(`mobile detail content priority is incorrect: ${JSON.stringify(detailOrder)}`)
+  }
+  await scoped.locator('.install-command-prominent .icon-button').click()
+  await scoped.locator('.install-command-prominent .icon-button[aria-label="已复制"]').waitFor()
   await scoped.locator('.detail-brand').click()
   await scoped.waitForURL('**/rankings')
   await scoped.locator('.ranking-section').waitFor()
   await scoped.close()
 
+  const compactMobile = await openPage({ width: 320, height: 568 }, '/rankings', { touch: true })
+  await compactMobile.locator('.ranking-section .package-list').waitFor()
+  await assertNoHorizontalOverflow(compactMobile, 'compact mobile rankings')
+  if (await compactMobile.locator('.catalog-hero .hero-language').isVisible()) {
+    throw new Error('compact mobile header did not hide the secondary language control')
+  }
+  await assertMinTouchTargets(compactMobile, 'compact mobile header', [
+    '.catalog-hero .hero-brand',
+    '.catalog-hero .github-link',
+    '.catalog-hero .hero-submit',
+    '.catalog-view-tabs a',
+    '.package-row .row-open',
+  ])
+  await compactMobile.close()
+
   if (errors.length > 0) throw new Error(`browser errors:\n${errors.join('\n')}`)
-  console.log('Visual smoke check passed: home navigation, separate directory/rankings views, live stats, desktop, mobile, search, and package details.')
+  console.log('Visual smoke check passed: desktop, touch-enabled 390px mobile, compact 320px mobile, search, copy actions, local scrollers, and package details.')
 } finally {
-  await context.close()
+  await desktopContext.close()
+  await mobileContext.close()
   await browser.close()
 }

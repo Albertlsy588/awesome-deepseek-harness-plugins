@@ -1670,12 +1670,17 @@ main {
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-areas:
+    "primary sidebar"
+    "readme sidebar";
   align-items: start;
-  gap: 36px;
+  column-gap: 36px;
+  row-gap: 0;
   padding-top: 36px;
 }
 
-.detail-main {
+.detail-primary {
+  grid-area: primary;
   min-width: 0;
 }
 
@@ -1716,12 +1721,14 @@ main {
 }
 
 .readme-section {
+  grid-area: readme;
   margin-top: 30px;
   padding-top: 24px;
   border-top: 1px solid var(--line);
 }
 
 .package-sidebar {
+  grid-area: sidebar;
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2008,42 +2015,57 @@ main {
 }
 
 @media (max-width: 680px) {
+  body {
+    font-size: 15px;
+  }
+
   .header-inner {
-    width: calc(100% - 24px);
+    width: auto;
+    margin-right: max(12px, env(safe-area-inset-right));
+    margin-left: max(12px, env(safe-area-inset-left));
   }
 
   .page-container {
-    width: min(100% - 24px, 980px);
+    width: auto;
+    margin-right: max(12px, env(safe-area-inset-right));
+    margin-left: max(12px, env(safe-area-inset-left));
   }
 
   .site-bottom-link {
-    width: calc(100% - 24px);
+    width: auto;
     align-items: center;
     justify-content: center;
     flex-direction: column;
     gap: 8px;
+    margin-right: max(12px, env(safe-area-inset-right));
+    margin-left: max(12px, env(safe-area-inset-left));
     padding-bottom: 22px;
     text-align: center;
   }
 
+  .site-header {
+    padding-top: env(safe-area-inset-top);
+  }
+
   .header-inner {
-    min-height: 56px;
-    grid-template-columns: minmax(92px, 1fr) auto;
-    gap: 6px;
+    min-height: 64px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px;
   }
 
   .header-tools {
-    gap: 6px;
+    gap: 4px;
   }
 
   .brand {
     min-width: 0;
-    gap: 7px;
+    min-height: 44px;
+    gap: 6px;
   }
 
   .brand-mark {
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
   }
 
   .brand-copy {
@@ -2053,7 +2075,7 @@ main {
   .brand-copy strong {
     display: flex;
     overflow: hidden;
-    font-size: 11px;
+    font-size: 13px;
     text-overflow: ellipsis;
   }
 
@@ -2063,12 +2085,12 @@ main {
 
   .header-live {
     gap: 5px;
-    min-height: 30px;
-    padding: 3px 8px;
+    min-height: 44px;
+    padding: 0 8px;
   }
 
   .live-stat {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .view-stat,
@@ -2077,12 +2099,25 @@ main {
   }
 
   .language-switch button {
-    min-width: 25px;
-    padding: 0 4px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0 6px;
+    font-size: 12px;
+  }
+
+  .main-nav {
+    padding-right: 4px;
+  }
+
+  .main-nav .github-link {
+    width: 44px;
+    height: 44px;
   }
 
   .header-submit {
-    width: 32px;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
     padding: 0;
   }
 
@@ -2105,8 +2140,8 @@ main {
 
   .catalog-intro p {
     margin-top: 6px;
-    font-size: 12px;
-    line-height: 1.55;
+    font-size: 14px;
+    line-height: 1.6;
   }
 
   .catalog-view-tabs {
@@ -2116,11 +2151,17 @@ main {
 
   .catalog-view-tabs a {
     flex: 1;
+    min-height: 44px;
     justify-content: center;
+    font-size: 14px;
   }
 
   .search-control {
-    height: 42px;
+    height: 48px;
+  }
+
+  .search-control input {
+    font-size: 16px;
   }
 
   .search-control small {
@@ -2132,13 +2173,26 @@ main {
   }
 
   .category-filter {
+    flex-wrap: nowrap;
     gap: 6px;
+    margin-right: -12px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    padding: 2px 12px 7px 0;
+    scrollbar-width: none;
+    touch-action: pan-x;
+  }
+
+  .category-filter::-webkit-scrollbar,
+  .segmented-control::-webkit-scrollbar {
+    display: none;
   }
 
   .category-filter button {
-    min-height: 30px;
-    padding: 0 8px;
-    font-size: 11px;
+    min-height: 44px;
+    flex: none;
+    padding: 0 12px;
+    font-size: 13px;
   }
 
   .catalog-section {
@@ -2146,6 +2200,7 @@ main {
   }
 
   .view-controls {
+    min-width: 0;
     justify-content: flex-start;
     margin-bottom: 12px;
   }
@@ -2165,21 +2220,24 @@ main {
   .segmented-control {
     max-width: 100%;
     overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    touch-action: pan-x;
   }
 
   .segmented-control button {
-    min-height: 29px;
-    padding: 0 9px;
-    font-size: 10px;
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 12px;
   }
 
   .package-row,
   .ranking-row {
-    min-height: 70px;
-    grid-template-columns: 27px 34px minmax(0, 1fr) 30px;
-    grid-template-rows: auto auto;
-    gap: 3px 8px;
-    padding: 8px 7px;
+    min-height: 104px;
+    grid-template-columns: 24px 40px minmax(0, 1fr) 44px;
+    grid-template-rows: minmax(44px, auto) 44px;
+    gap: 4px 8px;
+    padding: 8px;
   }
 
   .row-index {
@@ -2188,10 +2246,10 @@ main {
   }
 
   .owner-avatar {
-    width: 34px;
-    height: 34px;
+    width: 40px;
+    height: 40px;
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 1;
   }
 
   .row-identity {
@@ -2200,16 +2258,17 @@ main {
   }
 
   .row-title-line a {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .row-title-line span {
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .row-identity p {
-    margin-top: 1px;
-    font-size: 10px;
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.5;
   }
 
   .row-metrics {
@@ -2221,12 +2280,12 @@ main {
 
   .row-metrics > span {
     min-width: 38px;
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .row-metrics svg {
-    width: 11px;
-    height: 11px;
+    width: 13px;
+    height: 13px;
   }
 
   .date-metric {
@@ -2236,50 +2295,79 @@ main {
   .install-command-compact {
     grid-column: 4;
     grid-row: 2;
-    width: 28px;
-    height: 28px;
+    width: 44px;
+    height: 44px;
+    border: 0;
   }
 
   .install-command-compact .icon-button {
-    width: 26px;
-    height: 26px;
-    min-height: 26px;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    border: 1px solid var(--line);
   }
 
   .row-open {
     grid-column: 4;
     grid-row: 1;
-    width: 28px;
-    height: 28px;
+    width: 44px;
+    height: 44px;
   }
 
   .skeleton-row {
-    min-height: 70px;
-    grid-template-columns: 27px 34px minmax(0, 1fr);
+    min-height: 104px;
+    grid-template-columns: 24px 40px minmax(0, 1fr);
     gap: 8px;
-    padding: 8px 7px;
+    padding: 8px;
   }
 
   .skeleton-line-short {
     display: none;
   }
 
+  .package-detail-page,
+  .detail-loading {
+    padding-top: 20px;
+    padding-bottom: 48px;
+  }
+
+  .back-link {
+    min-height: 44px;
+    margin-bottom: 16px;
+    font-size: 12px;
+  }
+
   .detail-header {
-    grid-template-columns: 54px minmax(0, 1fr);
-    gap: 13px;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 14px;
+    padding-bottom: 24px;
   }
 
   .detail-avatar {
-    width: 54px;
-    height: 54px;
+    width: 56px;
+    height: 56px;
   }
 
   .detail-title-row h1 {
-    font-size: 21px;
+    font-size: 24px;
+  }
+
+  .detail-owner {
+    font-size: 12px;
+  }
+
+  .detail-description {
+    font-size: 15px;
   }
 
   .detail-actions {
     grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .detail-actions .button {
+    min-height: 44px;
+    flex: 1;
   }
 
   .repository-stats {
@@ -2303,18 +2391,87 @@ main {
     padding-left: 12px;
   }
 
+  .repository-stats dt {
+    font-size: 11px;
+  }
+
+  .repository-stats dd {
+    font-size: 17px;
+  }
+
   .detail-layout {
-    grid-template-columns: 1fr;
-    gap: 22px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "primary"
+      "sidebar"
+      "readme";
+    gap: 0;
     padding-top: 25px;
   }
 
   .package-sidebar {
-    grid-row: 1;
+    min-width: 0;
+    margin-top: 18px;
+    padding: 18px;
+  }
+
+  .readme-section {
+    min-width: 0;
+  }
+
+  .package-facts dt {
+    font-size: 11px;
+  }
+
+  .package-facts dd,
+  .package-facts code {
+    font-size: 13px;
+  }
+
+  .sidebar-link {
+    min-height: 44px;
+    margin-top: 8px;
+    font-size: 12px;
+  }
+
+  .readme-section {
+    margin-top: 28px;
+  }
+
+  .markdown-body {
+    font-size: 15px;
+  }
+
+  .markdown-body pre,
+  .markdown-body table {
+    overscroll-behavior-inline: contain;
+    touch-action: pan-x;
+  }
+
+  .notice strong,
+  .notice p {
+    font-size: 13px;
+  }
+
+  .button {
+    min-height: 44px;
   }
 
   .install-command-prominent code {
-    font-size: 11px;
+    font-size: 13px;
+  }
+
+  .install-command-prominent .icon-button {
+    min-height: 48px;
+  }
+
+  .site-bottom-link p,
+  .site-bottom-link a {
+    font-size: 13px;
+  }
+
+  .site-bottom-link a {
+    min-height: 44px;
   }
 
 }
@@ -2631,5 +2788,53 @@ main {
 
   .category-section {
     padding: 0 0 18px;
+  }
+}
+
+/* Mobile refinements for the integrated catalog masthead. Keep these after the
+   legacy responsive rules so the current hero remains touch-first. */
+@media (max-width: 680px) {
+  .page-container,
+  .site-bottom-link {
+    width: auto;
+    margin-right: max(12px, env(safe-area-inset-right));
+    margin-left: max(12px, env(safe-area-inset-left));
+  }
+
+  .hero-brand,
+  .detail-brand {
+    min-height: 44px;
+  }
+
+  .hero-action-link {
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .hero-language button {
+    min-width: 44px;
+    height: 44px;
+    font-size: 12px;
+  }
+
+  .hero-brand-copy small {
+    font-size: 10px;
+  }
+
+  .hero-heading > p:last-child {
+    font-size: 14px;
+  }
+
+  .hero-ledger dt {
+    font-size: 11px;
+  }
+
+  .catalog-hero .search-control input {
+    font-size: 16px;
+  }
+
+  .hero-footer .catalog-view-tabs a {
+    min-height: 44px;
+    font-size: 13px;
   }
 }

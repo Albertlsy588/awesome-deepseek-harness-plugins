@@ -248,7 +248,7 @@ export function PackagePage() {
       )}
 
       <div className="detail-layout">
-        <div className="detail-main">
+        <div className="detail-primary">
           <section className="detail-section install-section" aria-labelledby="install-heading">
             <h2 id="install-heading">{t('install')}</h2>
             <InstallCommand command={detail.install} prominent />
@@ -273,32 +273,6 @@ export function PackagePage() {
               <p>{t('securityBody')}</p>
             </div>
           </div>
-
-          <section className="detail-section readme-section" aria-labelledby="readme-heading">
-            <h2 id="readme-heading">{t('readme')}</h2>
-            {detail.readme ? (
-              <div className="markdown-body">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    h1: ({ children }) => <h3>{children}</h3>,
-                    h2: ({ children }) => <h3>{children}</h3>,
-                    h3: ({ children }) => <h4>{children}</h4>,
-                    a: ({ href, children }) => (
-                      <a href={readmeLink(href)} target={href?.startsWith('#') ? undefined : '_blank'} rel="noreferrer">
-                        {children}
-                      </a>
-                    ),
-                    img: ({ src, alt }) => <img src={readmeImage(src)} alt={alt ?? ''} loading="lazy" />,
-                  }}
-                >
-                  {detail.readme}
-                </ReactMarkdown>
-              </div>
-            ) : (
-              <p className="muted-copy">{t('noReadme')}</p>
-            )}
-          </section>
         </div>
 
         <aside className="package-sidebar" aria-labelledby="package-info-heading">
@@ -321,6 +295,32 @@ export function PackagePage() {
             </a>
           )}
         </aside>
+
+        <section className="detail-section readme-section" aria-labelledby="readme-heading">
+          <h2 id="readme-heading">{t('readme')}</h2>
+          {detail.readme ? (
+            <div className="markdown-body">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  h1: ({ children }) => <h3>{children}</h3>,
+                  h2: ({ children }) => <h3>{children}</h3>,
+                  h3: ({ children }) => <h4>{children}</h4>,
+                  a: ({ href, children }) => (
+                    <a href={readmeLink(href)} target={href?.startsWith('#') ? undefined : '_blank'} rel="noreferrer">
+                      {children}
+                    </a>
+                  ),
+                  img: ({ src, alt }) => <img src={readmeImage(src)} alt={alt ?? ''} loading="lazy" />,
+                }}
+              >
+                {detail.readme}
+              </ReactMarkdown>
+            </div>
+          ) : (
+            <p className="muted-copy">{t('noReadme')}</p>
+          )}
+        </section>
       </div>
     </div>
   )
