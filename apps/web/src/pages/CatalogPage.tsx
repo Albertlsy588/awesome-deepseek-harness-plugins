@@ -8,7 +8,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { LoadingState } from '../components/LoadingState'
 import { PackageRow } from '../components/PackageRow'
-import { SiteToolbar } from '../components/SiteToolbar'
 import {
   getCatalog,
   type CatalogResponse,
@@ -124,33 +123,6 @@ export function CatalogPage({ view }: CatalogPageProps) {
           </div>
         )}
 
-        <header className="catalog-hero">
-          <div className="catalog-hero-toolbar">
-            <SiteToolbar />
-          </div>
-
-          <h1 className="visually-hidden">
-            {t(view === 'rankings' ? 'rankingsTitle' : 'catalogTitle')}
-          </h1>
-
-          <div className="catalog-hero-body">
-            <dl className="catalog-overview" aria-label={t('overview')}>
-              <div>
-                <dt>{t('totalPlugins')}</dt>
-                <dd>{catalog ? formatNumber(catalog.meta.catalogTotal, language) : '—'}</dd>
-              </div>
-              <div>
-                <dt>{t('categoryCount')}</dt>
-                <dd>{catalog ? formatNumber(catalog.categories.length, language) : '—'}</dd>
-              </div>
-              <div>
-                <dt>{t('metricsCoverage')}</dt>
-                <dd>{catalog ? formatNumber(catalog.meta.metricCoverage, language) : '—'}</dd>
-              </div>
-            </dl>
-          </div>
-        </header>
-
         <section className="catalog-toolbar" aria-label={t('search')}>
           <label className="search-control">
             <Search size={18} aria-hidden="true" />
@@ -176,7 +148,9 @@ export function CatalogPage({ view }: CatalogPageProps) {
           </Link>
           <Link to={catalogHref} className={view === 'catalog' ? 'selected' : undefined} aria-current={view === 'catalog' ? 'page' : undefined}>
             <ListFilter size={16} aria-hidden="true" />
-            {t('catalog')}
+            <span>
+              {t('catalog')}{catalog ? ` (${formatNumber(catalog.meta.catalogTotal, language)})` : ''}
+            </span>
           </Link>
         </nav>
 
