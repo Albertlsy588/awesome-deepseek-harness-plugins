@@ -130,15 +130,23 @@ export async function runPluginDiscoveryTask(
 
     if (mode === 'full') await markMissingTopicRepositories(env.CATALOG_DB, runId, end)
     await setCatalogState(env.CATALOG_DB, 'discovery_watermark', end, end)
-    await completeScanRun(env.CATALOG_DB, runId, 'completed', counters, undefined, end)
-    await refreshCatalogSnapshot(env, fetch, scheduledTime)
+    const completedAt = new Date().toISOString()
+    await completeScanRun(env.CATALOG_DB, runId, 'completed', counters, undefined, completedAt)
+    await refreshCatalogSnapshot(env, fetch, new Date(completedAt).getTime())
     await releaseScanLease(env.CATALOG_DB, runId)
     leaseClaimed = false
     return { ...counters, mode, pending }
   } catch (error) {
     if (leaseClaimed) {
       const message = error instanceof Error ? error.message : String(error)
-      await completeScanRun(env.CATALOG_DB, runId, 'failed', counters, message, end)
+      await completeScanRun(
+        env.CATALOG_DB,
+        runId,
+        'failed',
+        counters,
+        message,
+        new Date().toISOString(),
+      )
       await releaseScanLease(env.CATALOG_DB, runId)
     }
     throw error
