@@ -59,6 +59,9 @@ try {
   if ((await rankings.locator('.ranking-section .package-row').count()) !== 100) {
     throw new Error('rankings did not render the top 100 packages')
   }
+  if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 6) {
+    throw new Error('rankings should expose growth, stars, release, and activity modes')
+  }
   if ((await rankings.locator('header a[href="https://www.deepseek.com/harness/"]').count()) !== 0) {
     throw new Error('official Harness link should not be rendered in the header')
   }
@@ -83,7 +86,7 @@ try {
   if ((await rankings.locator('footer, .reset-button').count()) !== 0) {
     throw new Error('removed footer or refresh control is still rendered')
   }
-  await rankings.locator('.ranking-section .segmented-control button').nth(1).click()
+  await rankings.locator('.ranking-section .segmented-control button').last().click()
   await rankings.locator('.ranking-section .package-row').first().waitFor()
   const rankingSearchResponse = rankings.waitForResponse(
     (response) => response.url().includes('/api/plugin?') && response.url().includes('q=crosstalk'),

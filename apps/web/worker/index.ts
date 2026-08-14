@@ -20,8 +20,8 @@ const worker = {
     if (url.pathname === '/api/live') return handleLiveStats(request, env)
     return app.fetch(request, env, ctx)
   },
-  scheduled(_controller, env, ctx) {
-    ctx.waitUntil(runScheduledCatalogRefresh(env))
+  scheduled(controller, env, ctx) {
+    ctx.waitUntil(runScheduledCatalogRefresh(env, controller.scheduledTime))
   },
 } satisfies ExportedHandler<Env>
 

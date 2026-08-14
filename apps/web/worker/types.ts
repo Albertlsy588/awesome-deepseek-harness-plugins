@@ -43,7 +43,13 @@ export interface RepositoryMetric {
   latestReleaseAt: string | null
 }
 
-export interface CatalogPlugin extends RegistryPlugin, RepositoryMetric {
+export interface StarGrowth {
+  growth24h: number | null
+  growth7d: number | null
+  growth30d: number | null
+}
+
+export interface CatalogPlugin extends RegistryPlugin, RepositoryMetric, StarGrowth {
   repository: string
 }
 
@@ -68,12 +74,22 @@ export interface CategoryResult extends RegistryCategory {
   count: number
 }
 
-export type CatalogSort = 'stars' | 'newest' | 'active' | 'name'
+export type CatalogSort =
+  | 'stars'
+  | 'growth24h'
+  | 'growth7d'
+  | 'growth30d'
+  | 'newest'
+  | 'active'
+  | 'name'
 
 export interface CatalogResponse {
   packages: CatalogPlugin[]
   rankings: {
     stars: CatalogPlugin[]
+    growth24h: CatalogPlugin[]
+    growth7d: CatalogPlugin[]
+    growth30d: CatalogPlugin[]
     newest: CatalogPlugin[]
     active: CatalogPlugin[]
   }

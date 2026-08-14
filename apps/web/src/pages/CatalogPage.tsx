@@ -19,7 +19,23 @@ import { formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 
 const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
-const RANKING_MODES: RankingMode[] = ['stars', 'newest', 'active']
+const RANKING_MODES: RankingMode[] = [
+  'growth24h',
+  'growth7d',
+  'growth30d',
+  'stars',
+  'newest',
+  'active',
+]
+
+function rankingLabel(mode: RankingMode): Parameters<ReturnType<typeof useI18n>['t']>[0] {
+  if (mode === 'growth24h') return 'growth24h'
+  if (mode === 'growth7d') return 'growth7d'
+  if (mode === 'growth30d') return 'growth30d'
+  if (mode === 'stars') return 'topStars'
+  if (mode === 'newest') return 'latestReleases'
+  return 'recentlyActive'
+}
 
 interface CatalogPageProps {
   view: 'catalog' | 'rankings'
@@ -110,6 +126,8 @@ export function CatalogPage({ view }: CatalogPageProps) {
       : catalog?.rankings[rankingMode] ?? []
     return candidates.slice(0, 100)
   }, [catalog, query, rankingMode])
+  const isGrowthMode =
+    rankingMode === 'growth24h' || rankingMode === 'growth7d' || rankingMode === 'growth30d'
   const sourceWarning = catalog?.meta.source === 'stale' ? t('stale') : null
   const catalogHref = query ? `/plugin?q=${encodeURIComponent(query)}` : '/plugin'
   const rankingsHref = query ? `/rankings?q=${encodeURIComponent(query)}` : '/rankings'
@@ -223,7 +241,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
                     onClick={() => setRankingMode(mode)}
                     aria-pressed={rankingMode === mode}
                   >
-                    {t(mode === 'stars' ? 'topStars' : mode === 'newest' ? 'latestReleases' : 'recentlyActive')}
+                    {t(rankingLabel(mode))}
                   </button>
                 ))}
               </div>
@@ -241,10 +259,14 @@ export function CatalogPage({ view }: CatalogPageProps) {
             ) : catalog && ranking.length === 0 ? (
               <div className="state-panel">
                 <Search size={27} aria-hidden="true" />
-                <h3>{t('emptyTitle')}</h3>
-                <p>{t('emptyBody')}</p>
-                <button className="button button-secondary" type="button" onClick={resetFilters}>
-                  {t('reset')}
+                <h3>{t(isGrowthMode && !query ? 'growthPendingTitle' : 'emptyTitle')}</h3>
+                <p>{t(isGrowthMode && !query ? 'growthPendingBody' : 'emptyBody')}</p>
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={isGrowthMode && !query ? () => setRankingMode('stars') : resetFilters}
+                >
+                  {t(isGrowthMode && !query ? 'topStars' : 'reset')}
                 </button>
               </div>
             ) : catalog ? (

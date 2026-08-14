@@ -12,6 +12,14 @@
       "binding": "CATALOG_CACHE"
     }
   ],
+  "d1_databases": [
+    {
+      "binding": "STAR_HISTORY",
+      "database_name": "dsh-store-star-history",
+      "database_id": "57006b9f-17e1-466f-b941-71c35cbff092",
+      "migrations_dir": "migrations"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {

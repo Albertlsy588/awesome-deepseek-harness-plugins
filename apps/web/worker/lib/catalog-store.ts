@@ -7,8 +7,9 @@ import type {
 import { repositoryName } from './catalog'
 import { fetchGitHubMetrics, metricKey } from './github-metrics'
 import { BUNDLED_REGISTRY, loadRegistry } from './registry'
+import { emptyStarGrowth, updateStarHistory } from './star-history'
 
-const SNAPSHOT_KEY = 'catalog:snapshot:v3'
+const SNAPSHOT_KEY = 'catalog:snapshot:v4'
 const SNAPSHOT_TTL_MS = 15 * 60 * 1000
 
 type JsonObject = Record<string, unknown>
@@ -33,7 +34,10 @@ function isCatalogPlugin(value: unknown): value is CatalogPlugin {
     (typeof value.forks === 'number' || value.forks === null) &&
     (typeof value.pushedAt === 'string' || value.pushedAt === null) &&
     (typeof value.updatedAt === 'string' || value.updatedAt === null) &&
-    (typeof value.latestReleaseAt === 'string' || value.latestReleaseAt === null)
+    (typeof value.latestReleaseAt === 'string' || value.latestReleaseAt === null) &&
+    (typeof value.growth24h === 'number' || value.growth24h === null) &&
+    (typeof value.growth7d === 'number' || value.growth7d === null) &&
+    (typeof value.growth30d === 'number' || value.growth30d === null)
   )
 }
 
@@ -65,6 +69,15 @@ function logRefreshError(error: unknown): void {
   )
 }
 
+function logStarHistoryError(error: unknown): void {
+  console.error(
+    JSON.stringify({
+      message: 'star_history_refresh_failed',
+      error: error instanceof Error ? error.message : String(error),
+    }),
+  )
+}
+
 async function readStoredSnapshot(env: Env): Promise<StoredCatalogSnapshot | null> {
   try {
     const value: unknown = await env.CATALOG_CACHE.get(SNAPSHOT_KEY, 'json')
@@ -78,6 +91,7 @@ async function readStoredSnapshot(env: Env): Promise<StoredCatalogSnapshot | nul
 export async function refreshCatalogSnapshot(
   env: Env,
   fetcher: typeof fetch = fetch,
+  capturedAt: number = Date.now(),
 ): Promise<CatalogSnapshotResult> {
   const [registryResult, previousSnapshot] = await Promise.all([
     loadRegistry(),
@@ -88,11 +102,19 @@ export async function refreshCatalogSnapshot(
   const previousMetrics = new Map(
     previousSnapshot?.plugins.map((plugin) => [metricKey(plugin), plugin]) ?? [],
   )
-  const plugins = registryResult.registry.plugins.map<CatalogPlugin>((plugin) => {
+  let plugins = registryResult.registry.plugins.map<CatalogPlugin>((plugin) => {
     const metric = metrics.get(metricKey(plugin))
     const previous = previousMetrics.get(metricKey(plugin))
+    const previousGrowth = previous
+      ? {
+          growth24h: previous.growth24h,
+          growth7d: previous.growth7d,
+          growth30d: previous.growth30d,
+        }
+      : emptyStarGrowth()
     return {
       ...plugin,
+      ...previousGrowth,
       repository: repositoryName(plugin),
       stars: metric?.stars ?? previous?.stars ?? null,
       forks: metric?.forks ?? previous?.forks ?? null,
@@ -101,8 +123,22 @@ export async function refreshCatalogSnapshot(
       latestReleaseAt: metric?.latestReleaseAt ?? previous?.latestReleaseAt ?? null,
     }
   })
+
+  const freshPlugins = plugins.filter((plugin) => metrics.has(metricKey(plugin)))
+  if (freshPlugins.length > 0 && env.STAR_HISTORY) {
+    try {
+      const growth = await updateStarHistory(env.STAR_HISTORY, freshPlugins, capturedAt)
+      plugins = plugins.map((plugin) => ({
+        ...plugin,
+        ...(growth.get(metricKey(plugin)) ?? {}),
+      }))
+    } catch (error) {
+      logStarHistoryError(error)
+    }
+  }
+
   const snapshot: StoredCatalogSnapshot = {
-    generatedAt: new Date().toISOString(),
+    generatedAt: new Date(capturedAt).toISOString(),
     registryUpdated: registryResult.registry.updated,
     registryRevision: registryResult.registry.revision,
     metricCoverage: plugins.filter((plugin) => plugin.stars !== null).length,
@@ -152,9 +188,12 @@ export async function loadCatalogSnapshot(
   return refreshCatalogSnapshot(env, fetcher)
 }
 
-export async function runScheduledCatalogRefresh(env: Env): Promise<void> {
+export async function runScheduledCatalogRefresh(
+  env: Env,
+  capturedAt: number = Date.now(),
+): Promise<void> {
   try {
-    const result = await refreshCatalogSnapshot(env)
+    const result = await refreshCatalogSnapshot(env, fetch, capturedAt)
     console.log(
       JSON.stringify({
         message: 'catalog_refresh_completed',

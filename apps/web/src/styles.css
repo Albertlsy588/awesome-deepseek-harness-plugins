@@ -984,6 +984,15 @@ main {
   color: var(--gold);
 }
 
+.row-metrics > .growth-metric {
+  color: var(--teal);
+  font-weight: 750;
+}
+
+.row-metrics > span.growth-metric svg {
+  color: var(--teal);
+}
+
 .date-metric {
   min-width: 132px !important;
 }
