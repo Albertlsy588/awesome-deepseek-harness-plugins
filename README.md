@@ -4,7 +4,7 @@
 
 这里主要展示可安装的插件。每个插件由各自作者独立开发和维护，收录仅表示其符合目录的基础格式要求。
 
-[英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md) · [结构化目录数据](catalog/generated/plugins.json)
+[在线网站](https://deepseek1024.com/) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md) · [结构化目录数据](catalog/generated/plugins.json)
 
 > 此文件由 `catalog/plugins/*.json` 自动生成，请勿直接编辑。
 

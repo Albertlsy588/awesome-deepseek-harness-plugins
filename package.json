@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
+  "homepage": "https://deepseek1024.com/",
   "type": "module",
   "packageManager": "npm@11.16.0",
   "workspaces": [

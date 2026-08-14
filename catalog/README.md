@@ -4,6 +4,8 @@
 
 A curated list of DeepSeek Harness community plugins: **262** packages across 11 categories.
 
+[Live website](https://deepseek1024.com/)
+
 Install with `dsh plugin --profile web add github:<owner>/<repository>`.
 
 ## Categories
