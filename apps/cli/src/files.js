@@ -6,6 +6,8 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 const LOCK_WAIT_TIMEOUT_MS = 30_000
 const EMPTY_LOCK_STALE_MS = 1_000
+const TRANSIENT_LOCK_ERROR_CODES = new Set(['EACCES', 'EBUSY', 'EPERM'])
+const LOCK_RELEASE_RETRIES = 5
 
 export function resolveDshHome(env = process.env) {
   return resolve(env.DSH_HOME || join(homedir(), '.dsh'))
@@ -52,8 +54,8 @@ export async function withFileLock(path, callback, options = {}) {
     try {
       await mkdir(lockDirectory, { mode: 0o700 })
     } catch (error) {
-      if (error?.code !== 'EEXIST') throw error
-      if (!await removeStaleLock(lockDirectory)) {
+      if (error?.code !== 'EEXIST' && !isTransientLockError(error)) throw error
+      if (error?.code !== 'EEXIST' || !await removeStaleLock(lockDirectory)) {
         if (Date.now() >= deadline) throw new Error(`timed out waiting for file lock: ${path}`)
         await delay(10 + Math.floor(Math.random() * 20))
       }
@@ -96,7 +98,7 @@ async function installOwner(lockDirectory, ownerPath, options) {
     await handle?.close().catch(() => {})
     await unlinkIfPresent(temporaryOwner).catch(() => {})
     await releaseOwnedLock(lockDirectory, ownerPath).catch(() => {})
-    if (error?.code === 'ENOENT') return false
+    if (error?.code === 'ENOENT' || isTransientLockError(error)) return false
     throw error
   }
 
@@ -105,7 +107,7 @@ async function installOwner(lockDirectory, ownerPath, options) {
       .filter((entry) => entry.isFile() && entry.name.endsWith('.owner'))
     if (owners.length === 1 && join(lockDirectory, owners[0].name) === ownerPath) return true
   } catch (error) {
-    if (error?.code !== 'ENOENT') throw error
+    if (error?.code !== 'ENOENT' && !isTransientLockError(error)) throw error
   }
 
   await releaseOwnedLock(lockDirectory, ownerPath)
@@ -118,6 +120,7 @@ async function removeStaleLock(lockDirectory) {
     entries = await readdir(lockDirectory, { withFileTypes: true })
   } catch (error) {
     if (error?.code === 'ENOENT') return true
+    if (isTransientLockError(error)) return false
     throw error
   }
 
@@ -130,7 +133,7 @@ async function removeStaleLock(lockDirectory) {
       return true
     } catch (error) {
       if (error?.code === 'ENOENT') return true
-      if (error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST') return false
+      if (error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST' || isTransientLockError(error)) return false
       throw error
     }
   }
@@ -143,7 +146,7 @@ async function removeStaleLock(lockDirectory) {
     try {
       await unlink(ownerPath)
     } catch (error) {
-      if (error?.code === 'ENOENT') return false
+      if (error?.code === 'ENOENT' || isTransientLockError(error)) return false
       throw error
     }
   }
@@ -153,7 +156,7 @@ async function removeStaleLock(lockDirectory) {
     return true
   } catch (error) {
     if (error?.code === 'ENOENT') return true
-    if (error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST') return false
+    if (error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST' || isTransientLockError(error)) return false
     throw error
   }
 }
@@ -162,12 +165,18 @@ async function ownerIsStale(ownerPath) {
   let metadata
   let owner
   try {
-    [metadata, owner] = await Promise.all([
+    let source
+    [metadata, source] = await Promise.all([
       stat(ownerPath),
-      readFile(ownerPath, 'utf8').then(JSON.parse).catch(() => null),
+      readFile(ownerPath, 'utf8'),
     ])
+    try {
+      owner = JSON.parse(source)
+    } catch {
+      owner = null
+    }
   } catch (error) {
-    if (error?.code === 'ENOENT') return null
+    if (error?.code === 'ENOENT' || isTransientLockError(error)) return null
     throw error
   }
 
@@ -185,15 +194,30 @@ async function ownerIsStale(ownerPath) {
 
 async function releaseOwnedLock(lockDirectory, ownerPath) {
   try {
-    await unlink(ownerPath)
+    await retryTransientLockOperation(() => unlink(ownerPath))
   } catch (error) {
     if (error?.code === 'ENOENT') return
     throw error
   }
   try {
-    await rmdir(lockDirectory)
+    await retryTransientLockOperation(() => rmdir(lockDirectory))
   } catch (error) {
-    if (error?.code !== 'ENOENT' && error?.code !== 'ENOTEMPTY' && error?.code !== 'EEXIST') throw error
+    if (error?.code !== 'ENOENT' && error?.code !== 'ENOTEMPTY' && error?.code !== 'EEXIST' && !isTransientLockError(error)) throw error
+  }
+}
+
+function isTransientLockError(error) {
+  return TRANSIENT_LOCK_ERROR_CODES.has(error?.code)
+}
+
+async function retryTransientLockOperation(operation) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (!isTransientLockError(error) || attempt >= LOCK_RELEASE_RETRIES) throw error
+      await delay(10 * (attempt + 1))
+    }
   }
 }
 
