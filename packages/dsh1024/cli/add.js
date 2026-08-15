@@ -16,7 +16,7 @@ import {
   flushPending,
   loadTelemetryConfig,
   markNoticeShown,
-} from './telemetry.js'
+} from '../lib/shared/telemetry.js'
 
 function officialDshVersion(packageSpec, env) {
   const explicitVersion = readCliEnv(env, 'DSH_VERSION')

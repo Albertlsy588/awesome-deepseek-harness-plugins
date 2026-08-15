@@ -1,6 +1,6 @@
 import { CLI_VERSION } from './constants.js'
 import { parseArgs, UsageError } from './args.js'
-import { resolveDshHome, storePaths } from './files.js'
+import { resolveDshHome, storePaths } from '../lib/shared/files.js'
 import { addPlugin } from './add.js'
 import {
   effectiveTelemetryEnabled,
@@ -8,7 +8,7 @@ import {
   loadTelemetryConfig,
   resetTelemetry,
   setTelemetryEnabled,
-} from './telemetry.js'
+} from '../lib/shared/telemetry.js'
 
 const HELP = `dsh1024 ${CLI_VERSION}
 
@@ -118,4 +118,4 @@ export {
   detectPlatform,
   enqueueEvent,
   flushPending,
-} from './telemetry.js'
+} from '../lib/shared/telemetry.js'

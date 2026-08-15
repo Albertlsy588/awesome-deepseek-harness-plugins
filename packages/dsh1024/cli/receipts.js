@@ -1,4 +1,4 @@
-import { readJson, storePaths, withFileLock, writeJsonAtomic } from './files.js'
+import { readJson, storePaths, withFileLock, writeJsonAtomic } from '../lib/shared/files.js'
 
 function receiptKey(profile, pluginId) {
   return `${encodeURIComponent(profile)}:${pluginId}`

@@ -1,3 +1,5 @@
+/** Shared filesystem primitives for the 1024 Store state directory (locked, atomic). */
+
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { mkdir, open, readdir, readFile, rename, rmdir, stat, unlink } from 'node:fs/promises'
@@ -7,11 +9,27 @@ import { setTimeout as delay } from 'node:timers/promises'
 const LOCK_WAIT_TIMEOUT_MS = 30_000
 const EMPTY_LOCK_STALE_MS = 1_000
 
-export function resolveDshHome(env = process.env) {
+export interface StorePaths {
+  directory: string
+  client: string
+  pending: string
+  receipts: string
+}
+
+export interface FileLockOptions {
+  /** Test hook that runs after the lock directory exists but before this owner commits. */
+  beforeOwnerCommit?: () => void | Promise<void>
+}
+
+function errno(error: unknown): string | undefined {
+  return (error as NodeJS.ErrnoException | null)?.code
+}
+
+export function resolveDshHome(env: NodeJS.ProcessEnv = process.env): string {
   return resolve(env.DSH_HOME || join(homedir(), '.dsh'))
 }
 
-export function storePaths(dshHome) {
+export function storePaths(dshHome: string): StorePaths {
   const directory = join(dshHome, '.dsh-1024store')
   return {
     directory,
@@ -21,16 +39,16 @@ export function storePaths(dshHome) {
   }
 }
 
-export async function readJson(path, fallback = null) {
+export async function readJson<T>(path: string, fallback: T | null = null): Promise<T | null> {
   try {
-    return JSON.parse(await readFile(path, 'utf8'))
+    return JSON.parse(await readFile(path, 'utf8')) as T
   } catch (error) {
-    if (error?.code === 'ENOENT') return fallback
+    if (errno(error) === 'ENOENT') return fallback
     throw error
   }
 }
 
-export async function writeJsonAtomic(path, value) {
+export async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`
   const handle = await open(temporary, 'wx', 0o600)
@@ -42,17 +60,21 @@ export async function writeJsonAtomic(path, value) {
   await rename(temporary, path)
 }
 
-export async function withFileLock(path, callback, options = {}) {
+export async function withFileLock<T>(
+  path: string,
+  callback: () => T | Promise<T>,
+  options: FileLockOptions = {},
+): Promise<T> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   const lockDirectory = `${path}.lock`
   const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS
-  let ownerPath
+  let ownerPath: string | undefined
 
   while (true) {
     try {
       await mkdir(lockDirectory, { mode: 0o700 })
     } catch (error) {
-      if (error?.code !== 'EEXIST') throw error
+      if (errno(error) !== 'EEXIST') throw error
       if (!await removeStaleLock(lockDirectory)) {
         if (Date.now() >= deadline) throw new Error(`timed out waiting for file lock: ${path}`)
         await delay(10 + Math.floor(Math.random() * 20))
@@ -72,13 +94,13 @@ export async function withFileLock(path, callback, options = {}) {
   try {
     return await callback()
   } finally {
-    await releaseOwnedLock(lockDirectory, ownerPath)
+    await releaseOwnedLock(lockDirectory, ownerPath as string)
   }
 }
 
-async function installOwner(lockDirectory, ownerPath, options) {
+async function installOwner(lockDirectory: string, ownerPath: string, options: FileLockOptions): Promise<boolean> {
   const temporaryOwner = `${lockDirectory}.${randomUUID()}.owner.tmp`
-  let handle
+  let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
     handle = await open(temporaryOwner, 'wx', 0o600)
     try {
@@ -96,7 +118,7 @@ async function installOwner(lockDirectory, ownerPath, options) {
     await handle?.close().catch(() => {})
     await unlinkIfPresent(temporaryOwner).catch(() => {})
     await releaseOwnedLock(lockDirectory, ownerPath).catch(() => {})
-    if (error?.code === 'ENOENT') return false
+    if (errno(error) === 'ENOENT') return false
     throw error
   }
 
@@ -105,19 +127,19 @@ async function installOwner(lockDirectory, ownerPath, options) {
       .filter((entry) => entry.isFile() && entry.name.endsWith('.owner'))
     if (owners.length === 1 && join(lockDirectory, owners[0].name) === ownerPath) return true
   } catch (error) {
-    if (error?.code !== 'ENOENT') throw error
+    if (errno(error) !== 'ENOENT') throw error
   }
 
   await releaseOwnedLock(lockDirectory, ownerPath)
   return false
 }
 
-async function removeStaleLock(lockDirectory) {
+async function removeStaleLock(lockDirectory: string): Promise<boolean> {
   let entries
   try {
     entries = await readdir(lockDirectory, { withFileTypes: true })
   } catch (error) {
-    if (error?.code === 'ENOENT') return true
+    if (errno(error) === 'ENOENT') return true
     throw error
   }
 
@@ -129,8 +151,8 @@ async function removeStaleLock(lockDirectory) {
       await rmdir(lockDirectory)
       return true
     } catch (error) {
-      if (error?.code === 'ENOENT') return true
-      if (error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST') return false
+      if (errno(error) === 'ENOENT') return true
+      if (errno(error) === 'ENOTEMPTY' || errno(error) === 'EEXIST') return false
       throw error
     }
   }
@@ -143,7 +165,7 @@ async function removeStaleLock(lockDirectory) {
     try {
       await unlink(ownerPath)
     } catch (error) {
-      if (error?.code === 'ENOENT') return false
+      if (errno(error) === 'ENOENT') return false
       throw error
     }
   }
@@ -152,57 +174,58 @@ async function removeStaleLock(lockDirectory) {
     await rmdir(lockDirectory)
     return true
   } catch (error) {
-    if (error?.code === 'ENOENT') return true
-    if (error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST') return false
+    if (errno(error) === 'ENOENT') return true
+    if (errno(error) === 'ENOTEMPTY' || errno(error) === 'EEXIST') return false
     throw error
   }
 }
 
-async function ownerIsStale(ownerPath) {
-  let metadata
-  let owner
+async function ownerIsStale(ownerPath: string): Promise<boolean | null> {
+  let metadata!: Awaited<ReturnType<typeof stat>>
+  let owner: { pid?: unknown } | null
   try {
     [metadata, owner] = await Promise.all([
       stat(ownerPath),
-      readFile(ownerPath, 'utf8').then(JSON.parse).catch(() => null),
+      readFile(ownerPath, 'utf8').then((content) => JSON.parse(content) as { pid?: unknown }).catch(() => null),
     ])
   } catch (error) {
-    if (error?.code === 'ENOENT') return null
+    if (errno(error) === 'ENOENT') return null
     throw error
   }
 
-  if (Number.isInteger(owner?.pid) && owner.pid > 0) {
+  const pid = owner?.pid
+  if (Number.isInteger(pid) && (pid as number) > 0) {
     try {
-      process.kill(owner.pid, 0)
+      process.kill(pid as number, 0)
       return false
     } catch (error) {
-      if (error?.code === 'ESRCH' || error?.code === 'EINVAL') return true
+      if (errno(error) === 'ESRCH' || errno(error) === 'EINVAL') return true
       return false
     }
   }
   return Date.now() - metadata.mtimeMs >= EMPTY_LOCK_STALE_MS
 }
 
-async function releaseOwnedLock(lockDirectory, ownerPath) {
+async function releaseOwnedLock(lockDirectory: string, ownerPath: string): Promise<void> {
   try {
     await unlink(ownerPath)
   } catch (error) {
-    if (error?.code === 'ENOENT') return
+    if (errno(error) === 'ENOENT') return
     throw error
   }
   try {
     await rmdir(lockDirectory)
   } catch (error) {
-    if (error?.code !== 'ENOENT' && error?.code !== 'ENOTEMPTY' && error?.code !== 'EEXIST') throw error
+    if (errno(error) !== 'ENOENT' && errno(error) !== 'ENOTEMPTY' && errno(error) !== 'EEXIST') throw error
   }
 }
 
-export async function unlinkIfPresent(path) {
+export async function unlinkIfPresent(path: string): Promise<boolean> {
   try {
     await unlink(path)
     return true
   } catch (error) {
-    if (error?.code === 'ENOENT') return false
+    if (errno(error) === 'ENOENT') return false
     throw error
   }
 }

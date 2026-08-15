@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { readJson } from './files.js'
+import { readJson } from '../lib/shared/files.js'
 
 function normalizeBundles(value) {
   if (Array.isArray(value)) {

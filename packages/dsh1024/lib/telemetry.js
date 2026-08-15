@@ -1,107 +1,25 @@
-/** Anonymous install telemetry aligned with the @dsh-1024store/cli event contract. */
+/** Anonymous install telemetry: a thin wrapper over the shared locked-queue implementation. */
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { CURRENT_VERSION } from './update.js';
-export const DEFAULT_TELEMETRY_URL = 'https://deepseek1024.com/api/v1/install-events';
+import { resolveDshHome } from './shared/files.js';
+import { CLI_VERSION, DEFAULT_TELEMETRY_URL, EVENT_KEYS, detectArch, detectCi, detectPlatform, effectiveTelemetryEnabled, enqueueEvent, ensureTelemetryConfig, environmentDisablesTelemetry, flushPending, loadTelemetryConfig, markNoticeShown, } from './shared/telemetry.js';
+export { DEFAULT_TELEMETRY_URL, EVENT_KEYS, detectArch, detectCi, detectPlatform, environmentDisablesTelemetry, };
 export const TELEMETRY_SOURCE_CHANNEL = 'dsh-1024store-plugin';
-const TELEMETRY_NOTICE_VERSION = 1;
-const FETCH_TIMEOUT_MS = 2_500;
 const MAX_DURATION_MS = 86_400_000;
 const PRIVACY_NOTICE = 'DSH 1024Store records anonymous plugin install outcomes and timestamps. '
-    + 'Disable with `DO_NOT_TRACK=1`, `DSH_1024STORE_TELEMETRY=0`, or `npx @dsh-1024store/cli telemetry disable`. '
+    + 'Disable with `DO_NOT_TRACK=1`, `DSH1024_TELEMETRY=0`, or `npx dsh1024 telemetry disable`. '
     + 'Details: https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/docs/install-analytics.md';
-/** The exact public event schema shared with the CLI, the Worker, and the docs. */
-export const EVENT_KEYS = [
-    'eventId',
-    'clientId',
-    'pluginId',
-    'profile',
-    'operation',
-    'status',
-    'clientStartedAt',
-    'clientCompletedAt',
-    'durationMs',
-    'beforeVersion',
-    'afterVersion',
-    'requestedRef',
-    'cliVersion',
-    'dshVersion',
-    'errorCode',
-    'sourceChannel',
-    'platform',
-    'arch',
-    'isCi',
-];
-const PLATFORM_VALUES = new Set(['darwin', 'linux', 'win32', 'freebsd', 'aix', 'android']);
-const ARCH_VALUES = new Set(['x64', 'arm64', 'arm', 'ia32', 'ppc64', 's390x', 'riscv64']);
-function isTrue(value) {
-    return ['1', 'true', 'on', 'yes'].includes(String(value ?? '').toLowerCase());
-}
-function isFalse(value) {
-    return ['0', 'false', 'off', 'no'].includes(String(value ?? '').toLowerCase());
-}
-/** Whether DO_NOT_TRACK / DSH_1024STORE_TELEMETRY turn telemetry off, mirroring the CLI. */
-export function environmentDisablesTelemetry(env) {
-    return isTrue(env.DO_NOT_TRACK)
-        || (env.DSH_1024STORE_TELEMETRY !== undefined && isFalse(env.DSH_1024STORE_TELEMETRY));
-}
-/** Reduce the host platform to the CLI's reporting whitelist. */
-export function detectPlatform(value = process.platform) {
-    return PLATFORM_VALUES.has(value) ? value : 'unknown';
-}
-/** Reduce the host architecture to the CLI's reporting whitelist. */
-export function detectArch(value = process.arch) {
-    return ARCH_VALUES.has(value) ? value : 'unknown';
-}
-/** Detect CI environments with the same probes as the CLI. */
-export function detectCi(env) {
-    return isTrue(env.CI) || Boolean(env.GITHUB_ACTIONS || env.BUILDKITE || env.TF_BUILD || env.JENKINS_URL);
-}
-function clientConfigPath(env) {
-    return join(env.DSH_HOME ?? join(homedir(), '.dsh'), '.dsh-1024store', 'client.json');
-}
-function readClientConfig(path) {
-    try {
-        const config = JSON.parse(readFileSync(path, 'utf8'));
-        if (config === null || typeof config !== 'object')
-            return null;
-        if (config.schemaVersion !== 1 || typeof config.clientId !== 'string')
-            return null;
-        return config;
-    }
-    catch {
-        return null;
-    }
-}
-function writeClientConfig(path, config) {
-    mkdirSync(dirname(path), { recursive: true });
-    const temporary = `${path}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
-    writeFileSync(temporary, `${JSON.stringify(config, null, 2)}\n`, { flag: 'wx' });
-    try {
-        renameSync(temporary, path);
-    }
-    catch (error) {
-        rmSync(temporary, { force: true });
-        throw error;
-    }
-}
 function boundedDuration(startedAt, completedAt) {
     return Math.min(MAX_DURATION_MS, Math.max(0, completedAt.getTime() - startedAt.getTime()));
 }
-function assertEventShape(event) {
-    const keys = Object.keys(event);
-    if (keys.length !== EVENT_KEYS.length || EVENT_KEYS.some(key => !keys.includes(key))) {
-        throw new Error('telemetry event does not match the public event schema');
-    }
-}
 /**
  * Report one plugin install/remove outcome to the public install-events API.
- * Fire-and-forget: no queue, 2.5s timeout, and every failure is silent so
- * telemetry can never affect a plugin operation. Respects DO_NOT_TRACK,
- * DSH_1024STORE_TELEMETRY, and an opted-out shared CLI identity; when opted
- * out no identity is created and nothing is sent.
+ * Delegates to the shared CLI implementation: the anonymous identity is
+ * created and read under a file lock, and the event goes through the pending
+ * queue so a failed delivery is retried on a later report. Every failure is
+ * silent so telemetry can never affect a plugin operation. Respects
+ * DO_NOT_TRACK, DSH1024_TELEMETRY / DSH_1024STORE_TELEMETRY, and an opted-out
+ * shared CLI identity; when opted out no identity is created and nothing is
+ * sent.
  */
 export async function reportInstallEvent(input, context = {}) {
     try {
@@ -110,22 +28,17 @@ export async function reportInstallEvent(input, context = {}) {
             return;
         const now = context.now ?? (() => new Date());
         const uuid = context.uuid ?? randomUUID;
-        const path = clientConfigPath(env);
-        let config = readClientConfig(path);
+        const dshHome = resolveDshHome(env);
+        let config = await loadTelemetryConfig(dshHome);
         if (config !== null && config.enabled === false)
             return;
         if (config === null) {
-            const timestamp = now().toISOString();
-            config = {
-                schemaVersion: 1,
-                clientId: uuid(),
-                enabled: true,
-                createdAt: timestamp,
-                updatedAt: timestamp,
-                noticeVersion: TELEMETRY_NOTICE_VERSION,
-                noticeShownAt: timestamp,
-            };
-            writeClientConfig(path, config);
+            config = (await ensureTelemetryConfig(dshHome, { now, uuid })).config;
+        }
+        if (!effectiveTelemetryEnabled(config, env))
+            return;
+        if (await markNoticeShown(dshHome, config, now)) {
+            ;
             (context.log ?? console.log)(PRIVACY_NOTICE);
         }
         const event = {
@@ -141,7 +54,7 @@ export async function reportInstallEvent(input, context = {}) {
             beforeVersion: null,
             afterVersion: null,
             requestedRef: null,
-            cliVersion: CURRENT_VERSION,
+            cliVersion: CLI_VERSION,
             dshVersion: null,
             errorCode: input.errorCode,
             sourceChannel: TELEMETRY_SOURCE_CHANNEL,
@@ -149,19 +62,8 @@ export async function reportInstallEvent(input, context = {}) {
             arch: detectArch(context.arch),
             isCi: detectCi(env),
         };
-        assertEventShape(event);
-        const fetcher = context.fetcher ?? fetch;
-        const endpoint = env.DSH_1024STORE_TELEMETRY_URL || DEFAULT_TELEMETRY_URL;
-        await fetcher(endpoint, {
-            method: 'POST',
-            headers: {
-                accept: 'application/json',
-                'content-type': 'application/json',
-                'user-agent': 'dsh-1024store',
-            },
-            body: JSON.stringify(event),
-            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        });
+        await enqueueEvent(dshHome, event);
+        await flushPending(dshHome, { env, fetchImpl: context.fetcher });
     }
     catch {
         // Telemetry must never block or fail a plugin operation.
