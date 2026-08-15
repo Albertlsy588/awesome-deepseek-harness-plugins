@@ -5,8 +5,8 @@
   "repository": "https://github.com/labmimors/dsh-mcp-lens",
   "category": "tools",
   "description": {
-    "en": "Progressive-disclosure MCP gateway for DeepSeek Harness: it keeps two model-facing tools and exposes exact remote MCP schemas lazily at call time.",
-    "zh": "DeepSeek Harness 的渐进式披露 MCP 网关：保持两个面向模型的工具，并在调用时按需暴露远程 MCP 的精确 schema。"
+    "en": "Progressive-disclosure MCP gateway for DeepSeek Harness: it keeps two model-facing tools, reveals ranked exact remote input schemas on demand, then calls an explicit server/tool pair.",
+    "zh": "DeepSeek Harness 的渐进式披露 MCP 网关：保持两个面向模型的工具，按需返回排序后的远端精确 inputSchema，再调用明确的 server/tool。"
   },
   "added": "2026-08-15"
 }
