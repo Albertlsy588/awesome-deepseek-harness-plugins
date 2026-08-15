@@ -16,9 +16,9 @@ export interface UpdateInfo {
   error?: string
 }
 
-export const DEFAULT_UPDATE_URL = 'https://registry.npmjs.org/dsh-1024store/latest'
+export const DEFAULT_UPDATE_URL = 'https://registry.npmjs.org/dsh1024/latest'
 export const DEFAULT_UPDATE_FALLBACK_URL = 'https://api.github.com/repos/imsai-sh/awesome-deepseek-harness-plugins/contents/package.json?ref=main'
-export const DEFAULT_RELEASE_URL = 'https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh-1024store'
+export const DEFAULT_RELEASE_URL = 'https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh1024'
 
 const FETCH_TIMEOUT_MS = 8_000
 const localManifest = JSON.parse(

@@ -10,8 +10,9 @@ import {
 } from '../lib/update.js'
 
 test('the npm registry is the preferred update source', () => {
-  assert.equal(DEFAULT_UPDATE_URL, 'https://registry.npmjs.org/dsh-1024store/latest')
+  assert.equal(DEFAULT_UPDATE_URL, 'https://registry.npmjs.org/dsh1024/latest')
   assert.match(DEFAULT_UPDATE_FALLBACK_URL, /^https:\/\/api\.github\.com\//)
+  assert.match(DEFAULT_RELEASE_URL, /\/packages\/dsh1024$/)
 })
 
 test('semantic version comparison handles releases and prereleases', () => {
@@ -26,17 +27,17 @@ test('automatic update check reads the published npm manifest first', async () =
   const fetcher = async (url) => {
     requested.push(String(url))
     return new Response(JSON.stringify({
-      name: 'dsh-1024store',
+      name: 'dsh1024',
       version: '99.0.0',
-      dist: { tarball: 'https://registry.npmjs.org/dsh-1024store/-/dsh-1024store-99.0.0.tgz' },
+      dist: { tarball: 'https://registry.npmjs.org/dsh1024/-/dsh1024-99.0.0.tgz' },
     }), { status: 200 })
   }
   const result = await checkForUpdate(
-    'https://registry.npmjs.org/dsh-1024store/latest',
+    'https://registry.npmjs.org/dsh1024/latest',
     'https://fallback.example/package.json',
     fetcher,
   )
-  assert.deepEqual(requested, ['https://registry.npmjs.org/dsh-1024store/latest'])
+  assert.deepEqual(requested, ['https://registry.npmjs.org/dsh1024/latest'])
   assert.equal(result.currentVersion, CURRENT_VERSION)
   assert.equal(result.latestVersion, '99.0.0')
   assert.equal(result.updateAvailable, true)
@@ -52,7 +53,7 @@ test('update check falls back to the repository API', async () => {
       : new Response(JSON.stringify({ version: CURRENT_VERSION }), { status: 200 })
   }
   const result = await checkForUpdate(
-    'https://registry.npmjs.org/dsh-1024store/latest',
+    'https://registry.npmjs.org/dsh1024/latest',
     'https://fallback.example/package.json',
     fetcher,
   )
@@ -64,7 +65,7 @@ test('update check falls back to the repository API', async () => {
 test('an unavailable update service never blocks the market', async () => {
   const fetcher = async () => new Response('unavailable', { status: 503 })
   const result = await checkForUpdate(
-    'https://registry.npmjs.org/dsh-1024store/latest',
+    'https://registry.npmjs.org/dsh1024/latest',
     'https://fallback.example/package.json',
     fetcher,
   )

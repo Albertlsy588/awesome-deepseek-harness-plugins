@@ -7,9 +7,9 @@ export interface UpdateInfo {
     releaseUrl: string;
     error?: string;
 }
-export declare const DEFAULT_UPDATE_URL = "https://registry.npmjs.org/dsh-1024store/latest";
+export declare const DEFAULT_UPDATE_URL = "https://registry.npmjs.org/dsh1024/latest";
 export declare const DEFAULT_UPDATE_FALLBACK_URL = "https://api.github.com/repos/imsai-sh/awesome-deepseek-harness-plugins/contents/package.json?ref=main";
-export declare const DEFAULT_RELEASE_URL = "https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh-1024store";
+export declare const DEFAULT_RELEASE_URL = "https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh1024";
 export declare const CURRENT_VERSION: string;
 /** Compare two semantic versions. Positive means left is newer. */
 export declare function compareVersions(leftValue: string, rightValue: string): number;
