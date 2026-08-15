@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'apps/web/**'
-      - 'packages/dsh-1024store/**'
+      - 'packages/dsh1024/**'
       - 'catalog/categories.json'
   workflow_dispatch:
 

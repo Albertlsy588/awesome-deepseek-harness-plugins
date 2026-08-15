@@ -2,7 +2,7 @@
 
 ## Decision
 
-The Awesome catalog, tracked installer, and online marketplace live in one repository, with `catalog/`, `apps/cli/`, and `apps/web/` as explicit ownership boundaries. The production Cloudflare D1 database is the **single source of truth** for catalog data. Everything else is either an input form into D1 or a projection out of it; there is no second canonical copy.
+The Awesome catalog, tracked installer, and online marketplace live in one repository, with `catalog/`, `packages/dsh1024/`, and `apps/web/` as explicit ownership boundaries. The production Cloudflare D1 database is the **single source of truth** for catalog data. Everything else is either an input form into D1 or a projection out of it; there is no second canonical copy.
 
 ```text
 plugin source entry (PR form) ─┐
@@ -32,7 +32,7 @@ There is no bundled registry, no `catalog/generated/` artifact, and no disaster-
 | `skills/` | Installable Agent Skills for contributor workflows | Yes |
 | `README.md` | Primary Chinese plugin directory (bot projection) | No |
 | `catalog/README.md` | English plugin directory (bot projection) | No |
-| `apps/cli/` | Publishable wrapper around the official DSH plugin command, local verification, and install-event delivery | Yes |
+| `packages/dsh1024/` | The publishable `dsh1024` package: wrapper CLI (official DSH plugin command delegation, local verification, install-event delivery) plus the in-DSH marketplace plugin | Yes |
 | `apps/web/src/` | React interface | Yes |
 | `apps/web/worker/` | Hono API, the only process that reads or writes D1 | Yes |
 | `scripts/` | Trusted pull-request review, catalog sync, README generation, and their tests | Yes |

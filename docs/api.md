@@ -32,7 +32,7 @@ was removed from the configuration after plugins referenced it).
 
 ## GET /api/v1/registry
 
-Compact full-catalog registry for the `dsh-1024store` marketplace plugin, the README builder
+Compact full-catalog registry for the `dsh1024` in-DSH marketplace plugin, the README builder
 (`scripts/build-readme.mjs`), and external tools:
 
 ```json
@@ -48,20 +48,23 @@ Compact full-catalog registry for the `dsh-1024store` marketplace plugin, the RE
     "url": "https://github.com/owner/repository",
     "category": "tools",
     "description": { "en": "…", "zh": "…" },
-    "install": "npx @dsh-1024store/cli add owner/repository --profile web",
+    "install": "dsh plugin --profile web add github:owner/repository",
     "added": "2026-08-15",
     "stars": 12
   }]
 }
 ```
 
-`stars` is `null` when unknown. The registry is projected from the same KV snapshot as the
-other read endpoints.
+`stars` is `null` when unknown. `install` carries the official DeepSeek Harness CLI
+command; the tracked alternative shown on the website is `npx dsh1024 add owner/repository`.
+The registry is projected from the same KV snapshot as the other read endpoints.
 
 ## POST /api/v1/install-events
 
-Anonymous install-event ingestion for the wrapper CLI (`sourceChannel: "dsh-1024store-cli"`)
-and the in-DSH marketplace plugin (`sourceChannel: "dsh-1024store-plugin"`).
+Anonymous install-event ingestion for the wrapper CLI (`npx dsh1024`,
+`sourceChannel: "dsh-1024store-cli"`) and the in-DSH marketplace plugin
+(`sourceChannel: "dsh-1024store-plugin"`). Both ship in the `dsh1024` npm package; the
+`sourceChannel` values are stable historical identifiers.
 
 - The event schema (19 fields) is unchanged; see
   [install analytics](install-analytics.md) for field semantics and
@@ -71,6 +74,17 @@ and the in-DSH marketplace plugin (`sourceChannel: "dsh-1024store-plugin"`).
 - Retained protections: strict field validation, `Content-Type: application/json`, 8 KB body
   limit, per-client rate limiting, HMAC anonymization of the client ID, and event-ID
   idempotency.
+
+## GET /api/v1/self/install-stats
+
+Aggregate install metrics for the catalog's own marketplace plugin (plugin id
+`imsai-sh/awesome-deepseek-harness-plugins`), rendered by the website's self-install
+banner. Returns the same `InstallMetrics` shape that is merged into the plugin detail
+payload (`installCount`, `installerCount`, `firstInstallCount`, `reinstallCount`,
+`updateCount`, `removeCount`, `failureCount`, `installs24h`, `installs7d`,
+`installs30d`, `latestInstallAt`), with the standard read-route `Cache-Control`
+header. All-zero metrics are returned when the analytics database is unavailable; the
+endpoint never exposes client hashes or raw events.
 
 ## POST /api/v1/catalog/sync
 

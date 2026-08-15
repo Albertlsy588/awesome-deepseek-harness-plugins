@@ -1,17 +1,19 @@
 # Install analytics
 
 DSH 1024Store counts installs reported through two channels, distinguished by
-the event's `sourceChannel` field:
+the event's `sourceChannel` field. Both channels ship in the single `dsh1024`
+npm package (`packages/dsh1024`); the channel values are stable historical
+identifiers and never change with package renames:
 
-- `dsh-1024store-cli` — the open-source wrapper CLI (`npx @dsh-1024store/cli`);
-- `dsh-1024store-plugin` — the in-DSH marketplace plugin
-  (`packages/dsh-1024store`), which installs plugins from the DSH settings page.
+- `dsh-1024store-cli` — the open-source wrapper CLI (`npx dsh1024`);
+- `dsh-1024store-plugin` — the in-DSH marketplace plugin, which installs
+  plugins from the DSH settings page.
 
 The wrapper CLI delegates package management to the official DeepSeek Harness
 CLI and only reports an event after checking the profile state on disk.
 
 ```text
-npx @dsh-1024store/cli add owner/repository --profile web
+npx dsh1024 add owner/repository
         |
         +-- official @deepseek-ai/dsh plugin command
         +-- before/after profile verification
@@ -83,16 +85,16 @@ in-flight upload is retained.
 The CLI does **not** send command output, file paths, usernames, environment
 variables, source files, session contents, prompts, raw errors, IP addresses,
 or a host-derived User-Agent. Requests use the fixed identifier
-`@dsh-1024store/cli`. The Worker HMACs the client UUID with
+`dsh1024/<version>`. The Worker HMACs the client UUID with
 `INSTALL_CLIENT_HASH_SECRET` and never writes the raw UUID to D1. Cloudflare may
 still process ordinary connection metadata as the hosting provider.
 
 Telemetry is enabled by default with a first-run notice. It can be disabled
-before execution with either `DO_NOT_TRACK=1` or
-`DSH_1024STORE_TELEMETRY=0`, or persistently with:
+before execution with either `DO_NOT_TRACK=1` or `DSH1024_TELEMETRY=0` (the
+legacy name `DSH_1024STORE_TELEMETRY` is still honored), or persistently with:
 
 ```bash
-npx @dsh-1024store/cli telemetry disable
+npx dsh1024 telemetry disable
 ```
 
 Use `telemetry status` to inspect the local setting, `telemetry enable` to opt
@@ -100,6 +102,24 @@ back in, and `telemetry reset` to rotate the local anonymous identifier and
 clear unsent events without changing the enabled/disabled preference.
 Persistently disabling telemetry also clears unsent events. Resetting does not
 rewrite historical aggregate data.
+
+## Self-install events (`npx dsh1024 store`)
+
+`npx dsh1024 store` installs the 1024 Store marketplace plugin itself into a
+DeepSeek Harness profile (default `web`, override with `--profile`). It uses
+the same event schema and channel (`sourceChannel: "dsh-1024store-cli"`) as a
+regular `add`, with a fixed identity:
+
+- `pluginId` is the catalog repository id
+  `imsai-sh/awesome-deepseek-harness-plugins` and `requestedRef` is `null`;
+  the official CLI receives the npm package name `dsh1024` as the install
+  target.
+- Profile verification recognizes the npm dependency spec (`dsh1024`) in
+  addition to GitHub specs, so before/after versions come from the installed
+  npm package.
+- Aggregates for that plugin id are exposed read-only at
+  `GET /api/v1/self/install-stats` and rendered by the website's self-install
+  banner; no separate counting rules apply.
 
 ## Storage
 
@@ -133,17 +153,26 @@ the primary tables retain the full HMAC for correct deduplication.
 
 ## Deployment
 
-Publish the wrapper package after verifying its exact tarball contents:
+Publish the unified `dsh1024` package after verifying its exact tarball
+contents:
 
 ```bash
 npm run test:cli
 npm run pack:cli
-npm publish --workspace @dsh-1024store/cli --access public
+npm publish --workspace dsh1024
 ```
 
-The `@dsh-1024store` npm organization must exist and the publisher must have access
-to it. Do not switch the website to another package name without updating the
-CLI package, UI command builder, tests, and this document together.
+`dsh1024` is an unscoped package, so no npm organization is required. After
+the first successful publish, deprecate the two legacy packages so existing
+users are redirected:
+
+```bash
+npm deprecate dsh-1024store "Renamed: install dsh1024 instead"
+npm deprecate @dsh-1024store/cli "Renamed: use npx dsh1024"
+```
+
+Do not switch the website to another package name without updating the
+package, UI command builder, tests, and this document together.
 
 Apply D1 migrations and set a high-entropy Worker secret before deploying:
 
@@ -167,7 +196,9 @@ as new instances.
 
 The CLI endpoint defaults to
 `https://deepseek1024.com/api/v1/install-events`. For local testing only, set
-`DSH_1024STORE_TELEMETRY_URL` to a different full endpoint URL.
+`DSH1024_TELEMETRY_URL` to a different full endpoint URL. Every `DSH1024_*`
+variable also reads its legacy `DSH_1024STORE_*` counterpart; when both are
+set, the `DSH1024_*` value wins.
 
 ## Trust boundary and abuse
 
