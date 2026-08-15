@@ -20,14 +20,14 @@ Merged submissions are synced to the website database and into this file automat
 - [Themes & Appearance](#theme) (2)
 - [Sessions & Messages](#session) (18)
 - [Memory](#memory) (13)
-- [Tools & Capabilities](#tools) (70)
-- [Skills](#skill) (2)
+- [Tools & Capabilities](#tools) (71)
+- [Skills](#skill) (3)
 - [Workflow & Automation](#workflow) (19)
 - [Notifications & Integrations](#notify) (14)
 - [Models & Providers](#model) (7)
 - [Development & Runtime](#dev) (43)
 - [Just for Fun](#fun) (17)
-- [Unclassified](#unclassified) (1230)
+- [Unclassified](#unclassified) (1228)
 
 <a id="ui"></a>
 
@@ -169,6 +169,7 @@ Merged submissions are synced to the website database and into this file automat
 - [dsh-image-search](https://github.com/zimai233/dsh-image-search) — Multi-engine reverse image search aggregator: Google Lens, Baidu, Yandex, TinEye, SauceNAO, IQDB, Ascii2d.
 - [dsh-kb-sieve](https://github.com/omdsh-dev/dsh-kb-sieve) — Build auditable KB packs (SQLite FTS5) from md/txt/docx/pdf with deterministic retrieval and original-text reading.
 - [dsh-market](https://github.com/dsh-market/dsh-market) — The plugin market inside DSH: a Settings page to browse and search the full community catalog by category, with confirmed one-click installs and an installed-plugins view.
+- [dsh-mcp-lens](https://github.com/labmimors/dsh-mcp-lens) — Progressive-disclosure MCP gateway for DeepSeek Harness: it keeps two model-facing tools, reveals ranked exact remote input schemas on demand, then calls an explicit server/tool pair.
 - [dsh-md-preview](https://github.com/LeslieWylie/dsh-md-preview) — Render Markdown to a standalone, self-contained HTML page: an `md_html_render` tool that works in a headless profile, plus a web drawer to browse, preview, edit and export local `.md` files; both share one renderer, with no runtime dependencies.
 - [dsh-mobile-gui-agent](https://github.com/kunjinkao-os/dsh-mobile-gui-agent) — Android GUI Agent with ADB screenshots, compact UI hierarchy grounding, verified iterative actions, approvals, and a Mobile Web view.
 - [dsh-net-proxy](https://github.com/mafeis/dsh-net-proxy) — Route agent network requests through a local HTTP/CONNECT/SOCKS5 proxy.
@@ -218,6 +219,7 @@ Merged submissions are synced to the website database and into this file automat
 
 ## Skills
 
+- [dsh-reverse-skill](https://github.com/dhicoc/dsh-reverse-skill) — A DeepSeek Harness Cordis plugin that registers 85 reverse-engineering, authorized penetration-testing, and security-research skills.
 - [dsh-skill-manager](https://github.com/YTxue/dsh-skill-manager) — Skill pool manager in the Settings sidebar: enable/disable, folder batch import with rename-conflict prompts, state-driven one-click DSH-spec check & auto-fix, system/project scope labels.
 - [skills](https://github.com/creght-dev/skills) — Skills for building websites on the Creght platform: CLI pull/push sync, page and component conventions, CMS, forms, auth, SEO, publishing and version rollback.
 
@@ -839,7 +841,6 @@ Merged submissions are synced to the website database and into this file automat
 - [dsh-mcp-admin](https://github.com/kairoz9/dsh-mcp-admin) — View MCP server status (/mcp) and manage MCP servers per profile from the settings page.
 - [dsh-mcp-center](https://github.com/drfccv/dsh-mcp-center) — Connect any MCP server to your DeepSeek Harness — point, click, done.
 - [dsh-mcp-json](https://github.com/caopu16/dsh-mcp-json) — deepseek-harness自动读取mcp相关配置文件（如.mcp.json），自动加载mcp
-- [dsh-mcp-lens](https://github.com/labmimors/dsh-mcp-lens) — Progressive-disclosure MCP gateway for DeepSeek Harness: 1,000 tools behind two model-facing schemas
 - [dsh-mcp-manager](https://github.com/1a125/dsh-mcp-manager) — DSH global MCP manager
 - [dsh-mcp-manager](https://github.com/fishlikewater/dsh-mcp-manager) — fishlikewater/dsh-mcp-manager discovered from GitHub.
 - [dsh-mcp-manager](https://github.com/HenC49/dsh-mcp-manager) — 一个 DeepSeek Harness MCP 配置页
@@ -1157,7 +1158,6 @@ Merged submissions are synced to the website database and into this file automat
 - [dsh-restart-web](https://github.com/shaoyi1991/dsh-restart-web) — DSH Web 设置页新增的「重启」入口：点击即可安全重启整个 DSH 进程，页面约 5 秒后自动重新连接。
 - [dsh-resume](https://github.com/xiaohj233/dsh-resume) — Resume interrupted DSH turns from an empty submit and restore sessions or subagents that were running at shutdown.
 - [dsh-resume-plugin](https://github.com/Demogorgon314/dsh-resume-plugin) — 让 DeepSeek Harness 安全读取并继续 Codex 与 Claude Code 的历史会话。
-- [dsh-reverse-skill](https://github.com/dhicoc/dsh-reverse-skill) — Complete reverse-skill (85 SKILL.md) as a DeepSeek Harness (dsh) Cordis plugin — reverse engineering, authorized pentesting and security research skill pack.
 - [dsh-review-loop](https://github.com/wuxiangru915/dsh-review-loop) — Incremental diff reviewer for DeepSeek Harness — Web UI review panel + /review command. 增量代码审查插件：checkpoint 增量队列 + 审查意见注入 agent.
 - [dsh-review-skills](https://github.com/ben7am1n/dsh-review-skills) — ben7am1n/dsh-review-skills discovered from GitHub.
 - [dsh-revive](https://github.com/omdsh-dev/dsh-revive) — DSH 一键复活：重启后给所有被打断的会话自动发送「继续」指令（/revive 命令 + revive_sessions 工具 + 浏览器一键按钮）

@@ -111,14 +111,14 @@ npx wrangler deploy --secrets-file .dev.vars
 - [主题与外观](#theme) (2)
 - [会话与消息](#session) (18)
 - [记忆](#memory) (13)
-- [工具与能力](#tools) (70)
-- [技能包](#skill) (2)
+- [工具与能力](#tools) (71)
+- [技能包](#skill) (3)
 - [工作流与自动化](#workflow) (19)
 - [通知与集成](#notify) (14)
 - [模型与账号接入](#model) (7)
 - [开发与运行时](#dev) (43)
 - [娱乐](#fun) (17)
-- [待分类](#unclassified) (1230)
+- [待分类](#unclassified) (1228)
 
 <a id="ui"></a>
 
@@ -260,6 +260,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-image-search](https://github.com/zimai233/dsh-image-search) — 多引擎反向识图聚合：Google Lens、百度、Yandex、TinEye、SauceNAO、IQDB、Ascii2d。
 - [dsh-kb-sieve](https://github.com/omdsh-dev/dsh-kb-sieve) — 从 md/txt/docx/pdf 构建可审计知识库包（SQLite FTS5），确定性检索与原文阅读。
 - [dsh-market](https://github.com/dsh-market/dsh-market) — 装在 DSH 里的插件市场：设置页内逛/搜全部社区插件，按分类筛选，确认后一键安装，已装插件一目了然。
+- [dsh-mcp-lens](https://github.com/labmimors/dsh-mcp-lens) — DeepSeek Harness 的渐进式披露 MCP 网关：保持两个面向模型的工具，按需返回排序后的远端精确 inputSchema，再调用明确的 server/tool。
 - [dsh-md-preview](https://github.com/LeslieWylie/dsh-md-preview) — 把 Markdown 渲染为自包含的独立 HTML 页面：提供在 headless 配置下同样可用的 `md_html_render` 工具，以及在网页端浏览、预览、编辑并导出本地 `.md` 文件的抽屉；两个入口共用同一个渲染器，无运行时依赖。
 - [dsh-mobile-gui-agent](https://github.com/kunjinkao-os/dsh-mobile-gui-agent) — Android GUI Agent：ADB 截图、压缩 UI hierarchy 定位、逐步动作验证、审批和 Mobile Web 视图。
 - [dsh-net-proxy](https://github.com/mafeis/dsh-net-proxy) — 让 agent 的网络请求走本机 HTTP/CONNECT/SOCKS5 代理。
@@ -309,6 +310,7 @@ npx wrangler deploy --secrets-file .dev.vars
 
 ## 技能包
 
+- [dsh-reverse-skill](https://github.com/dhicoc/dsh-reverse-skill) — 一个为 DeepSeek Harness 注册 85 个逆向工程、授权渗透测试与安全研究技能的 Cordis 插件。
 - [dsh-skill-manager](https://github.com/YTxue/dsh-skill-manager) — 设置侧边栏的 Skill 管理器：池与启用目录启停、文件夹批量导入（重名询问）、状态驱动一键规范检查与自动修复、系统级/项目级来源标识。
 - [skills](https://github.com/creght-dev/skills) — Creght 平台建站技能包：CLI 拉取/推送同步、页面与组件规范、CMS、表单、Auth、SEO、发布与版本回滚。
 
@@ -930,7 +932,6 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-mcp-admin](https://github.com/kairoz9/dsh-mcp-admin) — View MCP server status (/mcp) and manage MCP servers per profile from the settings page.
 - [dsh-mcp-center](https://github.com/drfccv/dsh-mcp-center) — Connect any MCP server to your DeepSeek Harness — point, click, done.
 - [dsh-mcp-json](https://github.com/caopu16/dsh-mcp-json) — deepseek-harness自动读取mcp相关配置文件（如.mcp.json），自动加载mcp
-- [dsh-mcp-lens](https://github.com/labmimors/dsh-mcp-lens) — Progressive-disclosure MCP gateway for DeepSeek Harness: 1,000 tools behind two model-facing schemas
 - [dsh-mcp-manager](https://github.com/1a125/dsh-mcp-manager) — DSH global MCP manager
 - [dsh-mcp-manager](https://github.com/fishlikewater/dsh-mcp-manager) — fishlikewater/dsh-mcp-manager discovered from GitHub.
 - [dsh-mcp-manager](https://github.com/HenC49/dsh-mcp-manager) — 一个 DeepSeek Harness MCP 配置页
@@ -1248,7 +1249,6 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-restart-web](https://github.com/shaoyi1991/dsh-restart-web) — DSH Web 设置页新增的「重启」入口：点击即可安全重启整个 DSH 进程，页面约 5 秒后自动重新连接。
 - [dsh-resume](https://github.com/xiaohj233/dsh-resume) — Resume interrupted DSH turns from an empty submit and restore sessions or subagents that were running at shutdown.
 - [dsh-resume-plugin](https://github.com/Demogorgon314/dsh-resume-plugin) — 让 DeepSeek Harness 安全读取并继续 Codex 与 Claude Code 的历史会话。
-- [dsh-reverse-skill](https://github.com/dhicoc/dsh-reverse-skill) — Complete reverse-skill (85 SKILL.md) as a DeepSeek Harness (dsh) Cordis plugin — reverse engineering, authorized pentesting and security research skill pack.
 - [dsh-review-loop](https://github.com/wuxiangru915/dsh-review-loop) — Incremental diff reviewer for DeepSeek Harness — Web UI review panel + /review command. 增量代码审查插件：checkpoint 增量队列 + 审查意见注入 agent.
 - [dsh-review-skills](https://github.com/ben7am1n/dsh-review-skills) — ben7am1n/dsh-review-skills discovered from GitHub.
 - [dsh-revive](https://github.com/omdsh-dev/dsh-revive) — DSH 一键复活：重启后给所有被打断的会话自动发送「继续」指令（/revive 命令 + revive_sessions 工具 + 浏览器一键按钮）
