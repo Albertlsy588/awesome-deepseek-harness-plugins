@@ -25,10 +25,10 @@ import { useLiveStats } from '../lib/useLiveStats'
 import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
+// growth7d / growth30d stay available in the API but are hidden here until
+// enough snapshot history accumulates to make those windows meaningful.
 const GITHUB_RANKING_MODES: RankingMode[] = [
   'growth24h',
-  'growth7d',
-  'growth30d',
   'stars',
   'newest',
   'active',
@@ -117,7 +117,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
     ? requestedSort as CatalogSort
     : 'stars'
   const [draftQuery, setDraftQuery] = useState(query)
-  const [rankingMode, setRankingMode] = useState<RankingMode>('stars')
+  const [rankingMode, setRankingMode] = useState<RankingMode>('growth24h')
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null)
   const [playIntro] = useState(() => !heroIntroPlayed)
   useEffect(() => {

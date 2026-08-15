@@ -2,7 +2,6 @@ import type { CatalogPlugin, StarGrowth } from '../types'
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
-const HISTORY_RETENTION_MS = 45 * DAY_MS
 const BASELINE_TOLERANCE_MS = 2 * HOUR_MS
 const MIN_PARTIAL_BASELINE_AGE_MS = HOUR_MS
 const INSERT_ROWS_PER_STATEMENT = 25
@@ -85,13 +84,6 @@ export async function recordStarSnapshots(
   })
 
   await db.batch(statements)
-
-  const scheduledAt = new Date(capturedAt)
-  if (scheduledAt.getUTCHours() === 0 && scheduledAt.getUTCMinutes() === 0) {
-    await db.prepare('DELETE FROM github_star_snapshots WHERE bucket_hour < ?')
-      .bind(hourBucket(capturedAt - HISTORY_RETENTION_MS))
-      .run()
-  }
 }
 
 async function loadEarliestSnapshots(
