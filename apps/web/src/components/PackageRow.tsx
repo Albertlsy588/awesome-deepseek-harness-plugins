@@ -1,7 +1,7 @@
-import { ArrowUpRight, CalendarDays, GitFork, Star, TrendingUp } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, Download, Star, TrendingUp, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
-import { packagePath } from '../lib/api'
+import { packagePath, trackedInstallCommand } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { CategoryTag } from './CategoryTag'
@@ -26,6 +26,18 @@ export function PackageRow({ plugin, category, index, ranking }: PackageRowProps
         : null
   const isGrowthRanking =
     ranking === 'growth24h' || ranking === 'growth7d' || ranking === 'growth30d'
+  const isInstallRanking =
+    ranking === 'installs' ||
+    ranking === 'installs24h' ||
+    ranking === 'installs7d' ||
+    ranking === 'installs30d'
+  const periodInstalls = ranking === 'installs24h'
+    ? plugin.installs24h ?? 0
+    : ranking === 'installs7d'
+      ? plugin.installs7d ?? 0
+      : ranking === 'installs30d'
+        ? plugin.installs30d ?? 0
+        : plugin.installCount ?? 0
   const relevantDate = ranking === 'active'
     ? plugin.pushedAt
     : ranking === 'newest'
@@ -51,17 +63,39 @@ export function PackageRow({ plugin, category, index, ranking }: PackageRowProps
       <CategoryTag category={category} />
 
       <div className="row-metrics">
-        {isGrowthRanking ? (
+        {isInstallRanking ? (
+          <span className="install-metric" title={t(
+            ranking === 'installs24h'
+              ? 'installs24h'
+              : ranking === 'installs7d'
+                ? 'installs7d'
+                : ranking === 'installs30d'
+                  ? 'installs30d'
+                  : 'installOperations',
+          )}>
+            {ranking === 'installs' ? (
+              <Download size={14} aria-hidden="true" />
+            ) : (
+              <TrendingUp size={14} aria-hidden="true" />
+            )}
+            {formatNumber(periodInstalls, language)}
+          </span>
+        ) : isGrowthRanking ? (
           <span className="growth-metric" title={t('starGrowth')}>
             <TrendingUp size={14} aria-hidden="true" />
             {growth === null
               ? '--'
               : `${growth >= 0 ? '+' : ''}${formatNumber(growth, language)}`}
           </span>
-        ) : (
+        ) : ranking ? (
           <span title={t('stars')}>
             <Star size={14} aria-hidden="true" />
             {plugin.stars === null ? '--' : formatNumber(plugin.stars, language)}
+          </span>
+        ) : (
+          <span className="install-metric" title={t('installOperations')}>
+            <Download size={14} aria-hidden="true" />
+            {formatNumber(plugin.installCount ?? 0, language)}
           </span>
         )}
         {isGrowthRanking && (
@@ -70,13 +104,25 @@ export function PackageRow({ plugin, category, index, ranking }: PackageRowProps
             {plugin.stars === null ? '--' : formatNumber(plugin.stars, language)}
           </span>
         )}
-        {!ranking && (
-          <span className="fork-metric" title={t('forks')}>
-            <GitFork size={14} aria-hidden="true" />
-            {plugin.forks === null ? '--' : formatNumber(plugin.forks, language)}
+        {isInstallRanking && ranking !== 'installs' && (
+          <span title={t('installOperations')}>
+            <Download size={14} aria-hidden="true" />
+            {formatNumber(plugin.installCount ?? 0, language)}
           </span>
         )}
-        {!isGrowthRanking && (
+        {isInstallRanking && (
+          <span className="installer-metric" title={t('anonymousInstallers')}>
+            <Users size={14} aria-hidden="true" />
+            {formatNumber(plugin.installerCount ?? 0, language)}
+          </span>
+        )}
+        {!ranking && (
+          <span className="catalog-star-metric" title={t('stars')}>
+            <Star size={14} aria-hidden="true" />
+            {plugin.stars === null ? '--' : formatNumber(plugin.stars, language)}
+          </span>
+        )}
+        {!isGrowthRanking && !isInstallRanking && (
           <span
             className="date-metric"
             title={ranking === 'newest' ? t('latestRelease') : t('lastPush')}
@@ -87,7 +133,7 @@ export function PackageRow({ plugin, category, index, ranking }: PackageRowProps
         )}
       </div>
 
-      {!ranking && <InstallCommand command={plugin.install} compact />}
+      {!ranking && <InstallCommand command={trackedInstallCommand(plugin)} compact />}
 
       <Link
         className="row-open"

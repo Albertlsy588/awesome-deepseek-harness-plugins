@@ -43,9 +43,27 @@ const STAR_GROWTH = [
   { growth24h: 1, growth7d: 2, growth30d: 2 },
 ]
 
+const INSTALL_COUNTS = [42, 80, 0, 45, 7, 3, 1]
+const INSTALLS_24H = [3, 2, 0, 8, 0, 0, 1]
+const INSTALLS_7D = [12, 8, 0, 20, 1, 0, 2]
+const INSTALLS_30D = [30, 45, 0, 25, 4, 1, 2]
+
 export const TEST_PLUGINS: CatalogPlugin[] = TEST_REGISTRY.plugins.map((plugin, index) => ({
   ...plugin,
   ...STAR_GROWTH[index],
+  installCount: INSTALL_COUNTS[index] ?? 0,
+  installerCount: Math.floor((INSTALL_COUNTS[index] ?? 0) * 0.75),
+  firstInstallCount: Math.floor((INSTALL_COUNTS[index] ?? 0) * 0.75),
+  reinstallCount: (INSTALL_COUNTS[index] ?? 0) - Math.floor((INSTALL_COUNTS[index] ?? 0) * 0.75),
+  updateCount: index,
+  removeCount: Math.floor(index / 2),
+  failureCount: index === 2 ? 1 : 0,
+  installs24h: INSTALLS_24H[index] ?? 0,
+  installs7d: INSTALLS_7D[index] ?? 0,
+  installs30d: INSTALLS_30D[index] ?? 0,
+  latestInstallAt: (INSTALL_COUNTS[index] ?? 0) > 0
+    ? `2026-08-${String(14 - index).padStart(2, '0')}T13:00:00Z`
+    : null,
   repository: repositoryName(plugin),
   stars: STAR_COUNTS[index] ?? null,
   forks: STAR_COUNTS[index] === null ? null : index + 1,

@@ -49,7 +49,21 @@ export interface StarGrowth {
   growth30d: number | null
 }
 
-export interface CatalogPlugin extends RegistryPlugin, RepositoryMetric, StarGrowth {
+export interface InstallMetrics {
+  installCount: number
+  installerCount: number
+  firstInstallCount: number
+  reinstallCount: number
+  updateCount: number
+  removeCount: number
+  failureCount: number
+  installs24h: number
+  installs7d: number
+  installs30d: number
+  latestInstallAt: string | null
+}
+
+export interface CatalogPlugin extends RegistryPlugin, RepositoryMetric, StarGrowth, InstallMetrics {
   repository: string
 }
 
@@ -76,6 +90,10 @@ export interface CategoryResult extends RegistryCategory {
 
 export type CatalogSort =
   | 'stars'
+  | 'installs'
+  | 'installs24h'
+  | 'installs7d'
+  | 'installs30d'
   | 'growth24h'
   | 'growth7d'
   | 'growth30d'
@@ -87,6 +105,10 @@ export interface CatalogResponse {
   packages: CatalogPlugin[]
   rankings: {
     stars: CatalogPlugin[]
+    installs: CatalogPlugin[]
+    installs24h: CatalogPlugin[]
+    installs7d: CatalogPlugin[]
+    installs30d: CatalogPlugin[]
     growth24h: CatalogPlugin[]
     growth7d: CatalogPlugin[]
     growth30d: CatalogPlugin[]
@@ -127,7 +149,7 @@ export interface GitHubSummary {
   avatarUrl: string
 }
 
-export interface PackageDetail extends RegistryPlugin {
+export interface PackageDetail extends RegistryPlugin, InstallMetrics {
   github: GitHubSummary | null
   manifest: PackageManifestSummary | null
   readme: string | null

@@ -1,6 +1,6 @@
-# DeepSeek Harness 插件目录
+# DSH 1024Store
 
-[DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）社区插件目录，共收录 **262** 个插件、11 个分类。
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **262** 个插件、11 个分类。
 
 这里主要展示可安装的插件。每个插件由各自作者独立开发和维护，收录仅表示其符合目录的基础格式要求。
 
@@ -9,6 +9,18 @@
 [![GitHub Stars](https://img.shields.io/github/stars/imsai-sh/awesome-deepseek-harness-plugins?style=social)](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)
 
 > 如果这个目录帮你找到好用的插件，欢迎点个 [⭐ Star](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)，让更多 DeepSeek Harness 用户看到它。
+
+## 安装插件并计入统计
+
+网站现在优先提供开源包装 CLI；它会调用官方 DeepSeek Harness 插件命令、校验 profile 的真实安装结果，并把匿名安装结果可靠地上报到排行榜：
+
+```bash
+npx @dsh-1024store/cli add <owner>/<repository> --profile web
+```
+
+仓库标识和 `--profile` 之外的参数会原样传给官方 CLI；参数可能与包装器冲突时可放到 `--` 后，例如 `... -- --ignore-scripts --reporter append-only`。透传参数不会写入遥测或本地 receipt。
+
+统计身份是保存在 `$DSH_HOME/.dsh-1024store/` 的随机安装实例 ID，不是实名用户或账号。CLI 不上传命令输出、路径、用户名、环境变量、会话内容或原始错误；可用 `npx @dsh-1024store/cli telemetry disable`、`DO_NOT_TRACK=1` 或 `DSH_1024STORE_TELEMETRY=0` 关闭。直接使用官方 `dsh plugin` 命令仍然可用，但不会计入 DSH 1024Store 安装统计。详细字段、口径、存储和部署方式见 [安装统计设计](docs/install-analytics.md)，CLI 源码见 [`apps/cli`](apps/cli)。
 
 ## 提交插件
 
@@ -32,7 +44,7 @@ npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plug
 
 欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置，通过后自动合并。
 
-安装命令：`dsh plugin --profile web add github:<owner>/<repository>`。
+安装命令：`npx @dsh-1024store/cli add <owner>/<repository> --profile web`。
 
 ## 项目定位
 
@@ -58,19 +70,23 @@ scripts/            插件发现、校验和测试脚本
 
 ```bash
 npm ci
+cd apps/web
+npx wrangler d1 migrations apply dsh-store-star-history --local
+cd ../..
 npm run dev
 ```
 
-浏览器访问 <http://127.0.0.1:5173>。如需完整 GitHub 数据，可在 `apps/web/.dev.vars` 中配置 `GITHUB_TOKEN`。
+浏览器访问 <http://127.0.0.1:5173>。如需完整 GitHub 数据，可在 `apps/web/.dev.vars` 中配置 `GITHUB_TOKEN`；本地接收安装事件还需要一个至少 32 字符的 `INSTALL_CLIENT_HASH_SECRET`。
 
 部署到 Cloudflare Workers：
 
 ```bash
 cp apps/web/.env.example apps/web/.dev.vars
-# 在 apps/web/.dev.vars 中填写 GITHUB_TOKEN
+# 在 apps/web/.dev.vars 中填写 GITHUB_TOKEN 和 INSTALL_CLIENT_HASH_SECRET
 npx wrangler login
 npm run build
 cd apps/web
+npx wrangler d1 migrations apply dsh-store-star-history --remote
 npx wrangler deploy --secrets-file .dev.vars
 ```
 

@@ -2,7 +2,7 @@
 
 ## Decision
 
-The Awesome catalog and the online marketplace live in one repository, with `catalog/` and `apps/web/` as explicit ownership boundaries. Plugin authors contribute one isolated source entry; maintainers update the human-readable lists and runtime projections separately.
+The Awesome catalog, tracked installer, and online marketplace live in one repository, with `catalog/`, `apps/cli/`, and `apps/web/` as explicit ownership boundaries. Plugin authors contribute one isolated source entry; maintainers update the human-readable lists and runtime projections separately.
 
 ```text
 plugin source entry -> static review -> maintainer projections -> Worker build -> Cloudflare deploy
@@ -19,6 +19,7 @@ plugin source entry -> static review -> maintainer projections -> Worker build -
 | `README.md` | Primary Chinese plugin directory | No |
 | `catalog/README.md` | English plugin directory | No |
 | `catalog/generated/` | Stable public registry artifact | No |
+| `apps/cli/` | Publishable wrapper around the official DSH plugin command, local verification, and install-event delivery | Yes |
 | `apps/web/src/` | React interface | Yes |
 | `apps/web/worker/` | Hono API, GitHub metrics, KV snapshots, and live statistics | Yes, except `data/registry.generated.json` |
 | `apps/web/public/` | Static assets copied by Vite | No for generated catalog files |
@@ -58,6 +59,14 @@ the stable public artifact and keeps the website available if D1 or GitHub is te
 unavailable.
 
 Live presence has a different consistency model, so it stays in the `LiveStats` Durable Object. Catalog changes never migrate or lock the live counter.
+
+Install analytics use the same D1 database as star history but separate tables.
+The wrapper CLI delegates to the official DeepSeek Harness CLI, verifies the
+profile before recording success, and retries idempotent events from a local
+queue. The Worker stores a server-keyed hash of each anonymous installation
+instance, never the raw client ID, and merges hourly aggregates into catalog
+snapshots. See [install analytics](install-analytics.md) for the event contract,
+counting rules, privacy controls, and deployment steps.
 
 ## Growth rules
 

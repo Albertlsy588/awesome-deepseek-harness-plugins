@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { Language } from './api'
 
 export const SITE_ORIGIN = 'https://deepseek1024.com'
-const SITE_NAME = 'DeepSeek Harness Plugin Store'
+const SITE_NAME = 'DSH 1024Store'
 const DEFAULT_IMAGE = `${SITE_ORIGIN}/deepseek1024-icon.png`
 
 interface PageSeoOptions {

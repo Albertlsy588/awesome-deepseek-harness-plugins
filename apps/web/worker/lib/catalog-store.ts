@@ -2,15 +2,17 @@ import type {
   BackgroundContext,
   CatalogPlugin,
   CatalogSnapshotResult,
+  InstallMetrics,
   StoredCatalogSnapshot,
 } from '../types'
 import { repositoryName } from './catalog'
 import { loadCatalogSnapshotFromD1, saveCatalogMetrics, syncBundledRegistry } from './catalog-db'
 import { fetchGitHubMetrics, metricKey } from './github-metrics'
+import { emptyInstallMetrics, loadInstallMetrics } from './install-metrics'
 import { BUNDLED_REGISTRY, loadRegistry } from './registry'
 import { emptyStarGrowth, updateStarHistory } from './star-history'
 
-const SNAPSHOT_KEY = 'catalog:snapshot:v4'
+const SNAPSHOT_KEY = 'catalog:snapshot:v5'
 const SNAPSHOT_TTL_MS = 15 * 60 * 1000
 
 type JsonObject = Record<string, unknown>
@@ -38,7 +40,18 @@ function isCatalogPlugin(value: unknown): value is CatalogPlugin {
     (typeof value.latestReleaseAt === 'string' || value.latestReleaseAt === null) &&
     (typeof value.growth24h === 'number' || value.growth24h === null) &&
     (typeof value.growth7d === 'number' || value.growth7d === null) &&
-    (typeof value.growth30d === 'number' || value.growth30d === null)
+    (typeof value.growth30d === 'number' || value.growth30d === null) &&
+    typeof value.installCount === 'number' &&
+    typeof value.installerCount === 'number' &&
+    typeof value.firstInstallCount === 'number' &&
+    typeof value.reinstallCount === 'number' &&
+    typeof value.updateCount === 'number' &&
+    typeof value.removeCount === 'number' &&
+    typeof value.failureCount === 'number' &&
+    typeof value.installs24h === 'number' &&
+    typeof value.installs7d === 'number' &&
+    typeof value.installs30d === 'number' &&
+    (typeof value.latestInstallAt === 'string' || value.latestInstallAt === null)
   )
 }
 
@@ -79,6 +92,35 @@ function logStarHistoryError(error: unknown): void {
   )
 }
 
+function logInstallMetricsError(error: unknown): void {
+  console.error(
+    JSON.stringify({
+      message: 'install_metrics_refresh_failed',
+      error: error instanceof Error ? error.message : String(error),
+    }),
+  )
+}
+
+function installMetricKey(plugin: Pick<CatalogPlugin, 'owner' | 'repository'>): string {
+  return `${plugin.owner}/${plugin.repository}`.toLocaleLowerCase()
+}
+
+function installMetricsFrom(plugin: CatalogPlugin): InstallMetrics {
+  return {
+    installCount: plugin.installCount,
+    installerCount: plugin.installerCount,
+    firstInstallCount: plugin.firstInstallCount,
+    reinstallCount: plugin.reinstallCount,
+    updateCount: plugin.updateCount,
+    removeCount: plugin.removeCount,
+    failureCount: plugin.failureCount,
+    installs24h: plugin.installs24h,
+    installs7d: plugin.installs7d,
+    installs30d: plugin.installs30d,
+    latestInstallAt: plugin.latestInstallAt,
+  }
+}
+
 async function readStoredSnapshot(env: Env): Promise<StoredCatalogSnapshot | null> {
   try {
     const value: unknown = await env.CATALOG_CACHE.get(SNAPSHOT_KEY, 'json')
@@ -115,6 +157,7 @@ export async function refreshCatalogSnapshot(
           const previous = previousByRepository.get(metricKey(plugin))
           return {
             ...plugin,
+            ...(previous ? installMetricsFrom(previous) : emptyInstallMetrics()),
             stars: metric?.stars ?? plugin.stars ?? previous?.stars ?? null,
             forks: metric?.forks ?? plugin.forks ?? previous?.forks ?? null,
             pushedAt: metric?.pushedAt ?? plugin.pushedAt ?? previous?.pushedAt ?? null,
@@ -134,6 +177,19 @@ export async function refreshCatalogSnapshot(
             ...plugin,
             ...(growth.get(metricKey(plugin)) ?? {}),
           }))
+        }
+        try {
+          const installMetrics = await loadInstallMetrics(
+            env.CATALOG_DB,
+            plugins.map((plugin) => `${plugin.owner}/${plugin.repository}`),
+            capturedAt,
+          )
+          plugins = plugins.map((plugin) => ({
+            ...plugin,
+            ...(installMetrics.get(installMetricKey(plugin)) ?? emptyInstallMetrics()),
+          }))
+        } catch (error) {
+          logInstallMetricsError(error)
         }
         const snapshot = {
           ...d1Snapshot,
@@ -170,7 +226,9 @@ export async function refreshCatalogSnapshot(
       : emptyStarGrowth()
     return {
       ...plugin,
+      install: `npx @dsh-1024store/cli add ${plugin.owner}/${repositoryName(plugin)} --profile web`,
       ...previousGrowth,
+      ...(previous ? installMetricsFrom(previous) : emptyInstallMetrics()),
       repository: repositoryName(plugin),
       stars: metric?.stars ?? previous?.stars ?? null,
       forks: metric?.forks ?? previous?.forks ?? null,
@@ -190,6 +248,22 @@ export async function refreshCatalogSnapshot(
       }))
     } catch (error) {
       logStarHistoryError(error)
+    }
+  }
+
+  if (env.CATALOG_DB) {
+    try {
+      const installMetrics = await loadInstallMetrics(
+        env.CATALOG_DB,
+        plugins.map((plugin) => `${plugin.owner}/${plugin.repository}`),
+        capturedAt,
+      )
+      plugins = plugins.map((plugin) => ({
+        ...plugin,
+        ...(installMetrics.get(installMetricKey(plugin)) ?? emptyInstallMetrics()),
+      }))
+    } catch (error) {
+      logInstallMetricsError(error)
     }
   }
 

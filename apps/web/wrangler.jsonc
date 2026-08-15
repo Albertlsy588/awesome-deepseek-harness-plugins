@@ -5,7 +5,7 @@
   "compatibility_date": "2026-08-14",
   "compatibility_flags": ["nodejs_compat"],
   "secrets": {
-    "required": ["GITHUB_TOKEN"]
+    "required": ["GITHUB_TOKEN", "INSTALL_CLIENT_HASH_SECRET"]
   },
   "kv_namespaces": [
     {

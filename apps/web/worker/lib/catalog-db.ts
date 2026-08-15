@@ -5,6 +5,8 @@ import type {
   RegistryCategory,
   StoredCatalogSnapshot,
 } from '../types'
+import { repositoryName } from './catalog'
+import { emptyInstallMetrics } from './install-metrics'
 
 const UNCLASSIFIED_CATEGORY = {
   en: 'Unclassified',
@@ -19,6 +21,11 @@ interface RepositoryIdentityRow {
   pushed_at: string | null
   validation_status: string
 }
+
+// Bump this marker whenever the bundled-registry projection changes without a
+// corresponding change to registry.generated.json. This v2 projection derives
+// repository identity from the GitHub URL instead of the human-facing name.
+const BUNDLED_REGISTRY_SYNC_VERSION = 'repository-url-v2'
 
 interface PendingRepositoryRow {
   github_id: number
@@ -108,12 +115,14 @@ export async function syncBundledRegistry(
   registry: Registry,
   now = new Date().toISOString(),
 ): Promise<void> {
+  const syncRevision = `${BUNDLED_REGISTRY_SYNC_VERSION}:${registry.revision}`
   const revision = await getCatalogState(db, 'bundled_registry_revision')
-  if (revision === registry.revision) return
+  if (revision === syncRevision) return
 
   for (const group of chunks(registry.plugins, 50)) {
     await db.batch(group.map((plugin) => {
-      const fullName = `${plugin.owner}/${plugin.name}`
+      const repository = repositoryName(plugin)
+      const fullName = `${plugin.owner}/${repository}`
       return db.prepare(
         `INSERT INTO catalog_repositories (
            full_name, normalized_full_name, owner, repository_name, html_url,
@@ -130,7 +139,7 @@ export async function syncBundledRegistry(
         fullName,
         normalizeRepositoryName(fullName),
         plugin.owner,
-        plugin.name,
+        repository,
         plugin.url,
         now,
         now,
@@ -142,7 +151,7 @@ export async function syncBundledRegistry(
 
   for (const group of chunks(registry.plugins, 40)) {
     const normalizedNames = group.map((plugin) =>
-      normalizeRepositoryName(`${plugin.owner}/${plugin.name}`))
+      normalizeRepositoryName(`${plugin.owner}/${repositoryName(plugin)}`))
     const result = await db.prepare(
       `SELECT id, normalized_full_name
          FROM catalog_repositories
@@ -151,8 +160,9 @@ export async function syncBundledRegistry(
     const ids = new Map(result.results.map((row) => [row.normalized_full_name, row.id]))
     const statements: D1PreparedStatement[] = []
     for (const plugin of group) {
-      const id = ids.get(normalizeRepositoryName(`${plugin.owner}/${plugin.name}`))
-      if (id === undefined) throw new Error(`Bundled repository was not inserted: ${plugin.owner}/${plugin.name}`)
+      const fullName = `${plugin.owner}/${repositoryName(plugin)}`
+      const id = ids.get(normalizeRepositoryName(fullName))
+      if (id === undefined) throw new Error(`Bundled repository was not inserted: ${fullName}`)
       statements.push(
         db.prepare(
           `INSERT INTO catalog_repository_sources (
@@ -189,7 +199,8 @@ export async function syncBundledRegistry(
   }
 
   const currentNames = JSON.stringify(
-    registry.plugins.map((plugin) => normalizeRepositoryName(`${plugin.owner}/${plugin.name}`)),
+    registry.plugins.map((plugin) =>
+      normalizeRepositoryName(`${plugin.owner}/${repositoryName(plugin)}`)),
   )
   await db.batch([
     db.prepare(
@@ -216,7 +227,7 @@ export async function syncBundledRegistry(
     ).bind(currentNames),
   ])
 
-  await setCatalogState(db, 'bundled_registry_revision', registry.revision, now)
+  await setCatalogState(db, 'bundled_registry_revision', syncRevision, now)
 }
 
 export async function getCatalogState(db: D1Database, key: string): Promise<string | null> {
@@ -590,6 +601,7 @@ export async function loadCatalogSnapshotFromD1(
   const plugins = result.results.map<CatalogPlugin>((row) => {
     const description = row.description ?? `${row.full_name} discovered from GitHub.`
     return {
+      ...emptyInstallMetrics(),
       name: row.display_name ?? row.repository_name,
       owner: row.owner,
       url: row.html_url,
@@ -599,7 +611,7 @@ export async function loadCatalogSnapshotFromD1(
         en: row.description_en ?? description,
         zh: row.description_zh ?? description,
       },
-      install: `dsh plugin --profile web add github:${row.full_name}`,
+      install: `npx @dsh-1024store/cli add ${row.full_name} --profile web`,
       added: row.added ?? (row.github_updated_at ?? now).slice(0, 10),
       stars: row.stars,
       forks: row.forks,

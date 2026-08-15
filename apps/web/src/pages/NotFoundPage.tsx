@@ -7,7 +7,7 @@ export function NotFoundPage() {
   const { language, t } = useI18n()
   const { pathname } = useLocation()
   usePageSeo({
-    title: language === 'zh' ? '页面未找到 | DSH 插件市场' : 'Page not found | DSH Store',
+    title: language === 'zh' ? '页面未找到 | DSH 1024Store' : 'Page not found | DSH 1024Store',
     description: language === 'zh'
       ? '请求的页面不在 DeepSeek Harness 社区插件目录中。'
       : 'The requested page is not available in the DeepSeek Harness community plugin catalog.',
