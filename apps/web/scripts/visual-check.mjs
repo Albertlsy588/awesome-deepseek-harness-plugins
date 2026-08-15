@@ -108,7 +108,7 @@ async function assertSeo(page, label, canonicalPath, robots = 'index,follow') {
 
 async function assertLiveStats(page) {
   await page.waitForFunction(
-    () => [...document.querySelectorAll('.hero-live dd')].every((node) => node.textContent !== '--'),
+    () => [...document.querySelectorAll('.hero-live-count')].every((node) => node.textContent !== '--'),
     undefined,
     { timeout: 10_000 },
   )
@@ -167,8 +167,11 @@ try {
   if ((await rankings.locator('.site-header').count()) !== 0) {
     throw new Error('the removed standalone site header is still rendered')
   }
-  if ((await rankings.locator('.catalog-hero .hero-brand-copy small').textContent())?.trim() !== 'DSH 1024Store') {
-    throw new Error('catalog banner is missing the DSH 1024Store brand')
+  if ((await rankings.locator('.catalog-hero .hero-brand-copy strong').textContent())?.trim() !== 'DeepSeek Harness Plugin 1024Store') {
+    throw new Error('catalog banner is missing the DeepSeek Harness Plugin 1024Store brand')
+  }
+  if ((await rankings.locator('.catalog-hero .hero-lockup-mark img[src="/deepseek1024.png"]').count()) !== 1) {
+    throw new Error('hero poster mark is missing the store icon')
   }
   if ((await rankings.locator('footer, .reset-button').count()) !== 0) {
     throw new Error('removed footer or refresh control is still rendered')
@@ -219,7 +222,7 @@ try {
   await assertMinFontSize(mobile, 'mobile package description', '.row-identity p', 12)
   await assertMinFontSize(mobile, 'mobile package metrics', '.row-metrics > span', 11)
   await assertMinFontSize(mobile, 'mobile hero description', '.hero-heading > p:last-child', 14)
-  await assertMinFontSize(mobile, 'mobile hero ledger labels', '.hero-ledger dt', 11)
+  await assertMinFontSize(mobile, 'mobile hero tally label', '.hero-tally-label', 11)
   await assertHorizontalTouchScroller(mobile, 'mobile category filters', '.category-filter')
 
   await mobile.locator('.category-filter button').nth(1).click()

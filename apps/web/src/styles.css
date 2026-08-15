@@ -97,25 +97,6 @@ body {
   gap: 11px;
 }
 
-.hero-brand-mark {
-  position: relative;
-  display: grid;
-  width: 42px;
-  height: 42px;
-  flex: none;
-  place-items: center;
-  border: 1px solid rgba(45, 43, 37, 0.16);
-  border-radius: 10px;
-  background: rgba(255, 253, 248, 0.84);
-  box-shadow: 3px 3px 0 rgba(36, 35, 31, 0.09);
-}
-
-.hero-brand-mark .brand-mark {
-  width: 34px;
-  height: 34px;
-  object-fit: contain;
-}
-
 .hero-brand-copy {
   display: flex;
   min-width: 0;
@@ -130,14 +111,6 @@ body {
   font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.015em;
-  white-space: nowrap;
-}
-
-.hero-brand-copy small {
-  color: var(--subtle);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -208,15 +181,48 @@ body {
   box-shadow: none;
 }
 
+/* Masthead grid: the tally card spans both rows so its top edge locks to the
+   heading and its bottom edge locks to the search bar. */
 .hero-stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 310px;
-  align-items: end;
-  gap: 64px;
-  padding: 42px 0 30px;
+  grid-template-rows: 1fr auto;
+  grid-template-areas:
+    "heading tally"
+    "search tally";
+  gap: 26px 56px;
+  padding: 30px 0 26px;
 }
 
 .hero-heading {
+  min-width: 0;
+  align-self: start;
+  grid-area: heading;
+}
+
+/* Poster lockup: the store mark sits beside the title like a stamped label. */
+.hero-lockup {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
+.hero-lockup-mark {
+  display: grid;
+  width: 132px;
+  height: 132px;
+  flex: none;
+  place-items: center;
+}
+
+.hero-lockup-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(4px 5px 0 rgba(36, 35, 31, 0.12));
+}
+
+.hero-lockup-copy {
   min-width: 0;
 }
 
@@ -233,19 +239,22 @@ body {
 .hero-heading h1 {
   display: flex;
   margin: 0;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 13px;
+  flex-direction: column;
+  gap: 3px;
   color: var(--ink);
   font-family: var(--font-display);
-  font-size: clamp(40px, 4.15vw, 58px);
   font-weight: 850;
-  letter-spacing: -0.055em;
-  line-height: 0.98;
+  line-height: 1.04;
+}
+
+.hero-heading h1 span {
+  font-size: clamp(21px, 2.2vw, 30px);
+  letter-spacing: -0.03em;
 }
 
 .hero-heading h1 em {
   color: var(--brand);
+  font-size: clamp(33px, 3.3vw, 45px);
   font-style: normal;
   letter-spacing: -0.045em;
 }
@@ -258,46 +267,98 @@ body {
   line-height: 1.7;
 }
 
-.hero-ledger {
+.hero-tally {
+  position: relative;
   display: grid;
   margin: 0;
-  border-top: 1px solid rgba(45, 43, 37, 0.32);
-  border-bottom: 1px solid rgba(45, 43, 37, 0.32);
+  grid-area: tally;
+  padding: 15px 20px 16px;
+  border: 1px solid var(--ink);
+  border-radius: 14px;
+  background-color: rgba(255, 253, 248, 0.94);
+  background-image:
+    linear-gradient(rgba(63, 96, 246, 0.075) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(63, 96, 246, 0.075) 1px, transparent 1px);
+  background-size: 21px 21px;
+  box-shadow: 5px 5px 0 rgba(36, 35, 31, 0.16);
 }
 
-.hero-ledger > div {
+.hero-tally dd {
+  margin: 0;
+}
+
+.hero-tally-count {
   display: grid;
-  min-height: 51px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 20px;
-  padding: 8px 2px;
-  border-bottom: 1px solid rgba(45, 43, 37, 0.13);
+  min-width: 0;
+  align-self: stretch;
+  gap: 9px;
+  grid-template-rows: auto 1fr;
 }
 
-.hero-ledger > div:last-child {
-  border-bottom: 0;
+.hero-tally-count .hero-tally-value {
+  align-self: center;
 }
 
-.hero-ledger dt {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--subtle);
+.hero-tally::before {
+  position: absolute;
+  top: -1px;
+  left: 19px;
+  width: 38px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--brand);
+  content: "";
+}
+
+.hero-tally-label {
+  color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.hero-ledger dd {
-  margin: 0;
-  color: var(--ink);
+.hero-live {
+  position: absolute;
+  right: 14px;
+  bottom: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 1px solid rgba(45, 43, 37, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.8);
+  color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 19px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hero-live-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hero-live-count {
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
-  font-weight: 750;
+}
+
+.hero-tally-value {
+  align-self: center;
+  justify-self: center;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: clamp(58px, 6vw, 86px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  line-height: 1;
 }
 
 .live-dot {
@@ -324,13 +385,58 @@ body {
   animation: live-breathe 2.2s ease-in-out infinite;
 }
 
-.hero-notice {
-  max-width: 780px;
-  margin-bottom: 12px;
+@media (prefers-reduced-motion: no-preference) {
+  .hero-eyebrow,
+  .hero-heading h1,
+  .hero-heading > p:last-child,
+  .hero-tally,
+  .catalog-hero .catalog-toolbar,
+  .hero-footer {
+    animation: hero-rise 620ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  .hero-heading h1 {
+    animation-delay: 50ms;
+  }
+
+  .hero-heading > p:last-child {
+    animation-delay: 100ms;
+  }
+
+  .hero-tally {
+    animation-delay: 150ms;
+  }
+
+  .catalog-hero .catalog-toolbar {
+    animation-delay: 200ms;
+  }
+
+  .hero-footer {
+    animation-delay: 250ms;
+  }
+}
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* Returning from a detail page remounts the catalog; keep the hero settled
+   instead of replaying the entrance. */
+.hero-static .hero-eyebrow,
+.hero-static .hero-heading h1,
+.hero-static .hero-heading > p:last-child,
+.hero-static .hero-tally,
+.hero-static .catalog-toolbar,
+.hero-static .hero-footer {
+  animation: none;
 }
 
 .catalog-hero .catalog-toolbar {
-  max-width: 780px;
+  align-self: end;
+  grid-area: search;
 }
 
 .catalog-hero .search-control {
@@ -357,14 +463,6 @@ body {
   justify-content: space-between;
   gap: 24px;
   margin-top: 20px;
-}
-
-.hero-footer > p {
-  margin: 0;
-  color: var(--subtle);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.03em;
 }
 
 .hero-footer .catalog-view-tabs {
@@ -474,17 +572,6 @@ body {
     gap: 8px;
   }
 
-  .hero-brand-mark {
-    width: 38px;
-    height: 38px;
-    border-radius: 9px;
-  }
-
-  .hero-brand-mark .brand-mark {
-    width: 31px;
-    height: 31px;
-  }
-
   .hero-brand-copy {
     display: grid;
     align-self: center;
@@ -492,11 +579,9 @@ body {
   }
 
   .hero-brand-copy strong {
-    font-size: 12px;
-  }
-
-  .hero-brand-copy small {
-    font-size: 8px;
+    font-size: 13px;
+    line-height: 1.25;
+    white-space: normal;
   }
 
   .hero-actions {
@@ -523,20 +608,34 @@ body {
 
   .hero-stage {
     grid-template-columns: 1fr;
-    gap: 25px;
-    padding: 30px 0 24px;
+    grid-template-rows: auto;
+    grid-template-areas:
+      "heading"
+      "tally"
+      "search";
+    gap: 22px;
+    padding: 26px 0 20px;
   }
 
-  .hero-heading h1 {
-    display: block;
-    max-width: 330px;
-    font-size: clamp(34px, 10.5vw, 42px);
-    line-height: 1.02;
+  .hero-lockup {
+    gap: 15px;
   }
 
-  .hero-heading h1 span,
+  .hero-lockup-mark {
+    width: 88px;
+    height: 88px;
+  }
+
+  .hero-lockup-mark img {
+    filter: drop-shadow(3px 4px 0 rgba(36, 35, 31, 0.12));
+  }
+
+  .hero-heading h1 span {
+    font-size: 16px;
+  }
+
   .hero-heading h1 em {
-    display: block;
+    font-size: 27px;
   }
 
   .hero-heading > p:last-child {
@@ -546,36 +645,33 @@ body {
     line-height: 1.65;
   }
 
-  .hero-ledger {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .hero-tally {
+    padding: 13px 16px 14px;
+    border-radius: 12px;
+    box-shadow: 4px 4px 0 rgba(36, 35, 31, 0.16);
   }
 
-  .hero-ledger > div {
-    display: block;
-    min-height: 65px;
-    padding: 9px 10px;
-    border-right: 1px solid rgba(45, 43, 37, 0.13);
-    border-bottom: 0;
+  .hero-tally::before {
+    left: 15px;
   }
 
-  .hero-ledger > div:first-child {
-    padding-left: 1px;
+  .hero-tally-label {
+    font-size: 11px;
+    letter-spacing: 0.05em;
   }
 
-  .hero-ledger > div:last-child {
-    padding-right: 1px;
-    border-right: 0;
+  .hero-tally-count {
+    gap: 7px;
   }
 
-  .hero-ledger dt {
-    min-height: 18px;
-    font-size: 8px;
-    letter-spacing: 0;
+  .hero-live {
+    right: 12px;
+    bottom: 11px;
   }
 
-  .hero-ledger dd {
-    margin-top: 4px;
-    font-size: 16px;
+  .hero-tally-value {
+    padding: 12px 0 26px;
+    font-size: 52px;
   }
 
   .catalog-hero .search-control {
@@ -3058,15 +3154,11 @@ main {
     font-size: 12px;
   }
 
-  .hero-brand-copy small {
-    font-size: 10px;
-  }
-
   .hero-heading > p:last-child {
     font-size: 14px;
   }
 
-  .hero-ledger dt {
+  .hero-tally-label {
     font-size: 11px;
   }
 

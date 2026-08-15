@@ -1,13 +1,12 @@
 import {
   AlertCircle,
   ArrowUpRight,
-  Eye,
   ListFilter,
   PackagePlus,
   Search,
   Trophy,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { LoadingState } from '../components/LoadingState'
 import { LanguageSwitch } from '../components/LanguageSwitch'
@@ -16,6 +15,7 @@ import {
   getCatalog,
   type CatalogResponse,
   type CatalogSort,
+  type Language,
   type RankingMode,
 } from '../lib/api'
 import { formatNumber } from '../lib/format'
@@ -46,6 +46,61 @@ function rankingLabel(mode: RankingMode): Parameters<ReturnType<typeof useI18n>[
   return 'recentlyActive'
 }
 
+function useCountUp(target: number | null, animate: boolean): number | null {
+  const [value, setValue] = useState<number | null>(null)
+  const previousRef = useRef(0)
+  useEffect(() => {
+    if (target === null) return
+    const from = previousRef.current
+    if (
+      !animate
+      || target === from
+      || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      previousRef.current = target
+      setValue(target)
+      return
+    }
+    let frame = 0
+    const start = performance.now()
+    const step = (now: number) => {
+      const progress = Math.min(Math.max((now - start) / 900, 0), 1)
+      const eased = 1 - (1 - progress) ** 3
+      const next = Math.round(from + (target - from) * eased)
+      previousRef.current = next
+      setValue(next)
+      if (progress < 1) frame = window.requestAnimationFrame(step)
+    }
+    frame = window.requestAnimationFrame(step)
+    // Animation frames stop entirely in hidden/background tabs; make sure the
+    // final value still lands once the duration has passed.
+    const settle = window.setTimeout(() => {
+      previousRef.current = target
+      setValue(target)
+    }, 1100)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(settle)
+    }
+  }, [animate, target])
+  return value
+}
+
+// Isolates the per-frame count-up state so the animation re-renders this leaf
+// only, not the whole page while up to 100 package rows are mounted.
+function TallyCount({ total, language, animate }: {
+  total: number | null
+  language: Language
+  animate: boolean
+}) {
+  const value = useCountUp(total, animate)
+  return <>{value === null ? '--' : formatNumber(value, language)}</>
+}
+
+// Play the hero entrance (CSS rise + count-up) once per page load, not every
+// time the router remounts this page on the way back from a detail view.
+let heroIntroPlayed = false
+
 interface CatalogPageProps {
   view: 'catalog' | 'rankings'
 }
@@ -63,6 +118,10 @@ export function CatalogPage({ view }: CatalogPageProps) {
   const [draftQuery, setDraftQuery] = useState(query)
   const [rankingMode, setRankingMode] = useState<RankingMode>('stars')
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null)
+  const [playIntro] = useState(() => !heroIntroPlayed)
+  useEffect(() => {
+    heroIntroPlayed = true
+  }, [])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [reload, setReload] = useState(0)
@@ -139,7 +198,6 @@ export function CatalogPage({ view }: CatalogPageProps) {
   const isGrowthMode =
     rankingMode === 'growth24h' || rankingMode === 'growth7d' || rankingMode === 'growth30d'
   const isPendingRanking = !query && isGrowthMode
-  const sourceWarning = catalog?.meta.source === 'stale' ? t('stale') : null
   const catalogHref = query ? `/plugin?q=${encodeURIComponent(query)}` : '/plugin'
   const rankingsHref = query ? `/rankings?q=${encodeURIComponent(query)}` : '/rankings'
   const canonicalPath = view === 'catalog' ? '/plugin' : '/rankings'
@@ -172,17 +230,15 @@ export function CatalogPage({ view }: CatalogPageProps) {
   })
 
   return (
-    <div className={`catalog-page ${view === 'rankings' ? 'rankings-page' : 'directory-page'}`}>
+    <div
+      className={`catalog-page ${view === 'rankings' ? 'rankings-page' : 'directory-page'}${playIntro ? '' : ' hero-static'}`}
+    >
       <section className="catalog-hero">
         <div className="page-container catalog-hero-inner">
           <div className="hero-topline">
-            <Link className="hero-brand" to="/" aria-label="DeepSeek Harness Store homepage">
-              <span className="hero-brand-mark">
-                <img className="brand-mark" src="/deepseek1024-icon.png" alt="" aria-hidden="true" />
-              </span>
+            <Link className="hero-brand" to="/" aria-label="DeepSeek Harness Plugin 1024Store homepage">
               <span className="hero-brand-copy">
-                <strong>DeepSeek Harness</strong>
-                <small>{t('market')}</small>
+                <strong>DeepSeek Harness Plugin 1024Store</strong>
               </span>
             </Link>
 
@@ -212,57 +268,61 @@ export function CatalogPage({ view }: CatalogPageProps) {
 
           <header className="hero-stage">
             <div className="hero-heading">
-              <p className="hero-eyebrow">{t('heroEyebrow')}</p>
-              <h1 aria-label={`DeepSeek Harness ${t(view === 'catalog' ? 'catalog' : 'rankings')}`}>
-                <span>DeepSeek Harness</span>
-                <em>{t(view === 'catalog' ? 'catalog' : 'rankings')}</em>
-              </h1>
+              <div className="hero-lockup">
+                <span className="hero-lockup-mark" aria-hidden="true">
+                  <img src="/deepseek1024.png" alt="" />
+                </span>
+                <div className="hero-lockup-copy">
+                  <p className="hero-eyebrow">{t('heroEyebrow')}</p>
+                  <h1 aria-label={`DeepSeek Harness Plugin ${t(view === 'catalog' ? 'catalog' : 'rankings')}`}>
+                    <span>DeepSeek Harness Plugin</span>
+                    <em>{t(view === 'catalog' ? 'catalog' : 'rankings')}</em>
+                  </h1>
+                </div>
+              </div>
               <p>{t(view === 'catalog' ? 'catalogIntro' : 'rankingsIntro')}</p>
             </div>
 
-            <dl className="hero-ledger">
-              <div>
-                <dt>{t('totalPlugins')}</dt>
-                <dd>{catalog ? formatNumber(catalog.meta.catalogTotal, language) : '--'}</dd>
+            <dl className="hero-tally">
+              <div className="hero-tally-count">
+                <dt className="hero-tally-label">{t('totalPlugins')}</dt>
+                <dd className="hero-tally-value">
+                  <TallyCount
+                    total={catalog?.meta.catalogTotal ?? null}
+                    language={language}
+                    animate={playIntro}
+                  />
+                </dd>
               </div>
-              <div className="hero-live" role="status" aria-live="polite">
-                <dt>
+              <div className="hero-live">
+                <dt className="hero-live-label">
                   <span className={connected ? 'live-dot is-connected' : 'live-dot'} aria-hidden="true" />
                   {t('online')}
                 </dt>
-                <dd>{stats ? formatNumber(stats.online, language) : '--'}</dd>
-              </div>
-              <div>
-                <dt><Eye size={13} aria-hidden="true" /> {t('views')}</dt>
-                <dd>{stats ? formatNumber(stats.views, language) : '--'}</dd>
+                <dd className="hero-live-count">
+                  {stats ? formatNumber(stats.online, language) : '--'}
+                </dd>
               </div>
             </dl>
+
+            <section className="catalog-toolbar" aria-label={t('search')}>
+              <label className="search-control">
+                <Search size={19} aria-hidden="true" />
+                <span className="visually-hidden">{t('search')}</span>
+                <input
+                  type="search"
+                  value={draftQuery}
+                  onChange={(event) => setDraftQuery(event.target.value)}
+                  placeholder={t('searchPlaceholder')}
+                />
+                {catalog && (
+                  <small>
+                    {catalog.meta.total} {t(catalog.meta.total === 1 ? 'result' : 'results')}
+                  </small>
+                )}
+              </label>
+            </section>
           </header>
-
-          {sourceWarning && (
-            <div className="notice notice-warning hero-notice" role="status">
-              <AlertCircle size={17} aria-hidden="true" />
-              <span>{sourceWarning}</span>
-            </div>
-          )}
-
-          <section className="catalog-toolbar" aria-label={t('search')}>
-            <label className="search-control">
-              <Search size={19} aria-hidden="true" />
-              <span className="visually-hidden">{t('search')}</span>
-              <input
-                type="search"
-                value={draftQuery}
-                onChange={(event) => setDraftQuery(event.target.value)}
-                placeholder={t('searchPlaceholder')}
-              />
-              {catalog && (
-                <small>
-                  {catalog.meta.total} {t(catalog.meta.total === 1 ? 'result' : 'results')}
-                </small>
-              )}
-            </label>
-          </section>
 
           <div className="hero-footer">
             <nav className="catalog-view-tabs" aria-label={`${t('catalog')} / ${t('rankings')}`}>
@@ -277,7 +337,6 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 </span>
               </Link>
             </nav>
-            <p>{t('heroNote')}</p>
           </div>
         </div>
       </section>
