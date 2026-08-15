@@ -155,8 +155,8 @@ try {
   if ((await rankings.locator('.catalog-hero .github-link[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"]').count()) !== 1) {
     throw new Error('GitHub repository link is missing from the catalog banner')
   }
-  if ((await rankings.locator('.catalog-hero .hero-submit[href="/CONTRIBUTING.md"]').count()) !== 1) {
-    throw new Error('submit button does not link to the contribution guide')
+  if ((await rankings.locator('.catalog-hero .hero-submit[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"][target="_blank"]').count()) !== 1) {
+    throw new Error('submit button does not link to the GitHub repository')
   }
   if ((await rankings.locator('.catalog-hero a.hero-brand[href="/"]').count()) !== 1) {
     throw new Error('banner brand does not link to the home page')

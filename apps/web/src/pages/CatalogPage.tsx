@@ -210,7 +210,12 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 <span>GitHub</span>
                 <ArrowUpRight size={12} aria-hidden="true" />
               </a>
-              <a className="hero-action-link hero-submit" href="/CONTRIBUTING.md">
+              <a
+                className="hero-action-link hero-submit"
+                href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"
+                target="_blank"
+                rel="noreferrer"
+              >
                 <PackagePlus size={16} aria-hidden="true" />
                 <span>{t('submit')}</span>
               </a>
