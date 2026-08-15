@@ -111,14 +111,14 @@ npx wrangler deploy --secrets-file .dev.vars
 - [主题与外观](#theme) (2)
 - [会话与消息](#session) (18)
 - [记忆](#memory) (13)
-- [工具与能力](#tools) (71)
+- [工具与能力](#tools) (72)
 - [技能包](#skill) (3)
 - [工作流与自动化](#workflow) (19)
 - [通知与集成](#notify) (14)
 - [模型与账号接入](#model) (7)
 - [开发与运行时](#dev) (45)
 - [娱乐](#fun) (17)
-- [待分类](#unclassified) (2205)
+- [待分类](#unclassified) (2204)
 
 <a id="ui"></a>
 
@@ -237,6 +237,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [@zhaoolee/dsh-notes](https://github.com/zhaoolee/notes) — 将 DSH 对话导出为锤子便签风格 PNG，或在配置的账号工作区中新建和更新 Markdown 便签。
 - [argo](https://github.com/taxueseek/argo) — 专为 agent 打造的搜索工具：多语言，覆盖中文/英文/学术/代码/购物/金融/新闻/百科。
 - [blender](https://github.com/CheshireJCat/blender) — Blender 3D 生产插件：提供 30 个建模/重建 Skill、13 个运行时工具和 26 个确定性 Helper，覆盖参考图拟合、渲染、验证、动画与可移植格式导出；npm 包名 `dsh-blender`。
+- [dsh-1024store](https://github.com/imsai-sh/awesome-deepseek-harness-plugins) — DSH 1024Store 官方商店插件：设置页内浏览/搜索 deepseek1024.com 实时目录，按分类筛选，确认后一键安装/卸载，支持自更新检查。
 - [dsh-adb](https://github.com/SamXiaBing/dsh-adb) — ADB 设备·台架运维工具集：设备发现、结构化 logcat（后台采集）、apk 安装、文件 pull/push、性能快照。
 - [dsh-adhd-copilot](https://github.com/zimai233/dsh-adhd-copilot) — ADHD 行为辅导技能：任务拆解、事项过载管理、启动仪式与失败重启。
 - [dsh-apple-mode](https://github.com/jihongboo/dsh-apple-mode) — DSH 的 Xcode AI 集成：26 个 Xcode MCP 工具（mcpbridge）+ Apple 平台技能 + Xcode Intelligence 风格 persona（agent preset 或全局 bundle）。
@@ -466,7 +467,6 @@ npx wrangler deploy --secrets-file .dev.vars
 - [archify](https://github.com/tt-a1i/archify) — Agent skill for beautiful, verifiable architecture, workflow, sequence, data-flow, and lifecycle diagrams—self-contained HTML with motion and crisp export.
 - [auto-compact](https://github.com/JohnathonYe/auto-compact) — JohnathonYe/auto-compact discovered from GitHub.
 - [awesome-deepseek-harness](https://github.com/Dominic789654/awesome-deepseek-harness) — A curated list of plugins, skills, MCP servers, patch/profile layers, orchestrators & UIs for DeepSeek Harness (DSH). Visualization · PPT · Coding · Agents · Loops (auto-research) and more. #dsh
-- [awesome-deepseek-harness-plugins](https://github.com/imsai-sh/awesome-deepseek-harness-plugins) — Curated community plugin directory and live marketplace for DeepSeek Harness.
 - [awesome-deepseek-skills](https://github.com/Whning0513/awesome-deepseek-skills) — Pinned and statically verified Agent Skills for DeepSeek and DSH
 - [awesome-dsh-background-plugin](https://github.com/leavestring/awesome-dsh-background-plugin) — DSH Web 背景个性化插件：上传自己的图片（JPG / PNG / WEBP / GIF，浏览器端自动压缩到 1600px 以内）或一键切换极光、余烬、宣纸三种预设氛围；实时预览所见即所得，支持细调图像存在感、暗色遮罩、柔焦、适配方式与焦点位置；上传即自动保存到 DSH 设置，重启后原样恢复，浅色 / 深色主题均正常；侧栏、消息气泡、输入框保持原样不遮挡，浮层菜单不受影响；全程本地处理不上传任何服务器，关闭开关或一键恢复默认即可完全移除；内置中英文双语界面。
 - [balance-dock](https://github.com/Cao-zhi-hao/balance-dock) — Cao-zhi-hao/balance-dock discovered from GitHub.

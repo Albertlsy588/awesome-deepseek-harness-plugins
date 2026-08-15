@@ -20,14 +20,14 @@ Merged submissions are synced to the website database and into this file automat
 - [Themes & Appearance](#theme) (2)
 - [Sessions & Messages](#session) (18)
 - [Memory](#memory) (13)
-- [Tools & Capabilities](#tools) (71)
+- [Tools & Capabilities](#tools) (72)
 - [Skills](#skill) (3)
 - [Workflow & Automation](#workflow) (19)
 - [Notifications & Integrations](#notify) (14)
 - [Models & Providers](#model) (7)
 - [Development & Runtime](#dev) (45)
 - [Just for Fun](#fun) (17)
-- [Unclassified](#unclassified) (2205)
+- [Unclassified](#unclassified) (2204)
 
 <a id="ui"></a>
 
@@ -146,6 +146,7 @@ Merged submissions are synced to the website database and into this file automat
 - [@zhaoolee/dsh-notes](https://github.com/zhaoolee/notes) — Export DSH conversations as Smartisan Notes-style PNGs, or create and update Markdown notes in a configured account-scoped workspace.
 - [argo](https://github.com/taxueseek/argo) — Search built for agents: multilingual coverage across web, academic, code, shopping, finance, news, and encyclopedias.
 - [blender](https://github.com/CheshireJCat/blender) — Blender 3D production plugin with 30 modeling/reconstruction skills, 13 runtime tools, and 26 deterministic helpers for reference fitting, rendering, validation, animation, and portable export; installable as `dsh-blender`.
+- [dsh-1024store](https://github.com/imsai-sh/awesome-deepseek-harness-plugins) — The DSH 1024Store client plugin: browse and search the live deepseek1024.com catalog from Settings, filter by category, confirmed one-click installs and uninstalls, plus self-update checks.
 - [dsh-adb](https://github.com/SamXiaBing/dsh-adb) — ADB device & bench operations for DSH: device discovery, structured logcat (background streaming), apk install, file pull/push, and dumpsys performance snapshots.
 - [dsh-adhd-copilot](https://github.com/zimai233/dsh-adhd-copilot) — ADHD behavioral coaching skill: task breakdown, overwhelm management, launch rituals, and failure recovery.
 - [dsh-apple-mode](https://github.com/jihongboo/dsh-apple-mode) — Xcode AI integration for DSH: 26 Xcode MCP tools (mcpbridge) + Apple platform skills + Xcode Intelligence-style persona (agent preset or global bundle).
@@ -375,7 +376,6 @@ Merged submissions are synced to the website database and into this file automat
 - [archify](https://github.com/tt-a1i/archify) — Agent skill for beautiful, verifiable architecture, workflow, sequence, data-flow, and lifecycle diagrams—self-contained HTML with motion and crisp export.
 - [auto-compact](https://github.com/JohnathonYe/auto-compact) — JohnathonYe/auto-compact discovered from GitHub.
 - [awesome-deepseek-harness](https://github.com/Dominic789654/awesome-deepseek-harness) — A curated list of plugins, skills, MCP servers, patch/profile layers, orchestrators & UIs for DeepSeek Harness (DSH). Visualization · PPT · Coding · Agents · Loops (auto-research) and more. #dsh
-- [awesome-deepseek-harness-plugins](https://github.com/imsai-sh/awesome-deepseek-harness-plugins) — Curated community plugin directory and live marketplace for DeepSeek Harness.
 - [awesome-deepseek-skills](https://github.com/Whning0513/awesome-deepseek-skills) — Pinned and statically verified Agent Skills for DeepSeek and DSH
 - [awesome-dsh-background-plugin](https://github.com/leavestring/awesome-dsh-background-plugin) — DSH Web 背景个性化插件：上传自己的图片（JPG / PNG / WEBP / GIF，浏览器端自动压缩到 1600px 以内）或一键切换极光、余烬、宣纸三种预设氛围；实时预览所见即所得，支持细调图像存在感、暗色遮罩、柔焦、适配方式与焦点位置；上传即自动保存到 DSH 设置，重启后原样恢复，浅色 / 深色主题均正常；侧栏、消息气泡、输入框保持原样不遮挡，浮层菜单不受影响；全程本地处理不上传任何服务器，关闭开关或一键恢复默认即可完全移除；内置中英文双语界面。
 - [balance-dock](https://github.com/Cao-zhi-hao/balance-dock) — Cao-zhi-hao/balance-dock discovered from GitHub.
