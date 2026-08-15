@@ -226,6 +226,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     return context.redirect(canonicalUrl.toString(), 301)
   })
 
+  app.get('/plugin/:owner/:name/', (context) => {
+    const owner = context.req.param('owner')
+    const name = context.req.param('name')
+    const canonicalUrl = new URL(context.req.url)
+    canonicalUrl.pathname = `/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    return context.redirect(canonicalUrl.toString(), 301)
+  })
+
   app.get('/packages', (context) => {
     const canonicalUrl = new URL(context.req.url)
     canonicalUrl.pathname = '/plugins'
@@ -239,6 +247,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   })
 
   app.get('/packages/:owner/:name', (context) => {
+    const owner = context.req.param('owner')
+    const name = context.req.param('name')
+    const canonicalUrl = new URL(context.req.url)
+    canonicalUrl.pathname = `/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    return context.redirect(canonicalUrl.toString(), 301)
+  })
+
+  app.get('/packages/:owner/:name/', (context) => {
     const owner = context.req.param('owner')
     const name = context.req.param('name')
     const canonicalUrl = new URL(context.req.url)

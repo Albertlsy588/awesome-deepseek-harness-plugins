@@ -161,10 +161,16 @@ describe('market API', () => {
     const singularDetail = await app.request(
       'https://store.example/plugin/openma-ai/deepseek-harness-tui?source=singular',
     )
+    const trailingSingularDetail = await app.request(
+      'https://store.example/plugin/openma-ai/deepseek-harness-tui/?source=singular-trailing',
+    )
     const catalog = await app.request('https://store.example/packages?q=terminal')
     const trailingCatalog = await app.request('https://store.example/packages/?q=terminal')
     const detail = await app.request(
       'https://store.example/packages/openma-ai/deepseek-harness-tui?source=legacy',
+    )
+    const trailingDetail = await app.request(
+      'https://store.example/packages/openma-ai/deepseek-harness-tui/?source=legacy-trailing',
     )
 
     expect(singularCatalog.status).toBe(301)
@@ -173,6 +179,10 @@ describe('market API', () => {
     expect(singularDetail.headers.get('Location')).toBe(
       'https://store.example/plugins/openma-ai/deepseek-harness-tui?source=singular',
     )
+    expect(trailingSingularDetail.status).toBe(301)
+    expect(trailingSingularDetail.headers.get('Location')).toBe(
+      'https://store.example/plugins/openma-ai/deepseek-harness-tui?source=singular-trailing',
+    )
     expect(catalog.status).toBe(301)
     expect(catalog.headers.get('Location')).toBe('https://store.example/plugins?q=terminal')
     expect(trailingCatalog.status).toBe(301)
@@ -180,6 +190,10 @@ describe('market API', () => {
     expect(detail.status).toBe(301)
     expect(detail.headers.get('Location')).toBe(
       'https://store.example/plugins/openma-ai/deepseek-harness-tui?source=legacy',
+    )
+    expect(trailingDetail.status).toBe(301)
+    expect(trailingDetail.headers.get('Location')).toBe(
+      'https://store.example/plugins/openma-ai/deepseek-harness-tui?source=legacy-trailing',
     )
   })
 
