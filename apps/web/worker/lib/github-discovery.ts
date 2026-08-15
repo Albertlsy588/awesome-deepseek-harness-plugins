@@ -99,7 +99,7 @@ export function createGitHubClient(
   const headers = {
     Accept: 'application/vnd.github+json',
     Authorization: `Bearer ${token}`,
-    'User-Agent': 'dsh-store-cloudflare-discovery',
+    'User-Agent': 'dsh-1024store-cloudflare-discovery',
     'X-GitHub-Api-Version': '2022-11-28',
   }
   let madeSearchRequest = false

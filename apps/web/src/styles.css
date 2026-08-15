@@ -1107,6 +1107,29 @@ main {
   margin-bottom: 14px;
 }
 
+.ranking-mode-groups {
+  display: flex;
+  max-width: 100%;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+
+.ranking-mode-group {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.ranking-mode-group > span {
+  padding-left: 7px;
+  color: var(--subtle);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .directory-section {
   padding-top: 18px;
 }
@@ -1356,6 +1379,19 @@ main {
 }
 
 .row-metrics > span.growth-metric svg {
+  color: var(--teal);
+}
+
+.row-metrics > span.install-metric {
+  color: var(--brand-dark);
+  font-weight: 750;
+}
+
+.row-metrics > span.install-metric svg {
+  color: var(--brand);
+}
+
+.row-metrics > span.installer-metric svg {
   color: var(--teal);
 }
 
@@ -1697,6 +1733,164 @@ main {
   font-weight: 700;
 }
 
+.install-telemetry-note {
+  margin: 9px 2px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.official-install-fallback {
+  margin-top: 10px;
+  color: var(--subtle);
+}
+
+.official-install-fallback summary {
+  width: fit-content;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.official-install-fallback[open] summary {
+  margin-bottom: 8px;
+}
+
+.install-activity-section {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 28px rgba(33, 43, 54, 0.04);
+}
+
+.install-activity-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.install-activity-heading h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.install-activity-heading p {
+  max-width: 520px;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.latest-install-time {
+  display: flex;
+  max-width: 230px;
+  flex: none;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--subtle);
+}
+
+.latest-install-time > span {
+  display: grid;
+  gap: 2px;
+}
+
+.latest-install-time small {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.latest-install-time strong {
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.install-stat-grid,
+.install-operation-breakdown {
+  display: grid;
+  margin: 0;
+}
+
+.install-stat-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.install-stat-grid > div {
+  min-width: 0;
+  padding: 11px 10px;
+  border-left: 1px solid var(--line);
+  background: #fafbfc;
+}
+
+.install-stat-grid > div:first-child {
+  border-left: 0;
+}
+
+.install-stat-grid dt,
+.install-operation-breakdown dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--subtle);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.install-stat-grid dd {
+  margin: 5px 0 0;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 760;
+}
+
+.install-stat-grid .install-stat-primary {
+  background: var(--brand-soft);
+}
+
+.install-stat-grid .install-stat-primary dt,
+.install-stat-grid .install-stat-primary dd {
+  color: var(--brand-dark);
+}
+
+.install-operation-breakdown {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.install-operation-breakdown > div {
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.install-operation-breakdown dd {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
 .verification-notice,
 .security-notice {
   margin-bottom: 10px;
@@ -1955,7 +2149,8 @@ main {
     gap: 8px;
   }
 
-  .fork-metric {
+  .fork-metric,
+  .catalog-star-metric {
     display: none !important;
   }
 }
@@ -1998,9 +2193,12 @@ main {
     display: none;
   }
 
-  .package-row,
+  .package-row {
+    grid-template-columns: 30px 36px minmax(190px, 1fr) minmax(180px, auto) 32px 30px;
+  }
+
   .ranking-row {
-    grid-template-columns: 30px 36px minmax(190px, 1fr) 110px 170px 32px;
+    grid-template-columns: 30px 36px minmax(190px, 1fr) minmax(180px, auto) 30px;
   }
 
   .package-row .category-tag,
@@ -2205,6 +2403,16 @@ main {
     margin-bottom: 12px;
   }
 
+  .ranking-mode-groups {
+    display: grid;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .ranking-mode-group {
+    overflow: hidden;
+  }
+
   .section-heading {
     align-items: flex-start;
     flex-direction: column;
@@ -2407,6 +2615,39 @@ main {
       "readme";
     gap: 0;
     padding-top: 25px;
+  }
+
+  .install-activity-heading {
+    flex-direction: column;
+    gap: 11px;
+  }
+
+  .latest-install-time {
+    max-width: 100%;
+  }
+
+  .install-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .install-stat-grid > div:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .install-stat-grid > div:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+
+  .install-stat-grid > div:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .install-operation-breakdown {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .install-operation-breakdown > div:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .package-sidebar {

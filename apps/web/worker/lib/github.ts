@@ -5,6 +5,7 @@ import type {
   RegistryPlugin,
 } from '../types'
 import { repositoryName } from './catalog'
+import { emptyInstallMetrics } from './install-metrics'
 
 type JsonObject = Record<string, unknown>
 
@@ -86,7 +87,7 @@ async function boundedText(
 function githubHeaders(token?: string): Record<string, string> {
   return {
     Accept: 'application/vnd.github+json',
-    'User-Agent': 'dsh-store-worker',
+    'User-Agent': 'dsh-1024store-worker',
     'X-GitHub-Api-Version': '2022-11-28',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
@@ -152,6 +153,7 @@ export async function fetchPackageDetail(
 
   return {
     ...plugin,
+    ...emptyInstallMetrics(),
     github,
     manifest,
     readme,

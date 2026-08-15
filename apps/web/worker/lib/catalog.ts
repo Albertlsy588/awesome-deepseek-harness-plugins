@@ -17,6 +17,10 @@ export interface CatalogQuery {
 export function parseCatalogQuery(query: Record<string, string>): CatalogQuery {
   const requestedSort = query.sort
   const sort: CatalogSort =
+    requestedSort === 'installs' ||
+    requestedSort === 'installs24h' ||
+    requestedSort === 'installs7d' ||
+    requestedSort === 'installs30d' ||
     requestedSort === 'growth24h' ||
     requestedSort === 'growth7d' ||
     requestedSort === 'growth30d' ||
@@ -91,6 +95,14 @@ function growthForSort(plugin: CatalogPlugin, sort: CatalogSort): number | null 
   return null
 }
 
+function installsForSort(plugin: CatalogPlugin, sort: CatalogSort): number | null {
+  if (sort === 'installs') return plugin.installCount
+  if (sort === 'installs24h') return plugin.installs24h
+  if (sort === 'installs7d') return plugin.installs7d
+  if (sort === 'installs30d') return plugin.installs30d
+  return null
+}
+
 function hasGrowthForSort(plugin: CatalogPlugin, sort: CatalogSort): boolean {
   return sort !== 'growth24h' && sort !== 'growth7d' && sort !== 'growth30d'
     ? true
@@ -101,6 +113,18 @@ export function comparePlugins(
   sort: CatalogSort,
 ): (left: CatalogPlugin, right: CatalogPlugin) => number {
   if (sort === 'name') return (left, right) => left.name.localeCompare(right.name)
+  if (
+    sort === 'installs' ||
+    sort === 'installs24h' ||
+    sort === 'installs7d' ||
+    sort === 'installs30d'
+  ) {
+    return (left, right) =>
+      compareNullableNumber(installsForSort(left, sort), installsForSort(right, sort)) ||
+      compareNullableNumber(left.installerCount, right.installerCount) ||
+      compareNullableNumber(left.stars, right.stars) ||
+      left.name.localeCompare(right.name)
+  }
   if (sort === 'growth24h' || sort === 'growth7d' || sort === 'growth30d') {
     return (left, right) =>
       compareNullableNumber(growthForSort(left, sort), growthForSort(right, sort)) ||
@@ -132,12 +156,23 @@ export function buildCatalog(result: CatalogSnapshotResult, query: CatalogQuery)
       .sort(comparePlugins(sort))
       .slice(0, 100)
 
+  const installRanking = (
+    sort: 'installs' | 'installs24h' | 'installs7d' | 'installs30d',
+  ) => [...snapshot.plugins]
+    .filter((plugin) => (installsForSort(plugin, sort) ?? 0) > 0)
+    .sort(comparePlugins(sort))
+    .slice(0, 100)
+
   return {
     packages: filtered,
     rankings: {
       stars: [...snapshot.plugins]
         .sort(comparePlugins('stars'))
         .slice(0, 100),
+      installs: installRanking('installs'),
+      installs24h: installRanking('installs24h'),
+      installs7d: installRanking('installs7d'),
+      installs30d: installRanking('installs30d'),
       growth24h: growthRanking('growth24h'),
       growth7d: growthRanking('growth7d'),
       growth30d: growthRanking('growth30d'),

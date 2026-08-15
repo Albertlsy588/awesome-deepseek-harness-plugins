@@ -108,7 +108,7 @@ export function createGitHubClient(token, fetchImplementation = globalThis.fetch
   assert(typeof fetchImplementation === 'function', 'A fetch implementation is required')
   const headers = {
     Accept: 'application/vnd.github+json',
-    'User-Agent': 'dsh-store-topic-collector',
+    'User-Agent': 'dsh-1024store-topic-collector',
     'X-GitHub-Api-Version': '2022-11-28',
     ...(typeof token === 'string' && token.length > 0 ? { Authorization: `Bearer ${token}` } : {}),
   }

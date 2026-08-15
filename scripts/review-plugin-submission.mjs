@@ -137,7 +137,7 @@ export async function findHarnessBundle(tree, readBlob) {
 export function createGitHubClient(token) {
   const headers = {
     Accept: 'application/vnd.github+json',
-    'User-Agent': 'dsh-store-plugin-review',
+    'User-Agent': 'dsh-1024store-plugin-review',
     'X-GitHub-Api-Version': '2022-11-28',
     ...(token === undefined || token.length === 0 ? {} : { Authorization: `Bearer ${token}` }),
   }

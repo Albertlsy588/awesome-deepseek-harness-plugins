@@ -83,4 +83,64 @@ describe('catalog snapshot storage', () => {
     expect(result.snapshot.metricCoverage).toBe(previous.metricCoverage)
     expect(put).toHaveBeenCalledOnce()
   })
+
+  it('merges D1 installation aggregates into every refreshed catalog entry', async () => {
+    const first = BUNDLED_REGISTRY.plugins[0]!
+    const repository = new URL(first.url).pathname.split('/').filter(Boolean)[1]!
+    const pluginId = `${first.owner}/${repository}`
+    const prepare = vi.fn((sql: string) => {
+      const statement = {
+        bind() {
+          return statement
+        },
+        async all() {
+          if (sql.includes('plugin_hourly_stats')) {
+            return {
+              results: [{
+                plugin_id: pluginId,
+                install_count: 9,
+                first_install_count: 7,
+                reinstall_count: 2,
+                update_count: 1,
+                remove_count: 1,
+                failure_count: 3,
+                installs_24h: 2,
+                installs_7d: 5,
+                installs_30d: 9,
+                latest_install_at: '2026-08-14T12:00:00.000Z',
+              }],
+            }
+          }
+          return { results: [{ plugin_id: pluginId, installer_count: 6 }] }
+        },
+      }
+      return statement
+    })
+    const env = {
+      CATALOG_CACHE: {
+        get: vi.fn(async () => null),
+        put: vi.fn(async () => undefined),
+      },
+      CATALOG_DB: { prepare },
+      GITHUB_TOKEN: '',
+    } as unknown as Env
+    const fetcher = vi.fn(async () => Response.json({ items: [] })) as unknown as typeof fetch
+
+    const result = await refreshCatalogSnapshot(env, fetcher, Date.parse('2026-08-14T13:00:00Z'))
+    const tracked = result.snapshot.plugins.find((plugin) =>
+      plugin.owner === first.owner && plugin.repository === repository)
+    const untracked = result.snapshot.plugins.find((plugin) => plugin.url !== first.url)
+
+    expect(tracked).toMatchObject({
+      installCount: 9,
+      installerCount: 6,
+      firstInstallCount: 7,
+      reinstallCount: 2,
+      installs24h: 2,
+      installs7d: 5,
+      installs30d: 9,
+      latestInstallAt: '2026-08-14T12:00:00.000Z',
+    })
+    expect(untracked).toMatchObject({ installCount: 0, installerCount: 0, latestInstallAt: null })
+  })
 })
