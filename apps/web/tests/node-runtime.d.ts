@@ -4,8 +4,9 @@ declare module 'node:fs' {
 
 declare module 'node:sqlite' {
   interface StatementSync {
-    run(...params: unknown[]): unknown
+    all(...params: unknown[]): Array<Record<string, unknown>>
     get(...params: unknown[]): Record<string, unknown> | undefined
+    run(...params: unknown[]): { changes: number | bigint }
   }
 
   export class DatabaseSync {

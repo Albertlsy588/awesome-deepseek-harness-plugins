@@ -251,7 +251,11 @@ try {
     '.segmented-control button',
     '.package-row .row-open',
   ])
-  await assertHorizontalTouchScroller(mobileRankings, 'mobile ranking modes', '.segmented-control')
+  await assertHorizontalTouchScroller(
+    mobileRankings,
+    'mobile GitHub ranking modes',
+    '.ranking-mode-group:last-child .segmented-control',
+  )
   await mobileRankings.locator('.ranking-section .segmented-control button').last().click()
   if (await mobileRankings.locator('.ranking-section .segmented-control button').last().getAttribute('aria-pressed') !== 'true') {
     throw new Error('mobile ranking controls could not select an offscreen mode')

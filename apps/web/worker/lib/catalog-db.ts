@@ -22,6 +22,11 @@ interface RepositoryIdentityRow {
   validation_status: string
 }
 
+// Bump this marker whenever the bundled-registry projection changes without a
+// corresponding change to registry.generated.json. This v2 projection derives
+// repository identity from the GitHub URL instead of the human-facing name.
+const BUNDLED_REGISTRY_SYNC_VERSION = 'repository-url-v2'
+
 interface PendingRepositoryRow {
   github_id: number
   full_name: string
@@ -110,8 +115,9 @@ export async function syncBundledRegistry(
   registry: Registry,
   now = new Date().toISOString(),
 ): Promise<void> {
+  const syncRevision = `${BUNDLED_REGISTRY_SYNC_VERSION}:${registry.revision}`
   const revision = await getCatalogState(db, 'bundled_registry_revision')
-  if (revision === registry.revision) return
+  if (revision === syncRevision) return
 
   for (const group of chunks(registry.plugins, 50)) {
     await db.batch(group.map((plugin) => {
@@ -221,7 +227,7 @@ export async function syncBundledRegistry(
     ).bind(currentNames),
   ])
 
-  await setCatalogState(db, 'bundled_registry_revision', registry.revision, now)
+  await setCatalogState(db, 'bundled_registry_revision', syncRevision, now)
 }
 
 export async function getCatalogState(db: D1Database, key: string): Promise<string | null> {
