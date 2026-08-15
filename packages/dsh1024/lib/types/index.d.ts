@@ -1,12 +1,12 @@
 /** 1024 Store market host plugin. */
 import type { Context } from '@deepseek-ai/cordis';
-export declare const name = "dsh-1024store";
+export declare const name = "dsh1024";
 export interface Config {
     /** DSH profile that owns plugin mutations. Defaults to the booted profile. */
     profile?: string;
     /** HTTPS registry endpoint. */
     registryUrl?: string;
-    /** HTTPS endpoint that reports the latest dsh-1024store version. */
+    /** HTTPS endpoint that reports the latest dsh1024 version. */
     updateUrl?: string;
 }
 /**

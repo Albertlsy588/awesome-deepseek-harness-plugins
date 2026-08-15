@@ -2,7 +2,7 @@
 import { DEFAULT_REGISTRY_URL } from './registry.js';
 import { mountMarketRoutes } from './routes.js';
 import { DEFAULT_UPDATE_URL } from './update.js';
-export const name = 'dsh-1024store';
+export const name = 'dsh1024';
 function argvProfile() {
     const index = process.argv.indexOf('--profile');
     const candidate = index >= 0 ? process.argv[index + 1] : undefined;
@@ -21,6 +21,6 @@ export function apply(ctx, config = {}) {
     };
     ctx.inject(['webServer'], hostContext => {
         const host = hostContext;
-        host.effect(() => mountMarketRoutes(host.webServer, resolved), 'dsh-1024store: http routes');
+        host.effect(() => mountMarketRoutes(host.webServer, resolved), 'dsh1024: http routes');
     });
 }

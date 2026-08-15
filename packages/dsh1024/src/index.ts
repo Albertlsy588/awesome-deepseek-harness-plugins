@@ -5,14 +5,14 @@ import { DEFAULT_REGISTRY_URL } from './registry.ts'
 import { mountMarketRoutes, type WebServerService } from './routes.ts'
 import { DEFAULT_UPDATE_URL } from './update.ts'
 
-export const name = 'dsh-1024store'
+export const name = 'dsh1024'
 
 export interface Config {
   /** DSH profile that owns plugin mutations. Defaults to the booted profile. */
   profile?: string
   /** HTTPS registry endpoint. */
   registryUrl?: string
-  /** HTTPS endpoint that reports the latest dsh-1024store version. */
+  /** HTTPS endpoint that reports the latest dsh1024 version. */
   updateUrl?: string
 }
 
@@ -41,7 +41,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     const host = hostContext as MarketContext
     host.effect(
       () => mountMarketRoutes(host.webServer, resolved),
-      'dsh-1024store: http routes',
+      'dsh1024: http routes',
     )
   })
 }

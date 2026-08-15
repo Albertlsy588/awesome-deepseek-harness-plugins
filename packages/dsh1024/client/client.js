@@ -1,11 +1,11 @@
-window.__ModuleLoader__.load({ id: "dsh-1024store", factory: (require) => {
+window.__ModuleLoader__.load({ id: "dsh1024", factory: (require) => {
 var module = { exports: {} }; var exports = module.exports;
 'use strict'
 
 const React = require('react')
 const h = React.createElement
 const { useCallback, useEffect, useMemo, useState } = React
-const NS = 'dsh-1024store'
+const NS = 'dsh1024'
 const SITE_URL = 'https://deepseek1024.com/'
 
 const zh = {
@@ -78,9 +78,9 @@ const CSS = `
 `
 
 function injectStyles() {
-  if (document.getElementById('dsh-1024store-style')) return
+  if (document.getElementById('dsh1024-style')) return
   const style = document.createElement('style')
-  style.id = 'dsh-1024store-style'
+  style.id = 'dsh1024-style'
   style.textContent = CSS
   document.head.appendChild(style)
 }
@@ -134,7 +134,7 @@ function MarketTab({ locale }) {
   const [visibleCount, setVisibleCount] = useState(40)
 
   const refreshInstalled = useCallback(() => {
-    return fetch('/dsh-1024store/installed', { cache: 'no-store' })
+    return fetch('/dsh1024/installed', { cache: 'no-store' })
       .then(responseJson)
       .then(({ status, body }) => {
         if (status !== 200) throw new Error(body.error || 'HTTP ' + status)
@@ -146,9 +146,9 @@ function MarketTab({ locale }) {
     setLoadFailed(false)
     setError(null)
     return Promise.all([
-      fetch('/dsh-1024store/registry', { cache: 'no-store' }).then(responseJson),
+      fetch('/dsh1024/registry', { cache: 'no-store' }).then(responseJson),
       refreshInstalled(),
-      fetch('/dsh-1024store/update', { cache: 'no-store' })
+      fetch('/dsh1024/update', { cache: 'no-store' })
         .then(responseJson)
         .then(({ status, body }) => status === 200 ? body : null)
         .catch(() => null),
@@ -169,7 +169,7 @@ function MarketTab({ locale }) {
   useEffect(() => {
     if (busy === null) { setProgress(''); return undefined }
     const timer = setInterval(() => {
-      fetch('/dsh-1024store/status', { cache: 'no-store' })
+      fetch('/dsh1024/status', { cache: 'no-store' })
         .then(responseJson)
         .then(({ body }) => {
           if (body.active) setProgress((body.lastLine || '…') + ' · ' + body.seconds + 's')
@@ -187,7 +187,7 @@ function MarketTab({ locale }) {
     if (!window.confirm(prompt)) return
     setBusy(kind + ':' + label)
     setError(null)
-    fetch('/dsh-1024store/' + kind, {
+    fetch('/dsh1024/' + kind, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(kind === 'install' ? { url: value.url } : { name: value }),
@@ -266,7 +266,7 @@ function MarketTab({ locale }) {
               className: 'dsm-action', type: 'button', disabled: busy !== null,
               onClick: () => mutate('install', plugin),
             }, installing ? copy.installing : copy.install)
-          : packageName === 'dsh-1024store'
+          : packageName === 'dsh1024'
             ? h('button', { className: 'dsm-action', type: 'button', disabled: true, 'data-kind': 'installed' }, copy.installed)
             : h('button', {
                 className: 'dsm-action', type: 'button', disabled: busy !== null, 'data-kind': 'remove',
@@ -321,12 +321,12 @@ function MarketTab({ locale }) {
                 }, copy.more + ' (' + visibleCount + '/' + plugins.length + ')'))))
 }
 
-exports.name = 'dsh-1024store/client'
+exports.name = 'dsh1024/client'
 exports.inject = ['slots', 'locale']
 exports.apply = function apply(ctx) {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-1024store: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh1024: dictionaries')
   const t = ctx.locale.bind(NS)
-  fetch('/dsh-1024store/registry', { cache: 'no-store' })
+  fetch('/dsh1024/registry', { cache: 'no-store' })
     .then(responseJson)
     .then(({ status, body }) => {
       if (status === 200 && body.registry) publishCatalogCount(body.registry.count)

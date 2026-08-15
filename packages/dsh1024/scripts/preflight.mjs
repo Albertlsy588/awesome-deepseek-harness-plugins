@@ -16,7 +16,8 @@ if (!patch.includes(`name: '${manifest.name}'`)) failures.push('bundle patch pac
 if (manifest.version !== rootManifest.version) failures.push('plugin and monorepo versions must stay synchronized')
 if (!registrySource.includes('https://deepseek1024.com/api/v1/registry')) failures.push('catalog must use the dynamic v1 registry API')
 if (registrySource.includes('registry-snapshot')) failures.push('catalog must not bundle a fixed plugin snapshot')
-if (!client.includes('/dsh-1024store/update')) failures.push('client update self-check is missing')
+if (!client.includes('/dsh1024/update')) failures.push('client update self-check is missing')
+if (manifest.exports?.['./package.json'] === undefined) failures.push('exports["./package.json"] must exist so the harness loads the client half')
 if (!client.includes("const SITE_URL = 'https://deepseek1024.com/'")) failures.push('1024 main website link is missing')
 if (!client.includes("name: 'settings.section'")) failures.push('left settings navigation entry is missing')
 

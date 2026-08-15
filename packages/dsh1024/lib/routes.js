@@ -196,7 +196,7 @@ export function mountMarketRoutes(webServer, config) {
     const disposers = [
         webServer.register({
             kind: 'exact',
-            path: '/dsh-1024store/registry',
+            path: '/dsh1024/registry',
             handler: async (request, response) => {
                 if (!requireMethod(request, response, 'GET'))
                     return;
@@ -211,7 +211,7 @@ export function mountMarketRoutes(webServer, config) {
         }),
         webServer.register({
             kind: 'exact',
-            path: '/dsh-1024store/update',
+            path: '/dsh1024/update',
             handler: async (request, response) => {
                 if (!requireMethod(request, response, 'GET'))
                     return;
@@ -220,7 +220,7 @@ export function mountMarketRoutes(webServer, config) {
         }),
         webServer.register({
             kind: 'exact',
-            path: '/dsh-1024store/installed',
+            path: '/dsh1024/installed',
             handler: (request, response) => {
                 if (!requireMethod(request, response, 'GET'))
                     return;
@@ -229,7 +229,7 @@ export function mountMarketRoutes(webServer, config) {
         }),
         webServer.register({
             kind: 'exact',
-            path: '/dsh-1024store/status',
+            path: '/dsh1024/status',
             handler: (request, response) => {
                 if (!requireMethod(request, response, 'GET'))
                     return;
@@ -242,7 +242,7 @@ export function mountMarketRoutes(webServer, config) {
         }),
         webServer.register({
             kind: 'exact',
-            path: '/dsh-1024store/install',
+            path: '/dsh1024/install',
             handler: async (request, response) => {
                 if (!requireTrustedPost(request, response))
                     return;
@@ -281,7 +281,7 @@ export function mountMarketRoutes(webServer, config) {
         }),
         webServer.register({
             kind: 'exact',
-            path: '/dsh-1024store/uninstall',
+            path: '/dsh1024/uninstall',
             handler: async (request, response) => {
                 if (!requireTrustedPost(request, response))
                     return;
@@ -292,7 +292,7 @@ export function mountMarketRoutes(webServer, config) {
                 try {
                     const body = await readJsonBody(request);
                     const name = typeof body.name === 'string' ? body.name : '';
-                    if (!PACKAGE_RE.test(name) || name === 'dsh-1024store') {
+                    if (!PACKAGE_RE.test(name) || name === 'dsh1024') {
                         sendJson(response, 400, { error: 'plugin cannot be uninstalled here' });
                         return;
                     }
