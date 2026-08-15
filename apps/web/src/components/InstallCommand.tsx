@@ -21,7 +21,18 @@ export function InstallCommand({
   }, [copied])
 
   async function copyCommand() {
-    await navigator.clipboard.writeText(command)
+    try {
+      await navigator.clipboard.writeText(command)
+    } catch {
+      // Clipboard API can be missing or denied (e.g. sandboxed iframes);
+      // fall back to the legacy selection-based copy.
+      const helper = document.createElement('textarea')
+      helper.value = command
+      document.body.append(helper)
+      helper.select()
+      document.execCommand('copy')
+      helper.remove()
+    }
     setCopied(true)
   }
 

@@ -234,8 +234,26 @@ interface I18nValue {
 
 const I18nContext = createContext<I18nValue | null>(null)
 
+// Storage access can throw outright (e.g. sandboxed iframes with third-party
+// storage blocked), so both accessors must stay non-fatal.
+function readStoredLanguage(): string | null {
+  try {
+    return window.localStorage.getItem('dsh-1024store-language')
+  } catch {
+    return null
+  }
+}
+
+function persistLanguage(language: Language) {
+  try {
+    window.localStorage.setItem('dsh-1024store-language', language)
+  } catch {
+    // The choice still applies for the current session.
+  }
+}
+
 function initialLanguage(): Language {
-  const stored = window.localStorage.getItem('dsh-1024store-language')
+  const stored = readStoredLanguage()
   if (stored === 'en' || stored === 'zh') return stored
   return window.navigator.language.toLocaleLowerCase().startsWith('zh') ? 'zh' : 'en'
 }
@@ -249,7 +267,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     () => ({
       language,
       setLanguage(nextLanguage) {
-        window.localStorage.setItem('dsh-1024store-language', nextLanguage)
+        persistLanguage(nextLanguage)
         updateLanguage(nextLanguage)
       },
       t: (key) => messages[language][key],
