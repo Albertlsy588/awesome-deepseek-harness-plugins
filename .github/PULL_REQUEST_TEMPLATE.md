@@ -1,14 +1,10 @@
-## Summary
+## Plugin
 
-Describe the focused change and its user-visible effect.
+Link the submitted plugin repository and summarize its user-visible capability.
 
-## Verification
+## Author verification
 
-- [ ] `npm run cf-typecheck`
-- [ ] `npm run typecheck`
-- [ ] `npm test`
-- [ ] `npm run build`
-- [ ] Visual checks or screenshots included when UI changed
+List the real command and result used to test plugin behavior and compatibility. The catalog workflow does not execute third-party plugin code.
 
 ## Catalog submissions
 
@@ -17,4 +13,4 @@ Describe the focused change and its user-visible effect.
 - [ ] Plugin behavior and compatibility were tested by the author
 - [ ] `dsh-plugin` topic added
 - [ ] English and Chinese descriptions are neutral and accurate
-- [ ] I understand that passing automated checks does not guarantee acceptance; a maintainer reviews and merges this PR manually
+- [ ] I understand that a non-draft PR passing the static review is merged automatically

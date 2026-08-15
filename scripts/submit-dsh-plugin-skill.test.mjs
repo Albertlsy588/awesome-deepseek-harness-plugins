@@ -118,3 +118,32 @@ test('dry-run prints JSON without creating a file', async t => {
   assert.equal(JSON.parse(result.stdout).id, 'owner/plugin')
   await assert.rejects(readFile(path.join(directory, 'catalog/plugins/owner--plugin.json')))
 })
+
+test('documents automatic merge behavior consistently', async () => {
+  const contributing = await readFile(path.join(root, 'CONTRIBUTING.md'), 'utf8')
+  const readme = await readFile(path.join(root, 'README.md'), 'utf8')
+  const pullRequestTemplate = await readFile(path.join(root, '.github/PULL_REQUEST_TEMPLATE.md'), 'utf8')
+  const skill = await readFile(path.join(root, 'skills/submit-dsh-plugin/SKILL.md'), 'utf8')
+  const reference = await readFile(path.join(root, 'skills/submit-dsh-plugin/references/submission-reference.md'), 'utf8')
+
+  assert.match(contributing, /merged automatically/i)
+  assert.doesNotMatch(contributing, /merges it manually|CI \/ verify/)
+  assert.match(readme, /自动合并/)
+  assert.match(pullRequestTemplate, /merged automatically/i)
+  assert.doesNotMatch(pullRequestTemplate, /maintainer reviews and merges/i)
+  assert.match(skill, /自动合并/)
+  assert.doesNotMatch(skill, /人工审查和合并|CI \/ verify/)
+  assert.match(reference, /自动合并/)
+  assert.doesNotMatch(reference, /人工审查并合并/)
+})
+
+test('runs only the trusted static gate for pull requests', async () => {
+  const ciWorkflow = await readFile(path.join(root, '.github/workflows/ci.yml'), 'utf8')
+  const reviewWorkflow = await readFile(path.join(root, '.github/workflows/plugin-review.yml'), 'utf8')
+
+  assert.doesNotMatch(ciWorkflow, /^\s*pull_request:/m)
+  assert.match(reviewWorkflow, /^\s*pull_request_target:/m)
+  assert.match(reviewWorkflow, /^\s+merge:\n\s+needs: static-review/m)
+  assert.match(reviewWorkflow, /PLUGIN_REVIEW_EXPECTED_HEAD_SHA/)
+  assert.match(reviewWorkflow, /contents: write/)
+})
