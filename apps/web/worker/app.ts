@@ -337,7 +337,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         url: plugin.url,
         category: plugin.category,
         description: plugin.description,
-        install: `npx @dsh-1024store/cli add ${plugin.owner}/${plugin.repository} --profile web`,
+        install: `dsh plugin --profile web add github:${plugin.owner}/${plugin.repository}`,
         added: plugin.added,
         stars: plugin.stars,
       })),

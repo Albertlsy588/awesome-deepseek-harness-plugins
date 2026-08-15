@@ -110,6 +110,21 @@ async function assertSeo(page, label, canonicalPath, robots = 'index,follow') {
   }
 }
 
+// The rankings view defaults to the 24h growth mode, which is legitimately
+// empty until enough star-history snapshots exist (e.g. a freshly seeded local
+// environment). Fall back to the stars mode so layout assertions can proceed.
+async function waitForRankingList(page) {
+  await page.locator('.ranking-section').waitFor()
+  await page
+    .locator('.ranking-section .package-list, .ranking-section .state-panel')
+    .first()
+    .waitFor()
+  if ((await page.locator('.ranking-section .package-list').count()) === 0) {
+    await page.locator('.ranking-section .segmented-control button').nth(1).click()
+    await page.locator('.ranking-section .package-list').waitFor()
+  }
+}
+
 async function assertLiveStats(page) {
   await page.waitForFunction(
     () => [...document.querySelectorAll('.hero-live-count')].every((node) => node.textContent !== '--'),
@@ -290,7 +305,7 @@ try {
   await mobile.close()
 
   const mobileRankings = await openPage({ width: 390, height: 844 }, '/rankings', { touch: true })
-  await mobileRankings.locator('.ranking-section .package-list').waitFor()
+  await waitForRankingList(mobileRankings)
   await assertMobileEnvironment(mobileRankings, 'mobile rankings')
   await assertNoHorizontalOverflow(mobileRankings, 'mobile rankings')
   await assertMinTouchTargets(mobileRankings, 'mobile rankings', [
@@ -316,6 +331,20 @@ try {
   await detail.locator('.install-activity-section').waitFor()
   if (!(await detail.locator('.install-section .install-command code').first().textContent())?.includes('@dsh-1024store/cli')) {
     throw new Error('detail page is missing the tracked wrapper CLI command')
+  }
+  // The collapsible fallback must show the OFFICIAL DeepSeek Harness CLI
+  // command, never the wrapper again (regression: registry install field was
+  // once overwritten with the wrapper command).
+  await detail.locator('.official-install-fallback summary').click()
+  const fallbackCommand = await detail
+    .locator('.official-install-fallback .install-command code')
+    .first()
+    .textContent()
+  if (!fallbackCommand?.trim().startsWith('dsh plugin --profile')) {
+    throw new Error(`official install fallback is not the official CLI command: ${fallbackCommand}`)
+  }
+  if (fallbackCommand.includes('@dsh-1024store/cli')) {
+    throw new Error('official install fallback still shows the wrapper CLI command')
   }
   await assertSeo(detail, 'desktop detail', '/plugins/openma-ai/deepseek-harness-tui')
   await assertNoHorizontalOverflow(detail, 'desktop detail')
@@ -369,7 +398,7 @@ try {
   await scoped.close()
 
   const compactMobile = await openPage({ width: 320, height: 568 }, '/rankings', { touch: true })
-  await compactMobile.locator('.ranking-section .package-list').waitFor()
+  await waitForRankingList(compactMobile)
   await assertNoHorizontalOverflow(compactMobile, 'compact mobile rankings')
   if (await compactMobile.locator('.catalog-hero .hero-language').isVisible()) {
     throw new Error('compact mobile header did not hide the secondary language control')
