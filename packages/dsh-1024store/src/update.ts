@@ -16,7 +16,7 @@ export interface UpdateInfo {
   error?: string
 }
 
-export const DEFAULT_UPDATE_URL = 'https://deepseek1024.com/api/dsh-1024store'
+export const DEFAULT_UPDATE_URL = 'https://registry.npmjs.org/dsh-1024store/latest'
 export const DEFAULT_UPDATE_FALLBACK_URL = 'https://api.github.com/repos/imsai-sh/awesome-deepseek-harness-plugins/contents/package.json?ref=main'
 export const DEFAULT_RELEASE_URL = 'https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh-1024store'
 
@@ -95,7 +95,7 @@ async function fetchManifest(url: string, fetcher: typeof fetch): Promise<Packag
 }
 
 /**
- * Query the first-party version API and fall back to the repository API.
+ * Query the npm registry for the published version and fall back to the repository API.
  * Failures are returned as state so an unavailable checker never blocks the market.
  */
 export async function checkForUpdate(

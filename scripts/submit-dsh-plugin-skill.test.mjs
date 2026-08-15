@@ -119,7 +119,7 @@ test('dry-run prints JSON without creating a file', async t => {
   await assert.rejects(readFile(path.join(directory, 'catalog/plugins/owner--plugin.json')))
 })
 
-test('documents automatic merge behavior consistently', async () => {
+test('documents automatic merge and automatic sync behavior consistently', async () => {
   const contributing = await readFile(path.join(root, 'CONTRIBUTING.md'), 'utf8')
   const readme = await readFile(path.join(root, 'README.md'), 'utf8')
   const pullRequestTemplate = await readFile(path.join(root, '.github/PULL_REQUEST_TEMPLATE.md'), 'utf8')
@@ -127,13 +127,19 @@ test('documents automatic merge behavior consistently', async () => {
   const reference = await readFile(path.join(root, 'skills/submit-dsh-plugin/references/submission-reference.md'), 'utf8')
 
   assert.match(contributing, /merged automatically/i)
-  assert.doesNotMatch(contributing, /merges it manually|CI \/ verify/)
+  assert.match(contributing, /synced automatically/i)
+  assert.doesNotMatch(contributing, /merges it manually|CI \/ verify|maintainer(s)? refresh/i)
   assert.match(readme, /自动合并/)
+  assert.match(readme, /自动同步/)
+  assert.doesNotMatch(readme, /结构化目录数据|catalog\/generated/)
   assert.match(pullRequestTemplate, /merged automatically/i)
+  assert.match(pullRequestTemplate, /refresh(es)? automatically/i)
   assert.doesNotMatch(pullRequestTemplate, /maintainer reviews and merges/i)
   assert.match(skill, /自动合并/)
-  assert.doesNotMatch(skill, /人工审查和合并|CI \/ verify/)
+  assert.match(skill, /自动同步/)
+  assert.doesNotMatch(skill, /人工审查和合并|CI \/ verify|由维护者单独更新/)
   assert.match(reference, /自动合并/)
+  assert.match(reference, /自动同步/)
   assert.doesNotMatch(reference, /人工审查并合并/)
 })
 

@@ -1,4 +1,8 @@
-export const CLI_VERSION = '0.1.0'
+import { readFileSync } from 'node:fs'
+
+const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+
+export const CLI_VERSION = packageJson.version
 export const DEFAULT_PROFILE = 'web'
 export const DEFAULT_DSH_PACKAGE = '@deepseek-ai/dsh'
 export const DEFAULT_TELEMETRY_URL = 'https://deepseek1024.com/api/v1/install-events'

@@ -6,7 +6,9 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { installTarget, loadRegistry } from './registry.ts'
+import { installTarget, loadRegistry, parseGitHubSource } from './registry.ts'
+import type { RegistryPlugin } from './registry.ts'
+import { reportInstallEvent } from './telemetry.ts'
 import { checkForUpdate } from './update.ts'
 
 export interface WebRoute {
@@ -148,6 +150,40 @@ function runPluginCommand(
   })
 }
 
+function failureCode(result: CommandResult): string {
+  if (result.timedOut) return 'TIMED_OUT'
+  if (result.exitCode === 127) return 'SPAWN_FAILED'
+  return 'OFFICIAL_CLI_FAILED'
+}
+
+function pluginEventId(plugin: RegistryPlugin): string {
+  return (parseGitHubSource(plugin.url) ?? plugin.id).toLowerCase()
+}
+
+/** Run one plugin mutation and report its outcome anonymously (fire-and-forget). */
+async function runReportedPluginCommand(
+  profile: string,
+  plugin: RegistryPlugin,
+  args: string[],
+  progress: Progress,
+  action: 'install' | 'uninstall',
+): Promise<CommandResult> {
+  const startedAt = new Date()
+  const result = await runPluginCommand(profile, args, progress, action)
+  const completedAt = new Date()
+  const succeeded = result.exitCode === 0 && !result.timedOut
+  void reportInstallEvent({
+    pluginId: pluginEventId(plugin),
+    profile,
+    operation: action === 'install' ? 'install' : 'remove',
+    status: succeeded ? 'success' : 'failed',
+    startedAt,
+    completedAt,
+    errorCode: succeeded ? null : failureCode(result),
+  })
+  return result
+}
+
 function sendJson(response: ServerResponse, status: number, value: unknown): void {
   response.writeHead(status, {
     'cache-control': 'no-store',
@@ -204,7 +240,7 @@ function requireTrustedPost(request: IncomingMessage, response: ServerResponse):
 export function mountMarketRoutes(webServer: WebServerService, config: MarketRouteConfig): () => void {
   if (!PROFILE_RE.test(config.profile)) throw new Error(`invalid profile name: ${config.profile}`)
   const registryUrl = new URL(config.registryUrl)
-  if (registryUrl.protocol !== 'https:') throw new Error('catalog API URL must use HTTPS')
+  if (registryUrl.protocol !== 'https:') throw new Error('registry API URL must use HTTPS')
   const updateUrl = new URL(config.updateUrl)
   if (updateUrl.protocol !== 'https:') throw new Error('update API URL must use HTTPS')
 
@@ -273,7 +309,7 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
           const target = installTarget(plugin)
           mutating = true
           try {
-            const result = await runPluginCommand(config.profile, ['add', target], progress, 'install')
+            const result = await runReportedPluginCommand(config.profile, plugin, ['add', target], progress, 'install')
             const ok = result.exitCode === 0 && !result.timedOut
             sendJson(response, ok ? 200 : 502, {
               ok,
@@ -311,15 +347,20 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
             return
           }
           const { registry } = await loadRegistry(config.registryUrl)
-          const cataloged = registry.plugins.some(plugin => plugin.name === name
-            || installedSpec.toLowerCase().includes(installTarget(plugin).toLowerCase()))
-          if (!cataloged) {
+          // Prefer the plugin whose github:owner/repo target appears in the installed
+          // manifest spec so telemetry is attributed to the actually-installed plugin;
+          // fall back to the display-name match only for the catalog-membership gate
+          // (display names are not unique across the catalog — same-named forks exist).
+          const cataloged = registry.plugins.find(plugin =>
+            installedSpec.toLowerCase().includes(installTarget(plugin).toLowerCase()))
+            ?? registry.plugins.find(plugin => plugin.name === name)
+          if (cataloged === undefined) {
             sendJson(response, 400, { error: 'plugin is not in the 1024 Store registry' })
             return
           }
           mutating = true
           try {
-            const result = await runPluginCommand(config.profile, ['remove', name], progress, 'uninstall')
+            const result = await runReportedPluginCommand(config.profile, cataloged, ['remove', name], progress, 'uninstall')
             const ok = result.exitCode === 0 && !result.timedOut
             sendJson(response, ok ? 200 : 502, {
               ok,

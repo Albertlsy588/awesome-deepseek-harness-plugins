@@ -1,17 +1,7 @@
 import type { GitHubRepository, RepositoryInspection } from './github-discovery'
-import type {
-  CatalogPlugin,
-  Registry,
-  RegistryCategory,
-  StoredCatalogSnapshot,
-} from '../types'
-import { repositoryName } from './catalog'
+import type { CatalogPlugin, LocalizedText, StoredCatalogSnapshot } from '../types'
+import { categoryLabelMap, UNCLASSIFIED_CATEGORY } from './categories'
 import { emptyInstallMetrics } from './install-metrics'
-
-const UNCLASSIFIED_CATEGORY = {
-  en: 'Unclassified',
-  zh: '待分类',
-} satisfies RegistryCategory
 
 interface RepositoryIdentityRow {
   id: number
@@ -21,11 +11,6 @@ interface RepositoryIdentityRow {
   pushed_at: string | null
   validation_status: string
 }
-
-// Bump this marker whenever the bundled-registry projection changes without a
-// corresponding change to registry.generated.json. This v2 projection derives
-// repository identity from the GitHub URL instead of the human-facing name.
-const BUNDLED_REGISTRY_SYNC_VERSION = 'repository-url-v2'
 
 interface PendingRepositoryRow {
   github_id: number
@@ -110,19 +95,40 @@ async function queryRepositoryIdentities(
   return byKey
 }
 
-export async function syncBundledRegistry(
-  db: D1Database,
-  registry: Registry,
-  now = new Date().toISOString(),
-): Promise<void> {
-  const syncRevision = `${BUNDLED_REGISTRY_SYNC_VERSION}:${registry.revision}`
-  const revision = await getCatalogState(db, 'bundled_registry_revision')
-  if (revision === syncRevision) return
+export interface CuratedCatalogEntry {
+  /** GitHub `owner/repository` identifier, matching the curated file name. */
+  id: string
+  name: string
+  /** GitHub repository URL. */
+  repository: string
+  category: string
+  description: LocalizedText
+  added: string
+}
 
-  for (const group of chunks(registry.plugins, 50)) {
-    await db.batch(group.map((plugin) => {
-      const repository = repositoryName(plugin)
-      const fullName = `${plugin.owner}/${repository}`
+export interface CuratedSyncResult {
+  total: number
+  removedSources: number
+}
+
+/**
+ * Full reconciliation of the curated catalog (catalog/plugins/*.json) into D1.
+ *
+ * Upserts `catalog_repositories`, the `github_pr` source rows, and
+ * `catalog_metadata`. Entries missing from `entries` lose their `github_pr`
+ * source and metadata only — the `catalog_repositories` row is never deleted,
+ * so production data is preserved. Idempotent: re-running with the same input
+ * is a no-op apart from `last_seen_at`/`updated_at` bumps.
+ */
+export async function syncCuratedEntries(
+  db: D1Database,
+  entries: CuratedCatalogEntry[],
+  now = new Date().toISOString(),
+): Promise<CuratedSyncResult> {
+  for (const group of chunks(entries, 50)) {
+    await db.batch(group.map((entry) => {
+      const { owner, name } = repositoryParts(entry.id)
+      const fullName = `${owner}/${name}`
       return db.prepare(
         `INSERT INTO catalog_repositories (
            full_name, normalized_full_name, owner, repository_name, html_url,
@@ -138,9 +144,9 @@ export async function syncBundledRegistry(
       ).bind(
         fullName,
         normalizeRepositoryName(fullName),
-        plugin.owner,
-        repository,
-        plugin.url,
+        owner,
+        name,
+        entry.repository,
         now,
         now,
         now,
@@ -149,9 +155,8 @@ export async function syncBundledRegistry(
     }))
   }
 
-  for (const group of chunks(registry.plugins, 40)) {
-    const normalizedNames = group.map((plugin) =>
-      normalizeRepositoryName(`${plugin.owner}/${repositoryName(plugin)}`))
+  for (const group of chunks(entries, 40)) {
+    const normalizedNames = group.map((entry) => normalizeRepositoryName(entry.id))
     const result = await db.prepare(
       `SELECT id, normalized_full_name
          FROM catalog_repositories
@@ -159,10 +164,9 @@ export async function syncBundledRegistry(
     ).bind(...normalizedNames).all<{ id: number; normalized_full_name: string }>()
     const ids = new Map(result.results.map((row) => [row.normalized_full_name, row.id]))
     const statements: D1PreparedStatement[] = []
-    for (const plugin of group) {
-      const fullName = `${plugin.owner}/${repositoryName(plugin)}`
-      const id = ids.get(normalizeRepositoryName(fullName))
-      if (id === undefined) throw new Error(`Bundled repository was not inserted: ${fullName}`)
+    for (const entry of group) {
+      const id = ids.get(normalizeRepositoryName(entry.id))
+      if (id === undefined) throw new Error(`Curated repository was not inserted: ${entry.id}`)
       statements.push(
         db.prepare(
           `INSERT INTO catalog_repository_sources (
@@ -171,7 +175,7 @@ export async function syncBundledRegistry(
            ON CONFLICT(repository_id, source) DO UPDATE SET
              source_reference = excluded.source_reference,
              last_seen_at = excluded.last_seen_at`,
-        ).bind(id, plugin.url, now, now),
+        ).bind(id, entry.repository, now, now),
         db.prepare(
           `INSERT INTO catalog_metadata (
              repository_id, display_name, category, description_en, description_zh,
@@ -186,11 +190,11 @@ export async function syncBundledRegistry(
              updated_at = excluded.updated_at`,
         ).bind(
           id,
-          plugin.name,
-          plugin.category,
-          plugin.description.en,
-          plugin.description.zh,
-          plugin.added,
+          entry.name,
+          entry.category,
+          entry.description.en,
+          entry.description.zh,
+          entry.added,
           now,
         ),
       )
@@ -199,10 +203,9 @@ export async function syncBundledRegistry(
   }
 
   const currentNames = JSON.stringify(
-    registry.plugins.map((plugin) =>
-      normalizeRepositoryName(`${plugin.owner}/${repositoryName(plugin)}`)),
+    entries.map((entry) => normalizeRepositoryName(entry.id)),
   )
-  await db.batch([
+  const reconciliation = await db.batch([
     db.prepare(
       `DELETE FROM catalog_metadata
         WHERE repository_id IN (
@@ -227,7 +230,10 @@ export async function syncBundledRegistry(
     ).bind(currentNames),
   ])
 
-  await setCatalogState(db, 'bundled_registry_revision', syncRevision, now)
+  return {
+    total: entries.length,
+    removedSources: Number(reconciliation[1]?.meta.changes ?? 0),
+  }
 }
 
 export async function getCatalogState(db: D1Database, key: string): Promise<string | null> {
@@ -576,7 +582,6 @@ async function sha256(value: string): Promise<string> {
 
 export async function loadCatalogSnapshotFromD1(
   db: D1Database,
-  bundledRegistry: Registry,
   now = new Date().toISOString(),
 ): Promise<StoredCatalogSnapshot | null> {
   const result = await db.prepare(
@@ -594,9 +599,9 @@ export async function loadCatalogSnapshotFromD1(
   ).all<CatalogRow>()
   if (result.results.length === 0) return null
 
-  const categories = { ...bundledRegistry.categories }
+  const categories = categoryLabelMap()
   if (result.results.some((row) => row.category === null)) {
-    categories.unclassified = UNCLASSIFIED_CATEGORY
+    categories[UNCLASSIFIED_CATEGORY.id] = { ...UNCLASSIFIED_CATEGORY.label }
   }
   const plugins = result.results.map<CatalogPlugin>((row) => {
     const description = row.description ?? `${row.full_name} discovered from GitHub.`
@@ -606,7 +611,7 @@ export async function loadCatalogSnapshotFromD1(
       owner: row.owner,
       url: row.html_url,
       repository: row.repository_name,
-      category: row.category ?? 'unclassified',
+      category: row.category ?? UNCLASSIFIED_CATEGORY.id,
       description: {
         en: row.description_en ?? description,
         zh: row.description_zh ?? description,

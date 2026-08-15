@@ -5,12 +5,11 @@ import type {
   InstallMetrics,
   StoredCatalogSnapshot,
 } from '../types'
-import { repositoryName } from './catalog'
-import { loadCatalogSnapshotFromD1, saveCatalogMetrics, syncBundledRegistry } from './catalog-db'
+import { categoryLabelMap } from './categories'
+import { loadCatalogSnapshotFromD1, saveCatalogMetrics } from './catalog-db'
 import { fetchGitHubMetrics, metricKey } from './github-metrics'
 import { emptyInstallMetrics, loadInstallMetrics } from './install-metrics'
-import { BUNDLED_REGISTRY, loadRegistry } from './registry'
-import { emptyStarGrowth, updateStarHistory } from './star-history'
+import { updateStarHistory } from './star-history'
 
 const SNAPSHOT_KEY = 'catalog:snapshot:v5'
 const SNAPSHOT_TTL_MS = 15 * 60 * 1000
@@ -83,15 +82,6 @@ function logRefreshError(error: unknown): void {
   )
 }
 
-function logStarHistoryError(error: unknown): void {
-  console.error(
-    JSON.stringify({
-      message: 'star_history_refresh_failed',
-      error: error instanceof Error ? error.message : String(error),
-    }),
-  )
-}
-
 function logInstallMetricsError(error: unknown): void {
   console.error(
     JSON.stringify({
@@ -131,6 +121,18 @@ async function readStoredSnapshot(env: Env): Promise<StoredCatalogSnapshot | nul
   }
 }
 
+function emptyCatalogSnapshot(capturedAt: number): StoredCatalogSnapshot {
+  const generatedAt = new Date(capturedAt).toISOString()
+  return {
+    generatedAt,
+    registryUpdated: generatedAt.slice(0, 10),
+    registryRevision: 'empty',
+    metricCoverage: 0,
+    categories: categoryLabelMap(),
+    plugins: [],
+  }
+}
+
 export async function refreshCatalogSnapshot(
   env: Env,
   fetcher: typeof fetch = fetch,
@@ -140,12 +142,7 @@ export async function refreshCatalogSnapshot(
   if (env.CATALOG_DB) {
     try {
       const generatedAt = new Date(capturedAt).toISOString()
-      await syncBundledRegistry(env.CATALOG_DB, BUNDLED_REGISTRY, generatedAt)
-      const d1Snapshot = await loadCatalogSnapshotFromD1(
-        env.CATALOG_DB,
-        BUNDLED_REGISTRY,
-        generatedAt,
-      )
+      const d1Snapshot = await loadCatalogSnapshotFromD1(env.CATALOG_DB, generatedAt)
       if (d1Snapshot) {
         const token = env.GITHUB_TOKEN?.trim() || undefined
         const metrics = await fetchGitHubMetrics(d1Snapshot.plugins, token, fetcher)
@@ -208,84 +205,13 @@ export async function refreshCatalogSnapshot(
     }
   }
 
-  const registryResult = await loadRegistry()
-  const token = env.GITHUB_TOKEN?.trim() || undefined
-  const metrics = await fetchGitHubMetrics(registryResult.registry.plugins, token, fetcher)
-  const previousMetrics = new Map(
-    previousSnapshot?.plugins.map((plugin) => [metricKey(plugin), plugin]) ?? [],
-  )
-  let plugins = registryResult.registry.plugins.map<CatalogPlugin>((plugin) => {
-    const metric = metrics.get(metricKey(plugin))
-    const previous = previousMetrics.get(metricKey(plugin))
-    const previousGrowth = previous
-      ? {
-          growth24h: previous.growth24h,
-          growth7d: previous.growth7d,
-          growth30d: previous.growth30d,
-        }
-      : emptyStarGrowth()
-    return {
-      ...plugin,
-      install: `npx @dsh-1024store/cli add ${plugin.owner}/${repositoryName(plugin)} --profile web`,
-      ...previousGrowth,
-      ...(previous ? installMetricsFrom(previous) : emptyInstallMetrics()),
-      repository: repositoryName(plugin),
-      stars: metric?.stars ?? previous?.stars ?? null,
-      forks: metric?.forks ?? previous?.forks ?? null,
-      pushedAt: metric?.pushedAt ?? previous?.pushedAt ?? null,
-      updatedAt: metric?.updatedAt ?? previous?.updatedAt ?? null,
-      latestReleaseAt: metric?.latestReleaseAt ?? previous?.latestReleaseAt ?? null,
-    }
-  })
-
-  const freshPlugins = plugins.filter((plugin) => metrics.has(metricKey(plugin)))
-  if (freshPlugins.length > 0 && env.CATALOG_DB) {
-    try {
-      const growth = await updateStarHistory(env.CATALOG_DB, freshPlugins, capturedAt)
-      plugins = plugins.map((plugin) => ({
-        ...plugin,
-        ...(growth.get(metricKey(plugin)) ?? {}),
-      }))
-    } catch (error) {
-      logStarHistoryError(error)
-    }
+  // D1 is the only source of truth. When it is unavailable (or still empty)
+  // the stale KV snapshot is the only degradation layer; past that, serve an
+  // explicitly empty snapshot so callers can surface the condition via meta.
+  if (previousSnapshot) {
+    return { snapshot: previousSnapshot, source: 'stale' }
   }
-
-  if (env.CATALOG_DB) {
-    try {
-      const installMetrics = await loadInstallMetrics(
-        env.CATALOG_DB,
-        plugins.map((plugin) => `${plugin.owner}/${plugin.repository}`),
-        capturedAt,
-      )
-      plugins = plugins.map((plugin) => ({
-        ...plugin,
-        ...(installMetrics.get(installMetricKey(plugin)) ?? emptyInstallMetrics()),
-      }))
-    } catch (error) {
-      logInstallMetricsError(error)
-    }
-  }
-
-  const snapshot: StoredCatalogSnapshot = {
-    generatedAt: new Date(capturedAt).toISOString(),
-    registryUpdated: registryResult.registry.updated,
-    registryRevision: registryResult.registry.revision,
-    metricCoverage: plugins.filter((plugin) => plugin.stars !== null).length,
-    categories: registryResult.registry.categories,
-    plugins,
-  }
-
-  try {
-    await env.CATALOG_CACHE.put(SNAPSHOT_KEY, JSON.stringify(snapshot))
-  } catch (error) {
-    logRefreshError(error)
-  }
-
-  return {
-    snapshot,
-    source: registryResult.source,
-  }
+  return { snapshot: emptyCatalogSnapshot(capturedAt), source: 'empty' }
 }
 
 export async function loadCatalogSnapshot(

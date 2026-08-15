@@ -1,8 +1,14 @@
 # Install analytics
 
-DSH 1024Store counts installs performed through its open-source wrapper CLI. The
-wrapper delegates package management to the official DeepSeek Harness CLI and
-only reports an event after checking the profile state on disk.
+DSH 1024Store counts installs reported through two channels, distinguished by
+the event's `sourceChannel` field:
+
+- `dsh-1024store-cli` — the open-source wrapper CLI (`npx @dsh-1024store/cli`);
+- `dsh-1024store-plugin` — the in-DSH marketplace plugin
+  (`packages/dsh-1024store`), which installs plugins from the DSH settings page.
+
+The wrapper CLI delegates package management to the official DeepSeek Harness
+CLI and only reports an event after checking the profile state on disk.
 
 ```text
 npx @dsh-1024store/cli add owner/repository --profile web
@@ -45,11 +51,24 @@ Client timestamps are retained for diagnostics, but public windows and the
 canonical event time use the Worker receive time. This avoids clock skew and
 client-controlled ranking timestamps.
 
+Two counting-policy notes:
+
+- **No catalog-membership gate.** A well-formed event is recorded even when its
+  plugin is not (yet) in the published catalog. The former 404 "Unknown plugin"
+  rejection was removed so installs that race catalog sync or target
+  just-published repositories are not silently dropped; format validation, rate
+  limits, and idempotency still apply.
+- **CI runs are currently counted.** Every event carries an `is_ci` flag. At
+  this stage CI-flagged events are included in public aggregates; the flag is
+  stored per event so the counting policy can be tightened later without losing
+  historical data.
+
 ## Collected fields
 
 Each event contains an idempotency UUID, the anonymous client UUID, canonical
-`owner/repository` plugin ID, profile name, operation and result, client start
-and completion times, duration, requested ref, before/after version when
+`owner/repository` plugin ID, profile name, the reporting source channel
+(`dsh-1024store-cli` or `dsh-1024store-plugin`), operation and result, client
+start and completion times, duration, requested ref, before/after version when
 available, wrapper and DSH versions, platform, architecture, CI flag, and a
 bounded error code.
 

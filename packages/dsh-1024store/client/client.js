@@ -227,15 +227,24 @@ function MarketTab({ locale }) {
 
   useEffect(() => { setVisibleCount(40) }, [category, query, sort, view])
 
-  const categories = registry === null ? [] : Object.keys(registry.categories)
+  const categoryLabels = useMemo(() => {
+    const labels = {}
+    for (const entry of registry === null ? [] : registry.categories) labels[entry.id] = entry.label || {}
+    return labels
+  }, [registry])
+  const categories = useMemo(() => registry === null
+    ? []
+    : [...registry.categories]
+        .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
+        .map(entry => entry.id), [registry])
 
   const cards = plugins.slice(0, visibleCount).map(plugin => {
     const packageName = installedName(plugin, installed)
     const installing = busy === 'install:' + plugin.name
     const removing = packageName !== null && busy === 'uninstall:' + packageName
     const description = plugin.description[lang] || plugin.description.en || ''
-    const categoryLabel = registry.categories[plugin.category]?.[lang]
-      || registry.categories[plugin.category]?.en
+    const categoryLabel = categoryLabels[plugin.category]?.[lang]
+      || categoryLabels[plugin.category]?.en
       || plugin.category
     return h('article', { className: 'dsm-card', key: plugin.url },
       h('div', { className: 'dsm-card-head' },
@@ -296,7 +305,7 @@ function MarketTab({ locale }) {
         categories.map(id => h('button', {
           className: 'dsm-chip', key: id, type: 'button', 'data-active': category === id,
           onClick: () => setCategory(id),
-        }, registry.categories[id]?.[lang] || registry.categories[id]?.en || id)))),
+        }, categoryLabels[id]?.[lang] || categoryLabels[id]?.en || id)))),
     loadFailed
       ? h('div', { className: 'dsm-state' }, h('span', null, copy.loadFailed, ' ',
           h('button', { className: 'dsm-chip', type: 'button', onClick: load }, copy.retry)))

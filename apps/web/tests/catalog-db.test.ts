@@ -3,10 +3,10 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it, vi } from 'vitest'
 import {
   normalizeRepositoryName,
-  syncBundledRegistry,
+  syncCuratedEntries,
   upsertDiscoveredRepositories,
+  type CuratedCatalogEntry,
 } from '../worker/lib/catalog-db'
-import type { Registry } from '../worker/types'
 import type { GitHubRepository } from '../worker/lib/github-discovery'
 
 class SqliteD1Statement {
@@ -116,83 +116,145 @@ describe('D1 catalog deduplication', () => {
     expect(calls[2]?.sql).toContain('catalog_repository_sources')
   })
 
-  it('reruns a legacy bundled sync when repository identity projection changes', async () => {
-    const database = new DatabaseSync(':memory:')
-    database.exec(readFileSync(
-      new URL('../migrations/0002_plugin_catalog.sql', import.meta.url),
-      'utf8',
-    ))
-    const revision = `sha256:${'1'.repeat(64)}`
+})
+
+function catalogDatabase(): DatabaseSync {
+  const database = new DatabaseSync(':memory:')
+  database.exec(readFileSync(
+    new URL('../migrations/0002_plugin_catalog.sql', import.meta.url),
+    'utf8',
+  ))
+  return database
+}
+
+function curatedEntry(overrides: Partial<CuratedCatalogEntry> = {}): CuratedCatalogEntry {
+  return {
+    id: 'Owner/curated-plugin',
+    name: 'curated-plugin',
+    repository: 'https://github.com/Owner/curated-plugin',
+    category: 'tools',
+    description: { en: 'English', zh: '中文' },
+    added: '2026-08-15',
+    ...overrides,
+  }
+}
+
+describe('curated catalog reconciliation', () => {
+  it('upserts repositories, github_pr sources, and metadata for every entry', async () => {
+    const database = catalogDatabase()
+    const now = '2026-08-15T01:00:00.000Z'
+
+    const result = await syncCuratedEntries(sqliteD1(database), [curatedEntry()], now)
+
+    expect(result).toEqual({ total: 1, removedSources: 0 })
+    expect(database.prepare(`
+      SELECT full_name, normalized_full_name, owner, repository_name, html_url, validation_status
+      FROM catalog_repositories
+    `).all()).toEqual([{
+      full_name: 'Owner/curated-plugin',
+      normalized_full_name: 'owner/curated-plugin',
+      owner: 'Owner',
+      repository_name: 'curated-plugin',
+      html_url: 'https://github.com/Owner/curated-plugin',
+      validation_status: 'pending',
+    }])
+    expect(database.prepare(`
+      SELECT source, source_reference FROM catalog_repository_sources
+    `).all()).toEqual([{
+      source: 'github_pr',
+      source_reference: 'https://github.com/Owner/curated-plugin',
+    }])
+    expect(database.prepare(`
+      SELECT display_name, category, description_en, description_zh, added, source
+      FROM catalog_metadata
+    `).all()).toEqual([{
+      display_name: 'curated-plugin',
+      category: 'tools',
+      description_en: 'English',
+      description_zh: '中文',
+      added: '2026-08-15',
+      source: 'github_pr',
+    }])
+    database.close()
+  })
+
+  it('is idempotent and applies metadata updates without a revision gate', async () => {
+    const database = catalogDatabase()
+    const db = sqliteD1(database)
+
+    await syncCuratedEntries(db, [curatedEntry()], '2026-08-15T01:00:00.000Z')
+    const updated = await syncCuratedEntries(db, [
+      curatedEntry({ category: 'dev', description: { en: 'Updated', zh: '更新' } }),
+    ], '2026-08-15T02:00:00.000Z')
+
+    expect(updated).toEqual({ total: 1, removedSources: 0 })
+    expect(database.prepare('SELECT COUNT(*) AS count FROM catalog_repositories').get())
+      .toEqual({ count: 1 })
+    expect(database.prepare('SELECT category, description_en FROM catalog_metadata').get())
+      .toEqual({ category: 'dev', description_en: 'Updated' })
+    database.close()
+  })
+
+  it('removes only the github_pr source and metadata for entries missing from the payload', async () => {
+    const database = catalogDatabase()
     const now = '2026-08-15T00:00:00.000Z'
     database.exec(`
       INSERT INTO catalog_repositories (
         github_id, full_name, normalized_full_name, owner, repository_name, html_url,
         validation_status, topic_present, first_seen_at, last_seen_at, created_at, updated_at
       ) VALUES
-        (NULL, 'Owner/Display Name', 'owner/display name', 'Owner', 'Display Name',
-         'https://github.com/Owner/canonical-plugin', 'pending', 0,
+        (NULL, 'Owner/retired-plugin', 'owner/retired-plugin', 'Owner', 'retired-plugin',
+         'https://github.com/Owner/retired-plugin', 'pending', 0,
          '${now}', '${now}', '${now}', '${now}'),
-        (42, 'Owner/canonical-plugin', 'owner/canonical-plugin', 'Owner', 'canonical-plugin',
-         'https://github.com/Owner/canonical-plugin', 'accepted', 1,
+        (42, 'Owner/scanned-plugin', 'owner/scanned-plugin', 'Owner', 'scanned-plugin',
+         'https://github.com/Owner/scanned-plugin', 'accepted', 1,
          '${now}', '${now}', '${now}', '${now}');
       INSERT INTO catalog_repository_sources (
         repository_id, source, source_reference, first_seen_at, last_seen_at
       ) VALUES
-        (1, 'github_pr', 'https://github.com/Owner/canonical-plugin', '${now}', '${now}'),
-        (2, 'github_topic', 'deepseek-harness-plugin', '${now}', '${now}');
+        (1, 'github_pr', 'https://github.com/Owner/retired-plugin', '${now}', '${now}'),
+        (1, 'github_topic', 'dsh-plugin', '${now}', '${now}'),
+        (2, 'github_topic', 'dsh-plugin', '${now}', '${now}');
       INSERT INTO catalog_metadata (
         repository_id, display_name, category, description_en, description_zh,
         added, source, updated_at
-      ) VALUES (1, 'Display Name', 'tool', 'English', '中文', '2026-08-15', 'github_pr', '${now}');
-      INSERT INTO catalog_state (key, value, updated_at)
-      VALUES ('bundled_registry_revision', '${revision}', '${now}');
+      ) VALUES (1, 'retired-plugin', 'tools', 'English', '中文', '2026-08-15', 'github_pr', '${now}');
     `)
-    const registry: Registry = {
-      updated: now,
-      count: 1,
-      revision,
-      categories: { tool: { en: 'Tool', zh: '工具' } },
-      plugins: [{
-        name: 'Display Name',
-        owner: 'Owner',
-        url: 'https://github.com/Owner/canonical-plugin',
-        category: 'tool',
-        description: { en: 'English', zh: '中文' },
-        install: 'dsh plugin add Owner/canonical-plugin',
-        added: '2026-08-15',
-      }],
-    }
 
-    await syncBundledRegistry(sqliteD1(database), registry, '2026-08-15T01:00:00.000Z')
+    const result = await syncCuratedEntries(
+      sqliteD1(database),
+      [curatedEntry()],
+      '2026-08-15T01:00:00.000Z',
+    )
 
-    expect(database.prepare(
-      "SELECT value FROM catalog_state WHERE key = 'bundled_registry_revision'",
-    ).get()).toEqual({ value: `repository-url-v2:${revision}` })
+    expect(result).toEqual({ total: 1, removedSources: 1 })
+    // The repository rows survive: only the curation markers are reconciled away.
     expect(database.prepare(`
-      SELECT m.display_name
-      FROM catalog_metadata m
-      JOIN catalog_repositories r ON r.id = m.repository_id
-      WHERE r.normalized_full_name = 'owner/canonical-plugin'
-    `).get()).toEqual({ display_name: 'Display Name' })
+      SELECT normalized_full_name FROM catalog_repositories ORDER BY normalized_full_name
+    `).all()).toEqual([
+      { normalized_full_name: 'owner/curated-plugin' },
+      { normalized_full_name: 'owner/retired-plugin' },
+      { normalized_full_name: 'owner/scanned-plugin' },
+    ])
     expect(database.prepare(`
-      SELECT source
+      SELECT s.source
       FROM catalog_repository_sources s
       JOIN catalog_repositories r ON r.id = s.repository_id
-      WHERE r.normalized_full_name = 'owner/canonical-plugin'
-      ORDER BY source
-    `).all()).toEqual([{ source: 'github_pr' }, { source: 'github_topic' }])
+      WHERE r.normalized_full_name = 'owner/retired-plugin'
+      ORDER BY s.source
+    `).all()).toEqual([{ source: 'github_topic' }])
     expect(database.prepare(`
       SELECT COUNT(*) AS count
       FROM catalog_metadata m
       JOIN catalog_repositories r ON r.id = m.repository_id
-      WHERE r.normalized_full_name = 'owner/display name'
+      WHERE r.normalized_full_name = 'owner/retired-plugin'
     `).get()).toEqual({ count: 0 })
     expect(database.prepare(`
       SELECT COUNT(*) AS count
       FROM catalog_repository_sources s
       JOIN catalog_repositories r ON r.id = s.repository_id
-      WHERE r.normalized_full_name = 'owner/display name' AND s.source = 'github_pr'
-    `).get()).toEqual({ count: 0 })
+      WHERE r.normalized_full_name = 'owner/scanned-plugin'
+    `).get()).toEqual({ count: 1 })
     database.close()
   })
 })

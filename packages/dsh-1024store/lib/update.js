@@ -1,6 +1,6 @@
 /** Automatic update checks for the 1024 Store plugin itself. */
 import { readFileSync } from 'node:fs';
-export const DEFAULT_UPDATE_URL = 'https://deepseek1024.com/api/dsh-1024store';
+export const DEFAULT_UPDATE_URL = 'https://registry.npmjs.org/dsh-1024store/latest';
 export const DEFAULT_UPDATE_FALLBACK_URL = 'https://api.github.com/repos/imsai-sh/awesome-deepseek-harness-plugins/contents/package.json?ref=main';
 export const DEFAULT_RELEASE_URL = 'https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh-1024store';
 const FETCH_TIMEOUT_MS = 8_000;
@@ -78,7 +78,7 @@ async function fetchManifest(url, fetcher) {
     return validateManifest(await response.json());
 }
 /**
- * Query the first-party version API and fall back to the repository API.
+ * Query the npm registry for the published version and fall back to the repository API.
  * Failures are returned as state so an unavailable checker never blocks the market.
  */
 export async function checkForUpdate(updateUrl = DEFAULT_UPDATE_URL, fallbackUrl = DEFAULT_UPDATE_FALLBACK_URL, fetcher = fetch) {
