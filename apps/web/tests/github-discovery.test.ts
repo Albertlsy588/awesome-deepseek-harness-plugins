@@ -95,6 +95,102 @@ describe('Cloudflare GitHub discovery', () => {
     expect(request).toHaveBeenCalledTimes(3)
   })
 
+  it.each([
+    [{ full_name: 'deepseek-ai/deepseek-harness' }, 'excluded_repository'],
+    [{ fork: true }, 'fork'],
+    [{ archived: true }, 'archived'],
+    [{ disabled: true }, 'disabled'],
+    [{ default_branch: '' }, 'missing_default_branch'],
+  ])('rejects repository metadata before making API calls', async (overrides, code) => {
+    const request = vi.fn()
+
+    const result = await inspectRepository(
+      { request } as unknown as ReturnType<typeof createGitHubClient>,
+      repository(overrides),
+    )
+
+    expect(result).toMatchObject({ status: 'rejected', code })
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [{ truncated: true, tree: [] }, 'truncated_tree'],
+    [{ truncated: false, tree: [] }, 'missing_package'],
+  ])('rejects an unusable repository tree', async (tree, code) => {
+    const request = vi.fn(async () => tree)
+
+    const result = await inspectRepository(
+      { request } as unknown as ReturnType<typeof createGitHubClient>,
+      repository(),
+    )
+
+    expect(result).toMatchObject({ status: 'rejected', code })
+  })
+
+  it.each([
+    [{ encoding: 'utf-8', content: '{}' }, 'unreadable_file'],
+    [{ encoding: 'base64', content: Buffer.from('{').toString('base64') }, 'invalid_package'],
+    [{ encoding: 'base64', content: encodedJson({ name: 'plugin' }) }, 'missing_bundle'],
+    [{
+      encoding: 'base64',
+      content: encodedJson({ name: 'plugin', dsh: { bundle: { patch: '../../escape.patch' } } }),
+    }, 'invalid_bundle_patch'],
+    [{
+      encoding: 'base64',
+      content: encodedJson({ name: 'plugin', dsh: { bundle: { patch: './missing.patch' } } }),
+    }, 'missing_bundle_patch'],
+  ])('rejects an invalid plugin manifest without aborting the scan', async (blob, code) => {
+    const request = vi.fn(async (path: string) => path.includes('/git/trees/')
+      ? {
+          truncated: false,
+          tree: [
+            { path: 'package.json', mode: '100644', type: 'blob', sha: 'manifest' },
+            { path: 'plugin.patch', mode: '100644', type: 'blob', sha: 'patch' },
+          ],
+        }
+      : blob)
+
+    const result = await inspectRepository(
+      { request } as unknown as ReturnType<typeof createGitHubClient>,
+      repository(),
+    )
+
+    expect(result).toMatchObject({ status: 'rejected', code })
+  })
+
+  it.each([
+    [404, 'Not Found', 'repository_unavailable'],
+    [409, 'Git Repository is empty.', 'empty_repository'],
+    [410, 'Gone', 'repository_unavailable'],
+    [422, 'Reference does not exist', 'invalid_repository_tree'],
+  ])('isolates repository-scoped GitHub API status %i', async (status, message, code) => {
+    const fetcher = vi.fn(async () => Response.json({ message }, { status })) as unknown as typeof fetch
+
+    const result = await inspectRepository(createGitHubClient('token', fetcher), repository({
+      full_name: 'ShawnSiao/dsh-agent-eval',
+    }))
+
+    expect(result).toMatchObject({
+      githubId: 42,
+      status: 'rejected',
+      code,
+    })
+  })
+
+  it('does not hide authentication or rate-limit failures as repository rejections', async () => {
+    const fetcher = vi.fn(async () => Response.json(
+      { message: 'API rate limit exceeded' },
+      { status: 403, headers: { 'x-ratelimit-remaining': '0' } },
+    )) as unknown as typeof fetch
+
+    await expect(inspectRepository(createGitHubClient('token', fetcher), repository()))
+      .rejects.toMatchObject({
+        name: 'GitHubApiError',
+        status: 403,
+        rateLimitRemaining: 0,
+      })
+  })
+
   it('paces repository search after the first request', async () => {
     const waiter = vi.fn(async () => undefined)
     const fetcher = vi.fn(async () => Response.json({ ok: true })) as unknown as typeof fetch
