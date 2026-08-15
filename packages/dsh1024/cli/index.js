@@ -10,16 +10,16 @@ import {
   setTelemetryEnabled,
 } from './telemetry.js'
 
-const HELP = `dsh-1024store ${CLI_VERSION}
+const HELP = `dsh1024 ${CLI_VERSION}
 
 Usage:
-  dsh-1024store add <owner/repository> [--profile <name>] [official arguments...]
-  dsh-1024store telemetry [status|enable|disable|reset]
+  dsh1024 add <owner/repository> [--profile <name>] [official arguments...]
+  dsh1024 telemetry [status|enable|disable|reset]
 
 Examples:
-  dsh-1024store add omdsh-dev/dsh-deep-research
-  dsh-1024store add owner/plugin#v1.2.0 --profile web
-  dsh-1024store add owner/plugin --profile web -- --ignore-scripts --reporter append-only
+  dsh1024 add omdsh-dev/dsh-deep-research
+  dsh1024 add owner/plugin#v1.2.0 --profile web
+  dsh1024 add owner/plugin --profile web -- --ignore-scripts --reporter append-only
 
 The add command delegates to the official @deepseek-ai/dsh CLI, verifies the
 resulting profile, and records a narrow anonymous install event. Only the
@@ -45,7 +45,7 @@ export async function main(argv, overrides = {}) {
   } catch (error) {
     if (error instanceof UsageError) {
       io.stderr(`Error: ${error.message}`)
-      io.stderr('Run `dsh-1024store --help` for usage.')
+      io.stderr('Run `dsh1024 --help` for usage.')
       return 2
     }
     throw error

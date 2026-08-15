@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { main } from '../cli/index.js'
-import { EVENT_KEYS } from '../cli/constants.js'
+import { CLI_VERSION, EVENT_KEYS } from '../cli/constants.js'
 
 function clock(start = '2026-08-15T01:00:00.000Z') {
   let value = new Date(start).getTime()
@@ -117,7 +117,7 @@ test('delegates without a shell, verifies state, receipts locally, and posts the
   assert.equal(event.dshVersion, '0.1.0-rc.5')
   assert.equal(event.sourceChannel, 'dsh-1024store-cli')
   assert.equal(event.isCi, true)
-  assert.equal(requests[0].options.headers['user-agent'], '@dsh-1024store/cli')
+  assert.equal(requests[0].options.headers['user-agent'], `dsh1024/${CLI_VERSION}`)
   assert.equal('packageNames' in event, false)
   assert.equal(requests[0].options.body.includes('--ignore-scripts'), false)
   assert.equal(requests[0].options.body.includes('append-only'), false)
@@ -246,6 +246,88 @@ test('DO_NOT_TRACK disables identity creation, queueing, and upload', async () =
   assert.equal(existsSync(join(dshHome, '.dsh-1024store', 'client.json')), false)
   assert.equal(existsSync(join(dshHome, '.dsh-1024store', 'pending.json')), false)
   assert.equal(existsSync(join(dshHome, '.dsh-1024store', 'receipts.json')), true)
+})
+
+test('legacy DSH_1024STORE_TELEMETRY=0 disables identity creation, queueing, and upload', async () => {
+  const dshHome = await makeHome()
+  let fetchCalls = 0
+  const exitCode = await main(['add', 'owner/repo'], {
+    dshHome,
+    env: { DSH_1024STORE_TELEMETRY: '0' },
+    io: ioCapture().io,
+    spawn() {
+      installProfile(dshHome)
+      return { status: 0 }
+    },
+    async fetchImpl() {
+      fetchCalls += 1
+      throw new Error('must not upload')
+    },
+  })
+  assert.equal(exitCode, 0)
+  assert.equal(fetchCalls, 0)
+  assert.equal(existsSync(join(dshHome, '.dsh-1024store', 'client.json')), false)
+  assert.equal(existsSync(join(dshHome, '.dsh-1024store', 'pending.json')), false)
+})
+
+test('DSH1024_TELEMETRY=0 disables identity creation, queueing, and upload', async () => {
+  const dshHome = await makeHome()
+  let fetchCalls = 0
+  const exitCode = await main(['add', 'owner/repo'], {
+    dshHome,
+    env: { DSH1024_TELEMETRY: '0' },
+    io: ioCapture().io,
+    spawn() {
+      installProfile(dshHome)
+      return { status: 0 }
+    },
+    async fetchImpl() {
+      fetchCalls += 1
+      throw new Error('must not upload')
+    },
+  })
+  assert.equal(exitCode, 0)
+  assert.equal(fetchCalls, 0)
+  assert.equal(existsSync(join(dshHome, '.dsh-1024store', 'client.json')), false)
+  assert.equal(existsSync(join(dshHome, '.dsh-1024store', 'pending.json')), false)
+})
+
+test('prefers DSH1024_* over the legacy DSH_1024STORE_* variables', async () => {
+  const dshHome = await makeHome()
+  const requests = []
+  let invocation
+  const exitCode = await main(['add', 'owner/repo'], {
+    dshHome,
+    env: {
+      DSH1024_TELEMETRY: '1',
+      DSH_1024STORE_TELEMETRY: '0',
+      DSH1024_DSH_PACKAGE: '@deepseek-ai/dsh@0.2.0',
+      DSH_1024STORE_DSH_PACKAGE: '@deepseek-ai/dsh@0.1.0',
+      DSH1024_TELEMETRY_URL: 'http://modern.invalid/api/v1/install-events',
+      DSH_1024STORE_TELEMETRY_URL: 'http://legacy.invalid/api/v1/install-events',
+    },
+    io: ioCapture().io,
+    platform: 'linux',
+    now: clock(),
+    uuid: uuidSequence(
+      'abababab-abab-4bab-8bab-abababababab',
+      'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd',
+    ),
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installProfile(dshHome)
+      return { status: 0 }
+    },
+    async fetchImpl(url, options) {
+      requests.push({ url, options })
+      return { ok: true, status: 202 }
+    },
+  })
+  assert.equal(exitCode, 0)
+  assert.equal(invocation.args[1], '@deepseek-ai/dsh@0.2.0')
+  assert.equal(requests.length, 1)
+  assert.equal(requests[0].url, 'http://modern.invalid/api/v1/install-events')
+  assert.equal(JSON.parse(requests[0].options.body).dshVersion, '0.2.0')
 })
 
 test('keeps failed uploads and retries them before the next current event', async () => {

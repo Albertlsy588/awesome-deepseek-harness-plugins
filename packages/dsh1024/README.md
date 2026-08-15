@@ -1,6 +1,6 @@
-# @dsh-1024store/cli
+# dsh1024
 
-`dsh-1024store` is DSH 1024Store's thin, verifiable wrapper around the official
+`dsh1024` is DSH 1024Store's thin, verifiable wrapper around the official
 DeepSeek Harness plugin command. It installs a catalog plugin, checks that the
 selected DSH profile really contains it, and submits an anonymous installation
 outcome to the DSH 1024Store statistics API.
@@ -10,7 +10,7 @@ outcome to the DSH 1024Store statistics API.
 Node.js 22 or newer is required.
 
 ```sh
-npx @dsh-1024store/cli add omdsh-dev/dsh-deep-research --profile web
+npx dsh1024 add omdsh-dev/dsh-deep-research --profile web
 ```
 
 The wrapper executes this command without a shell:
@@ -22,7 +22,7 @@ npx --yes @deepseek-ai/dsh plugin --profile web add github:omdsh-dev/dsh-deep-re
 `web` is the default profile. A Git ref is optional:
 
 ```sh
-npx @dsh-1024store/cli add owner/repository#v1.2.0
+npx dsh1024 add owner/repository#v1.2.0
 ```
 
 ### Official CLI argument pass-through
@@ -34,7 +34,7 @@ first, and use `--` when an official argument could otherwise look like a
 wrapper option:
 
 ```sh
-npx @dsh-1024store/cli add owner/repository --profile web -- \
+npx dsh1024 add owner/repository --profile web -- \
   --ignore-scripts --reporter append-only --config.confirmModulesPurge=false
 ```
 
@@ -81,29 +81,43 @@ overwrite each other; network requests run outside those locks.
 ## Controls
 
 ```sh
-npx @dsh-1024store/cli telemetry status
-npx @dsh-1024store/cli telemetry disable
-npx @dsh-1024store/cli telemetry enable
-npx @dsh-1024store/cli telemetry reset
+npx dsh1024 telemetry status
+npx dsh1024 telemetry disable
+npx dsh1024 telemetry enable
+npx dsh1024 telemetry reset
 ```
 
 `reset` rotates the local anonymous identity and clears the pending queue while
 preserving the enabled or disabled preference; it does not uninstall plugins.
 Persistently disabling telemetry also clears unsent events. Telemetry is also
 disabled for a process when either
-`DO_NOT_TRACK=1` or `DSH_1024STORE_TELEMETRY=0` is set.
+`DO_NOT_TRACK=1` or `DSH1024_TELEMETRY=0` is set.
 
 ## Configuration
 
 - `DSH_HOME`: DSH data directory (default `~/.dsh`).
-- `DSH_1024STORE_DSH_PACKAGE`: official CLI package spec (default
+- `DSH1024_TELEMETRY`: set to `0` to disable telemetry for a process.
+- `DSH1024_DSH_PACKAGE`: official CLI package spec (default
   `@deepseek-ai/dsh`; useful for pinning or tests).
-- `DSH_1024STORE_DSH_VERSION`: explicit DSH version placed in the event when the
+- `DSH1024_DSH_VERSION`: explicit DSH version placed in the event when the
   package spec itself is unversioned.
-- `DSH_1024STORE_TELEMETRY_URL`: complete event endpoint URL (default
+- `DSH1024_TELEMETRY_URL`: complete event endpoint URL (default
   `https://deepseek1024.com/api/v1/install-events`).
-- `DSH_1024STORE_TELEMETRY_TIMEOUT_MS`: upload timeout from 100 to 30000 ms
+- `DSH1024_TELEMETRY_TIMEOUT_MS`: upload timeout from 100 to 30000 ms
   (default 2500 ms).
+
+The legacy `DSH_1024STORE_*` spellings of these variables (for example
+`DSH_1024STORE_TELEMETRY=0`) remain supported permanently. When both spellings
+are set, the `DSH1024_*` value wins.
+
+## Migrating from the old packages
+
+`dsh1024` replaces the deprecated `@dsh-1024store/cli` npm package. Replace
+`npx @dsh-1024store/cli ...` with `npx dsh1024 ...`; every command, option, and
+pass-through behavior is unchanged. Existing telemetry preferences, the
+anonymous identity, and local receipts are stored under
+`$DSH_HOME/.dsh-1024store/` and are reused as-is, so no migration step is
+needed and no environment variable has to be renamed.
 
 ## Development
 

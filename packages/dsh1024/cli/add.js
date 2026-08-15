@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { win32 as win32Path } from 'node:path'
 import { arch as hostArch, execPath as hostExecPath, platform as hostPlatform } from 'node:process'
-import { CLI_VERSION, DEFAULT_DSH_PACKAGE } from './constants.js'
+import { CLI_VERSION, DEFAULT_DSH_PACKAGE, readCliEnv } from './constants.js'
 import { readProfileState, inspectInstallation, createReceipt } from './profile.js'
 import { getReceipt, readReceipts, saveReceipt } from './receipts.js'
 import {
@@ -19,7 +19,8 @@ import {
 } from './telemetry.js'
 
 function officialDshVersion(packageSpec, env) {
-  if (env.DSH_1024STORE_DSH_VERSION) return env.DSH_1024STORE_DSH_VERSION.slice(0, 64)
+  const explicitVersion = readCliEnv(env, 'DSH_VERSION')
+  if (explicitVersion) return explicitVersion.slice(0, 64)
   const separator = packageSpec.lastIndexOf('@')
   const slash = packageSpec.lastIndexOf('/')
   return separator > slash ? packageSpec.slice(separator + 1, separator + 65) : null
@@ -88,7 +89,7 @@ export async function addPlugin(command, context) {
     arch: architecture = hostArch,
     execPath: nodeExecutable = hostExecPath,
   } = context
-  const officialPackage = env.DSH_1024STORE_DSH_PACKAGE || DEFAULT_DSH_PACKAGE
+  const officialPackage = readCliEnv(env, 'DSH_PACKAGE') || DEFAULT_DSH_PACKAGE
   const receipts = await readReceipts(dshHome)
   const previousReceipt = getReceipt(receipts, command.profile, command.pluginId)
   const before = await readProfileState(dshHome, command.profile)
@@ -100,7 +101,7 @@ export async function addPlugin(command, context) {
       telemetryConfig = (await ensureTelemetryConfig(dshHome, { now, uuid })).config
     }
     if (effectiveTelemetryEnabled(telemetryConfig, env) && await markNoticeShown(dshHome, telemetryConfig, now)) {
-      stderr('DSH 1024Store records anonymous plugin install outcomes and timestamps. Disable with `npx @dsh-1024store/cli telemetry disable`, `DO_NOT_TRACK=1`, or `DSH_1024STORE_TELEMETRY=0`. Details: https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/docs/install-analytics.md')
+      stderr('DSH 1024Store records anonymous plugin install outcomes and timestamps. Disable with `npx dsh1024 telemetry disable`, `DO_NOT_TRACK=1`, or `DSH1024_TELEMETRY=0`. Details: https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/docs/install-analytics.md')
     }
   } catch {
     // Telemetry storage must never block an installation.

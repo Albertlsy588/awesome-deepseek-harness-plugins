@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { arch as nodeArch, platform as nodePlatform } from 'node:process'
 import {
+  CLI_VERSION,
   DEFAULT_TELEMETRY_URL,
   EVENT_KEYS,
   TELEMETRY_NOTICE_VERSION,
+  readCliEnv,
 } from './constants.js'
 import {
   readJson,
@@ -27,7 +29,8 @@ function isTrue(value) {
 }
 
 export function environmentDisablesTelemetry(env) {
-  return isTrue(env.DO_NOT_TRACK) || (env.DSH_1024STORE_TELEMETRY !== undefined && isFalse(env.DSH_1024STORE_TELEMETRY))
+  const telemetry = readCliEnv(env, 'TELEMETRY')
+  return isTrue(env.DO_NOT_TRACK) || (telemetry !== undefined && isFalse(telemetry))
 }
 
 function createConfig(now, uuid) {
@@ -157,8 +160,8 @@ export async function flushPending(dshHome, options = {}) {
 
   const fetchImpl = options.fetchImpl ?? globalThis.fetch
   const env = options.env ?? process.env
-  const endpoint = env.DSH_1024STORE_TELEMETRY_URL || DEFAULT_TELEMETRY_URL
-  const timeoutMs = normalizedTimeout(env.DSH_1024STORE_TELEMETRY_TIMEOUT_MS)
+  const endpoint = readCliEnv(env, 'TELEMETRY_URL') || DEFAULT_TELEMETRY_URL
+  const timeoutMs = normalizedTimeout(readCliEnv(env, 'TELEMETRY_TIMEOUT_MS'))
   let sent = 0
   let discarded = 0
   const processedIds = new Set()
@@ -170,7 +173,7 @@ export async function flushPending(dshHome, options = {}) {
         headers: {
           accept: 'application/json',
           'content-type': 'application/json',
-          'user-agent': '@dsh-1024store/cli',
+          'user-agent': `dsh1024/${CLI_VERSION}`,
         },
         body: JSON.stringify(event),
         signal: AbortSignal.timeout(timeoutMs),
