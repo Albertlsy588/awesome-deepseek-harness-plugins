@@ -14,9 +14,11 @@ import {
 import { refreshCatalogSnapshot } from './catalog-store'
 import {
   createGitHubClient,
+  DISCOVERY_STRATEGY_VERSION,
   discoverRepositories,
   incrementalStart,
   inspectRepository,
+  selectDiscoveryMode,
 } from './github-discovery'
 
 const DEFAULT_TOPIC = 'dsh-plugin'
@@ -25,6 +27,7 @@ const VALIDATION_CHUNK_SIZE = 20
 const CORE_RATE_LIMIT_RESERVE = 500
 const TASK_DEADLINE_MS = 12 * 60 * 1000
 const LEASE_MS = 20 * 60 * 1000
+const DISCOVERY_STRATEGY_STATE_KEY = 'discovery_strategy_version'
 
 interface RateLimitResponse {
   resources: {
@@ -79,7 +82,8 @@ export async function runPluginDiscoveryTask(
     leaseClaimed = await claimScanLease(env.CATALOG_DB, runId, runAt, LEASE_MS)
     if (!leaseClaimed) return { ...counters, mode, skipped: true }
     const watermark = await getCatalogState(env.CATALOG_DB, 'discovery_watermark')
-    mode = requestedMode ?? (watermark === null ? 'full' : 'incremental')
+    const strategyVersion = await getCatalogState(env.CATALOG_DB, DISCOVERY_STRATEGY_STATE_KEY)
+    mode = selectDiscoveryMode(requestedMode, watermark, strategyVersion)
     await startScanRun(env.CATALOG_DB, runId, mode, end)
 
     const client = createGitHubClient(env.GITHUB_TOKEN.trim())
@@ -127,6 +131,14 @@ export async function runPluginDiscoveryTask(
 
     if (mode === 'full') await markMissingTopicRepositories(env.CATALOG_DB, runId, end)
     await setCatalogState(env.CATALOG_DB, 'discovery_watermark', end, end)
+    if (mode === 'full') {
+      await setCatalogState(
+        env.CATALOG_DB,
+        DISCOVERY_STRATEGY_STATE_KEY,
+        DISCOVERY_STRATEGY_VERSION,
+        end,
+      )
+    }
     const completedAt = new Date().toISOString()
     await completeScanRun(env.CATALOG_DB, runId, 'completed', counters, undefined, completedAt)
     await refreshCatalogSnapshot(env, fetch, new Date(completedAt).getTime())

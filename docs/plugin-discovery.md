@@ -26,7 +26,10 @@ topic never silently removes a maintainer-approved entry.
 ## Schedules and failure behavior
 
 - `7 * * * *` and `37 * * * *`: Cron Triggers dispatch incremental GitHub discovery every
-  30 minutes, with a five-minute overlap.
+  30 minutes, with a five-minute overlap. Each incremental run combines GitHub's supported
+  `created:` and `pushed:` repository searches and deduplicates the results. This captures new
+  repositories and fresh plugin pushes; the weekly full reconciliation catches topic-only
+  changes on otherwise inactive repositories.
 - `17 3 * * SUN`: weekly full reconciliation, partitioned by repository creation timestamp to
   exhaust GitHub Search's 1,000-result window.
 - `*/15 * * * *`: refresh the published catalog/star-growth snapshot.
@@ -36,6 +39,10 @@ cannot overlap another discovery run. Work that exceeds the deadline or GitHub b
 pending for the next half-hour invocation. Each run has a durable scan record, and each GitHub source record stores the
 last full run that saw it. A repository is marked as no longer carrying the topic only after a
 successful full scan. The watermark advances only during the final publish step.
+
+The Worker stores a discovery-strategy version in D1. A deployment that changes the search
+strategy forces one successful full reconciliation before incremental discovery resumes. This
+provides an automatic production backfill without deleting the watermark or editing D1 by hand.
 
 Validation reads the default-branch Git tree and at most 25 root or nested `package.json`
 blobs. It never installs dependencies or executes repository code. It requires a package name,
@@ -49,18 +56,18 @@ apart (at most 28.6/minute). Every validation batch checks `/rate_limit`, proces
 serially, and preserves 500 core calls for the website and other automation. Pending validation
 continues in the next half-hour run instead of exhausting the token.
 
-At the current scale of roughly 2,100 topic repositories:
+At the current scale of roughly 3,300 topic repositories:
 
 | Work | Expected calls |
 | --- | ---: |
-| Half-hour search with fewer than 100 updated repositories | 1 Search request |
+| Half-hour created + pushed search with fewer than 100 results each | 2 Search requests |
 | Validation of one ordinary single-package repository | 2 core requests |
 | Weekly full discovery | roughly 25–35 Search requests |
-| First validation backfill, if most repositories have one manifest | roughly 4,200 core requests |
+| First validation backfill, if most repositories have one manifest | roughly 6,600 core requests |
 
-The initial backfill is therefore close to, but normally below, one 5,000-request core window.
-The 500-call reserve makes the upper bound safe; monorepos that need extra manifest reads simply
-carry over. The limit is shared by all tokens acting as the same GitHub user, so use a dedicated,
+The initial backfill can span more than one 5,000-request core window. The 500-call reserve makes
+that safe; remaining validation work carries over to later half-hour runs. The limit is shared by
+all tokens acting as the same GitHub user, so use a dedicated,
 read-only fine-grained token. A GitHub App is the later upgrade path if this automation needs an
 isolated and scalable quota.
 
