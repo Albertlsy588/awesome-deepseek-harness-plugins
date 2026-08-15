@@ -48,7 +48,7 @@ Compact full-catalog registry for the `dsh-1024store` marketplace plugin, the RE
     "url": "https://github.com/owner/repository",
     "category": "tools",
     "description": { "en": "…", "zh": "…" },
-    "install": "npx @dsh-1024store/cli add owner/repository --profile web",
+    "install": "dsh plugin --profile web add github:owner/repository",
     "added": "2026-08-15",
     "stars": 12
   }]
@@ -56,7 +56,9 @@ Compact full-catalog registry for the `dsh-1024store` marketplace plugin, the RE
 ```
 
 `stars` is `null` when unknown. The registry is projected from the same KV snapshot as the
-other read endpoints.
+other read endpoints. The `install` field always carries the official DeepSeek Harness CLI
+command; tracked wrapper commands (`npx @dsh-1024store/cli add …`) are derived at the
+presentation layer and never stored in the registry.
 
 ## POST /api/v1/install-events
 
