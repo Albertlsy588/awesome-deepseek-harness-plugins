@@ -71,14 +71,18 @@ async function assertMinFontSize(page, label, selector, minimum) {
   if (size < minimum) throw new Error(`${label} uses ${size}px text; expected at least ${minimum}px`)
 }
 
-async function assertHorizontalTouchScroller(page, label, selector) {
+async function assertHorizontalTouchScroller(page, label, selector, { requireOverflow = true } = {}) {
   const result = await page.locator(selector).evaluate((node) => ({
     clientWidth: node.clientWidth,
     scrollWidth: node.scrollWidth,
     touchAction: getComputedStyle(node).touchAction,
   }))
   if (result.scrollWidth <= result.clientWidth) {
-    throw new Error(`${label} does not expose its overflowing controls through a local scroller`)
+    if (requireOverflow) {
+      throw new Error(`${label} does not expose its overflowing controls through a local scroller`)
+    }
+    // Content fits without scrolling; nothing to pan.
+    return
   }
   if (!result.touchAction.includes('pan-x')) {
     throw new Error(`${label} is missing horizontal touch panning`)
@@ -147,11 +151,11 @@ try {
   if ((await rankings.locator('.directory-section').count()) !== 0) {
     throw new Error('desktop rankings unexpectedly renders the directory')
   }
-  if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 6) {
-    throw new Error('rankings should only expose the six GitHub activity modes')
+  if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 4) {
+    throw new Error('rankings should only expose the four GitHub activity modes')
   }
-  if (await rankings.locator('.ranking-section .segmented-control button').nth(3).getAttribute('aria-pressed') !== 'true') {
-    throw new Error('rankings should default to stars')
+  if (await rankings.locator('.ranking-section .segmented-control button').first().getAttribute('aria-pressed') !== 'true') {
+    throw new Error('rankings should default to the 24h growth mode')
   }
   if ((await rankings.locator('header a[href="https://www.deepseek.com/harness/"]').count()) !== 0) {
     throw new Error('official Harness link should not be rendered in the header')
@@ -192,11 +196,8 @@ try {
   if ((await rankings.locator('a[href^="/plugins/"]').count()) === 0) {
     throw new Error('catalog cards do not use the canonical plural plugins path')
   }
-  const rankingSearchResponse = rankings.waitForResponse(
-    (response) => response.url().includes('/api/v1/plugins?') && response.url().includes('q=crosstalk'),
-  )
+  // Search filters client-side from the cached catalog; no network round trip.
   await rankings.locator('input[type="search"]').fill('crosstalk')
-  await rankingSearchResponse
   await rankings.waitForFunction(
     () => document.querySelectorAll('.ranking-section .package-row').length === 1,
     undefined,
@@ -211,6 +212,36 @@ try {
   const mobile = await openPage({ width: 390, height: 844 }, '/plugins', { touch: true })
   await mobile.locator('.directory-section .package-list').waitFor()
   await assertLiveStats(mobile)
+
+  // Regression guards for instant filtering: the directory renders
+  // incrementally instead of mounting every plugin at once, and switching
+  // filters derives from the cached catalog without another network request.
+  let catalogRequests = 0
+  mobile.on('request', (request) => {
+    if (request.url().includes('/api/v1/plugins')) catalogRequests += 1
+  })
+  const initialRows = await mobile.locator('.directory-section .package-row').count()
+  if (initialRows > 60) {
+    throw new Error(`directory mounted ${initialRows} rows at once; expected incremental rendering`)
+  }
+  await mobile.locator('.load-more-row button').waitFor()
+  await mobile.locator('.load-more-row button').click()
+  await mobile.waitForFunction(
+    (before) => document.querySelectorAll('.directory-section .package-row').length > before,
+    initialRows,
+    { timeout: 5_000 },
+  )
+  await mobile.locator('.category-filter button').nth(2).click()
+  await mobile.waitForFunction(
+    () => document.querySelectorAll('.category-filter button')[2]?.classList.contains('selected'),
+    undefined,
+    { timeout: 5_000 },
+  )
+  if (catalogRequests > 0) {
+    throw new Error('filter interactions refetched the catalog; expected client-side derivation')
+  }
+  await mobile.locator('.category-filter button').first().click()
+  await mobile.waitForURL((url) => !url.searchParams.has('category'))
   await assertMobileEnvironment(mobile, 'mobile catalog')
   await assertNoHorizontalOverflow(mobile, 'mobile catalog')
   await assertMinTouchTargets(mobile, 'mobile catalog', [
@@ -223,6 +254,7 @@ try {
     '.segmented-control button',
     '.package-row .icon-button',
     '.package-row .row-open',
+    '.load-more-row .button',
   ])
   await assertMinFontSize(mobile, 'mobile search input', 'input[type="search"]', 16)
   await assertMinFontSize(mobile, 'mobile package title', '.row-title-line a', 14)
@@ -237,11 +269,13 @@ try {
   await mobile.locator('.category-filter button').first().click()
   await mobile.waitForURL((url) => !url.searchParams.has('category'))
 
-  const searchResponse = mobile.waitForResponse(
-    (response) => response.url().includes('/api/v1/plugins?') && response.url().includes('q=crosstalk'),
-  )
   await mobile.locator('input[type="search"]').fill('crosstalk')
-  await searchResponse
+  await mobile.waitForURL((url) => url.searchParams.get('q') === 'crosstalk')
+  await mobile.waitForFunction(
+    () => document.querySelector('meta[name="robots"]')?.getAttribute('content') === 'noindex,follow',
+    undefined,
+    { timeout: 5_000 },
+  )
   await assertSeo(mobile, 'filtered mobile catalog', '/plugins', 'noindex,follow')
   if ((await mobile.locator('.directory-section .package-row').count()) === 0) {
     throw new Error('search returned no package rows')
@@ -268,6 +302,8 @@ try {
     mobileRankings,
     'mobile GitHub ranking modes',
     '.ranking-mode-group:last-child .segmented-control',
+    // Four modes fit within 390px; the scroller only engages when they overflow.
+    { requireOverflow: false },
   )
   await mobileRankings.locator('.ranking-section .segmented-control button').last().click()
   if (await mobileRankings.locator('.ranking-section .segmented-control button').last().getAttribute('aria-pressed') !== 'true') {

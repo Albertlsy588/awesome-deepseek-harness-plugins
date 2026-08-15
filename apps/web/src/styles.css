@@ -1255,6 +1255,45 @@ main {
   transition: opacity 150ms ease;
 }
 
+.refresh-note {
+  margin-left: auto;
+  align-self: center;
+  font-size: 13px;
+  color: var(--subtle);
+  white-space: nowrap;
+  animation: refresh-note-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes refresh-note-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refresh-note {
+    animation: none;
+  }
+}
+
+.load-more-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 20px 0 8px;
+}
+
+.load-more-row .button {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.load-more-count {
+  font-size: 13px;
+  color: var(--subtle);
+  font-variant-numeric: tabular-nums;
+}
+
 .package-row {
   position: relative;
   display: grid;

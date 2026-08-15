@@ -1,4 +1,5 @@
 import { ArrowUpRight, CalendarDays, Download, Star, TrendingUp, Users } from 'lucide-react'
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
 import { packagePath, trackedInstallCommand } from '../lib/api'
@@ -15,7 +16,13 @@ interface PackageRowProps {
   ranking?: RankingMode
 }
 
-export function PackageRow({ plugin, category, index, ranking }: PackageRowProps) {
+// Memoized so appending a page of rows leaves already-mounted rows untouched.
+export const PackageRow = memo(function PackageRow({
+  plugin,
+  category,
+  index,
+  ranking,
+}: PackageRowProps) {
   const { language, t } = useI18n()
   const growth = ranking === 'growth24h'
     ? plugin.growth24h
@@ -145,4 +152,4 @@ export function PackageRow({ plugin, category, index, ranking }: PackageRowProps
       </Link>
     </article>
   )
-}
+})

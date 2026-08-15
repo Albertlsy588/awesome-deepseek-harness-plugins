@@ -141,14 +141,21 @@ export function comparePlugins(
   return (left, right) => compareNullableNumber(left.stars, right.stars) || left.name.localeCompare(right.name)
 }
 
-export function buildCatalog(result: CatalogSnapshotResult, query: CatalogQuery): CatalogResponse {
-  const { snapshot, source } = result
+export function filterCatalogPackages(
+  plugins: CatalogPlugin[],
+  query: CatalogQuery,
+): CatalogPlugin[] {
   const normalizedSearch = query.q.toLocaleLowerCase()
-  const filtered = snapshot.plugins
+  return plugins
     .filter((plugin) => !query.category || plugin.category === query.category)
     .filter((plugin) => !normalizedSearch || searchableText(plugin).includes(normalizedSearch))
     .filter((plugin) => hasGrowthForSort(plugin, query.sort))
     .sort(comparePlugins(query.sort))
+}
+
+export function buildCatalog(result: CatalogSnapshotResult, query: CatalogQuery): CatalogResponse {
+  const { snapshot, source } = result
+  const filtered = filterCatalogPackages(snapshot.plugins, query)
 
   const growthRanking = (sort: 'growth24h' | 'growth7d' | 'growth30d') =>
     [...snapshot.plugins]
@@ -191,6 +198,22 @@ export function buildCatalog(result: CatalogSnapshotResult, query: CatalogQuery)
       source,
       metricCoverage: snapshot.metricCoverage,
     },
+  }
+}
+
+// Re-applies a catalog query on the client from one unfiltered response
+// (packages must hold the complete plugin list). Rankings and categories are
+// query-independent, so only packages/meta.total need recomputing; the filter
+// helpers are shared with buildCatalog to keep both sides byte-identical.
+export function deriveCatalogResponse(
+  full: CatalogResponse,
+  query: CatalogQuery,
+): CatalogResponse {
+  const filtered = filterCatalogPackages(full.packages, query)
+  return {
+    ...full,
+    packages: filtered,
+    meta: { ...full.meta, total: filtered.length },
   }
 }
 
