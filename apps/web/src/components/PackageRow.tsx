@@ -1,12 +1,12 @@
 import { ArrowUpRight, CalendarDays, Download, Star, TrendingUp, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
-import { packagePath, trackedInstallCommand } from '../lib/api'
+import { packagePath } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { CategoryTag } from './CategoryTag'
-import { InstallCommand } from './InstallCommand'
 import { OwnerAvatar } from './OwnerAvatar'
+import { SplitInstallButton } from './SplitInstallButton'
 
 interface PackageRowProps {
   plugin: CatalogPlugin
@@ -133,7 +133,7 @@ export function PackageRow({ plugin, category, index, ranking }: PackageRowProps
         )}
       </div>
 
-      {!ranking && <InstallCommand command={trackedInstallCommand(plugin)} compact />}
+      <SplitInstallButton plugin={plugin} />
 
       <Link
         className="row-open"

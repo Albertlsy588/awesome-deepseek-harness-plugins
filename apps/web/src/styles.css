@@ -1259,7 +1259,7 @@ main {
   position: relative;
   display: grid;
   min-height: 76px;
-  grid-template-columns: 38px 36px minmax(240px, 1fr) minmax(120px, auto) minmax(230px, auto) 32px 30px;
+  grid-template-columns: 38px 36px minmax(240px, 1fr) minmax(120px, auto) minmax(230px, auto) 54px 30px;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
@@ -1276,7 +1276,7 @@ main {
 }
 
 .ranking-row {
-  grid-template-columns: 38px 36px minmax(270px, 1fr) minmax(120px, auto) minmax(230px, auto) 30px;
+  grid-template-columns: 38px 36px minmax(270px, 1fr) minmax(120px, auto) minmax(230px, auto) 54px 30px;
 }
 
 .ranking-list {
@@ -1614,6 +1614,93 @@ main {
 .install-option-label {
   display: block;
   margin-bottom: 7px;
+  color: var(--subtle);
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.split-install {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.split-install-main.icon-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px 0 0 6px;
+}
+
+.split-install-toggle.icon-button {
+  width: 22px;
+  height: 32px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 0;
+}
+
+.split-install-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% - 6px);
+  right: 12px;
+  display: flex;
+  width: min(340px, calc(100vw - 24px));
+  flex-direction: column;
+  padding: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: 0 4px 10px rgba(20, 24, 32, 0.06), 0 14px 34px rgba(33, 43, 54, 0.16);
+}
+
+.split-install-menu [role='menuitem'] {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.split-install-menu [role='menuitem']:hover,
+.split-install-menu [role='menuitem']:focus-visible {
+  background: var(--brand-soft);
+}
+
+.split-install-menu code {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: #263245;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.split-install-menu [role='menuitem'] svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.split-menu-badge {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.split-menu-label {
+  flex: none;
   color: var(--subtle);
   font-size: 11px;
   font-weight: 620;
@@ -2255,12 +2342,12 @@ main {
   }
 
   .package-row {
-    grid-template-columns: 32px 36px minmax(210px, 1fr) 110px 200px 32px 30px;
+    grid-template-columns: 32px 36px minmax(210px, 1fr) 110px 200px 54px 30px;
     gap: 9px;
   }
 
   .ranking-row {
-    grid-template-columns: 32px 36px minmax(220px, 1fr) 110px 200px 30px;
+    grid-template-columns: 32px 36px minmax(220px, 1fr) 110px 200px 54px 30px;
   }
 
   .row-metrics {
@@ -2312,11 +2399,11 @@ main {
   }
 
   .package-row {
-    grid-template-columns: 30px 36px minmax(190px, 1fr) minmax(180px, auto) 32px 30px;
+    grid-template-columns: 30px 36px minmax(190px, 1fr) minmax(180px, auto) 54px 30px;
   }
 
   .ranking-row {
-    grid-template-columns: 30px 36px minmax(190px, 1fr) minmax(180px, auto) 30px;
+    grid-template-columns: 30px 36px minmax(190px, 1fr) minmax(180px, auto) 54px 30px;
   }
 
   .package-row .category-tag,
@@ -2560,7 +2647,7 @@ main {
   .package-row,
   .ranking-row {
     min-height: 104px;
-    grid-template-columns: 24px 40px minmax(0, 1fr) 44px;
+    grid-template-columns: 24px 40px minmax(0, 1fr) auto;
     grid-template-rows: minmax(44px, auto) 44px;
     gap: 4px 8px;
     padding: 8px;
@@ -2618,19 +2705,21 @@ main {
     min-width: auto !important;
   }
 
-  .install-command-compact {
+  .split-install {
     grid-column: 4;
     grid-row: 2;
-    width: 44px;
-    height: 44px;
-    border: 0;
+    justify-self: end;
   }
 
-  .install-command-compact .icon-button {
+  .split-install-main.icon-button,
+  .split-install-toggle.icon-button {
     width: 44px;
     height: 44px;
-    min-height: 44px;
-    border: 1px solid var(--line);
+  }
+
+  .split-install-menu {
+    top: calc(100% - 4px);
+    right: 8px;
   }
 
   .row-open {
@@ -2638,6 +2727,7 @@ main {
     grid-row: 1;
     width: 44px;
     height: 44px;
+    justify-self: end;
   }
 
   .skeleton-row {
@@ -2950,13 +3040,13 @@ main {
 
   .package-row {
     min-height: 84px;
-    grid-template-columns: 42px 42px minmax(320px, 1fr) minmax(130px, auto) minmax(250px, auto) 36px 34px;
+    grid-template-columns: 42px 42px minmax(320px, 1fr) minmax(130px, auto) minmax(250px, auto) 54px 34px;
     gap: 14px;
     padding: 12px 18px;
   }
 
   .ranking-row {
-    grid-template-columns: 42px 42px minmax(360px, 1fr) minmax(130px, auto) minmax(250px, auto) 34px;
+    grid-template-columns: 42px 42px minmax(360px, 1fr) minmax(130px, auto) minmax(250px, auto) 54px 34px;
   }
 
   .ranking-list .ranking-row:nth-child(-n + 3) .row-index {
