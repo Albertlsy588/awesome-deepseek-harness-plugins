@@ -1,0 +1,44 @@
+{
+  "name": "@dsh-1024store/cli",
+  "version": "0.1.0",
+  "description": "DSH 1024Store's tracked, privacy-conscious plugin installer for DeepSeek Harness",
+  "license": "MIT",
+  "homepage": "https://deepseek1024.com/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imsai-sh/awesome-deepseek-harness-plugins.git",
+    "directory": "apps/cli"
+  },
+  "bugs": "https://github.com/imsai-sh/awesome-deepseek-harness-plugins/issues",
+  "type": "module",
+  "bin": {
+    "dsh-1024store": "./bin/dsh-1024store.js"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "pack:check": "npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-1024store",
+    "1024store",
+    "plugins"
+  ]
+}

@@ -10,7 +10,23 @@ export interface RegistryPlugin {
   added: string
 }
 
-export interface CatalogPlugin extends RegistryPlugin {
+export interface InstallMetrics {
+  /** Successful install operations, including first installs and reinstalls. */
+  installCount?: number
+  /** Anonymous installation instances, not verified or named people. */
+  installerCount?: number
+  firstInstallCount?: number
+  reinstallCount?: number
+  updateCount?: number
+  removeCount?: number
+  failureCount?: number
+  installs24h?: number
+  installs7d?: number
+  installs30d?: number
+  latestInstallAt?: string | null
+}
+
+export interface CatalogPlugin extends RegistryPlugin, InstallMetrics {
   repository: string
   stars: number | null
   forks: number | null
@@ -30,6 +46,10 @@ export interface CategoryResult {
 }
 
 export type CatalogSort =
+  | 'installs'
+  | 'installs24h'
+  | 'installs7d'
+  | 'installs30d'
   | 'stars'
   | 'growth24h'
   | 'growth7d'
@@ -49,12 +69,12 @@ export interface CatalogResponse {
     updated: string
     generatedAt: string
     revision: string
-    source: 'bundled' | 'kv' | 'stale'
+    source: 'bundled' | 'd1' | 'kv' | 'stale'
     metricCoverage: number
   }
 }
 
-export interface PackageDetail extends RegistryPlugin {
+export interface PackageDetail extends RegistryPlugin, InstallMetrics {
   github: {
     stars: number
     forks: number
@@ -137,6 +157,12 @@ export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): st
   } catch {
     return plugin.name.split('/').at(-1) ?? plugin.name
   }
+}
+
+export function trackedInstallCommand(
+  plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
+): string {
+  return `npx @dsh-1024store/cli add ${plugin.owner}/${repositoryName(plugin)} --profile web`
 }
 
 export function githubAvatar(owner: string): string {

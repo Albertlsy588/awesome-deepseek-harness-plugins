@@ -116,7 +116,7 @@ async function assertLiveStats(page) {
 
 try {
   const defaultView = await openPage({ width: 1440, height: 1000 }, '/')
-  await defaultView.locator('.ranking-section .package-list').waitFor()
+  await defaultView.locator('.ranking-section').waitFor()
   if (!defaultView.url().endsWith('/rankings')) {
     throw new Error('root route did not default to rankings')
   }
@@ -136,15 +136,12 @@ try {
   await desktop.close()
 
   const rankings = await openPage({ width: 1440, height: 1000 }, '/rankings')
-  await rankings.locator('.ranking-section .package-list').waitFor()
+  await rankings.locator('.ranking-section').waitFor()
   if ((await rankings.locator('.directory-section').count()) !== 0) {
     throw new Error('desktop rankings unexpectedly renders the directory')
   }
-  if ((await rankings.locator('.ranking-section .package-row').count()) !== 100) {
-    throw new Error('rankings did not render the top 100 packages')
-  }
-  if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 6) {
-    throw new Error('rankings should expose growth, stars, release, and activity modes')
+  if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 10) {
+    throw new Error('rankings should expose four install and six GitHub activity modes')
   }
   if ((await rankings.locator('header a[href="https://www.deepseek.com/harness/"]').count()) !== 0) {
     throw new Error('official Harness link should not be rendered in the header')
@@ -167,8 +164,8 @@ try {
   if ((await rankings.locator('.site-header').count()) !== 0) {
     throw new Error('the removed standalone site header is still rendered')
   }
-  if ((await rankings.locator('a[href^="/plugin/"]').count()) === 0) {
-    throw new Error('catalog cards do not use the canonical singular plugin path')
+  if ((await rankings.locator('.catalog-hero .hero-brand-copy small').textContent())?.trim() !== 'DSH 1024Store') {
+    throw new Error('catalog banner is missing the DSH 1024Store brand')
   }
   if ((await rankings.locator('footer, .reset-button').count()) !== 0) {
     throw new Error('removed footer or refresh control is still rendered')
@@ -176,6 +173,12 @@ try {
   await assertSeo(rankings, 'desktop rankings', '/rankings')
   await rankings.locator('.ranking-section .segmented-control button').last().click()
   await rankings.locator('.ranking-section .package-row').first().waitFor()
+  if ((await rankings.locator('.ranking-section .package-row').count()) !== 100) {
+    throw new Error('GitHub activity rankings did not render the top 100 packages')
+  }
+  if ((await rankings.locator('a[href^="/plugin/"]').count()) === 0) {
+    throw new Error('catalog cards do not use the canonical singular plugin path')
+  }
   const rankingSearchResponse = rankings.waitForResponse(
     (response) => response.url().includes('/api/plugin?') && response.url().includes('q=crosstalk'),
   )
@@ -248,7 +251,11 @@ try {
     '.segmented-control button',
     '.package-row .row-open',
   ])
-  await assertHorizontalTouchScroller(mobileRankings, 'mobile ranking modes', '.segmented-control')
+  await assertHorizontalTouchScroller(
+    mobileRankings,
+    'mobile GitHub ranking modes',
+    '.ranking-mode-group:last-child .segmented-control',
+  )
   await mobileRankings.locator('.ranking-section .segmented-control button').last().click()
   if (await mobileRankings.locator('.ranking-section .segmented-control button').last().getAttribute('aria-pressed') !== 'true') {
     throw new Error('mobile ranking controls could not select an offscreen mode')
@@ -257,6 +264,10 @@ try {
 
   const detail = await openPage({ width: 1440, height: 1000 }, '/plugin/openma-ai/deepseek-harness-tui')
   await detail.locator('.detail-header').waitFor()
+  await detail.locator('.install-activity-section').waitFor()
+  if (!(await detail.locator('.install-section .install-command code').first().textContent())?.includes('@dsh-1024store/cli')) {
+    throw new Error('detail page is missing the tracked wrapper CLI command')
+  }
   await assertSeo(detail, 'desktop detail', '/plugin/openma-ai/deepseek-harness-tui')
   await assertNoHorizontalOverflow(detail, 'desktop detail')
   await detail.locator('.detail-brand').click()
@@ -280,15 +291,24 @@ try {
   await assertMinFontSize(scoped, 'mobile README prose', '.markdown-body', 15)
   await assertMinFontSize(scoped, 'mobile package facts', '.package-facts dd', 13)
   const detailOrder = await scoped.evaluate(() => ({
+    install: document.querySelector('.install-section')?.getBoundingClientRect().top,
+    installActivity: document.querySelector('.install-activity-section')?.getBoundingClientRect().top,
     primary: document.querySelector('.detail-primary')?.getBoundingClientRect().top,
     readme: document.querySelector('.readme-section')?.getBoundingClientRect().top,
     sidebar: document.querySelector('.package-sidebar')?.getBoundingClientRect().top,
   }))
   if (
-    detailOrder.primary === undefined
+    detailOrder.install === undefined
+    || detailOrder.installActivity === undefined
+    || detailOrder.primary === undefined
     || detailOrder.sidebar === undefined
     || detailOrder.readme === undefined
-    || !(detailOrder.primary < detailOrder.sidebar && detailOrder.sidebar < detailOrder.readme)
+    || !(
+      detailOrder.primary <= detailOrder.install
+      && detailOrder.install < detailOrder.installActivity
+      && detailOrder.installActivity < detailOrder.sidebar
+      && detailOrder.sidebar < detailOrder.readme
+    )
   ) {
     throw new Error(`mobile detail content priority is incorrect: ${JSON.stringify(detailOrder)}`)
   }

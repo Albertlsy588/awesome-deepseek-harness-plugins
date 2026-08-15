@@ -98,7 +98,7 @@ export function metadataForPath(
   registry: Registry = BUNDLED_REGISTRY,
 ): PageMetadata {
   if (pathname === '/' || pathname === '/rankings') {
-    const title = 'DeepSeek Harness Plugin Rankings | DSH Store'
+    const title = 'DeepSeek Harness Plugin Rankings | DSH 1024Store'
     const description = 'Compare popular DeepSeek Harness plugins by GitHub stars, recent growth, releases, and repository activity in the community plugin rankings.'
     return {
       title,
@@ -111,7 +111,7 @@ export function metadataForPath(
   }
 
   if (pathname === '/plugin') {
-    const title = 'DeepSeek Harness Plugins & Extensions | DSH Store'
+    const title = 'DeepSeek Harness Plugins & Extensions | DSH 1024Store'
     const description = 'Browse curated DeepSeek Harness plugins and extensions. Compare GitHub activity, explore categories, and copy install commands from the community catalog.'
     return {
       title,
@@ -131,7 +131,7 @@ export function metadataForPath(
     if (plugin) {
       const canonicalPath = `/plugin/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
       const canonical = absolute(canonicalPath)
-      const title = fitText(`${plugin.name} DeepSeek Harness Plugin | DSH Store`, 60)
+      const title = fitText(`${plugin.name} DeepSeek Harness Plugin | DSH 1024Store`, 60)
       const description = fitText(
         `Explore ${plugin.name}, a DeepSeek Harness plugin by ${plugin.owner}. ${plugin.description.en}`,
         160,
@@ -147,7 +147,7 @@ export function metadataForPath(
     }
   }
 
-  const title = 'Page not found | DSH Store'
+  const title = 'Page not found | DSH 1024Store'
   const description = 'The requested page is not available in the DeepSeek Harness community plugin catalog.'
   return {
     title,

@@ -1,15 +1,22 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowUp,
   CalendarDays,
   CheckCircle2,
   CircleDot,
+  Clock3,
   Code2,
+  Download,
   ExternalLink,
   GitFork,
   Package,
+  RefreshCw,
   ShieldAlert,
   Star,
+  Trash2,
+  Users,
+  XCircle,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -19,8 +26,8 @@ import { CategoryTag } from '../components/CategoryTag'
 import { InstallCommand } from '../components/InstallCommand'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
-import { getPackage, repositoryName, type CategoryResult, type PackageDetail } from '../lib/api'
-import { formatDate, formatNumber } from '../lib/format'
+import { getPackage, repositoryName, trackedInstallCommand, type CategoryResult, type PackageDetail } from '../lib/api'
+import { formatDate, formatDateTime, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { fitSeoText, SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
@@ -61,13 +68,13 @@ export function PackagePage() {
   const seoTitle = detail
     ? fitSeoText(
         language === 'zh'
-          ? `${detail.name} DeepSeek Harness 插件 | DSH 插件市场`
-          : `${detail.name} DeepSeek Harness Plugin | DSH Store`,
+          ? `${detail.name} DeepSeek Harness 插件 | DSH 1024Store`
+          : `${detail.name} DeepSeek Harness Plugin | DSH 1024Store`,
         60,
       )
     : error
-      ? language === 'zh' ? '插件未找到 | DSH 插件市场' : 'Plugin not found | DSH Store'
-      : language === 'zh' ? 'DeepSeek Harness 插件 | DSH 插件市场' : 'DeepSeek Harness Plugin | DSH Store'
+      ? language === 'zh' ? '插件未找到 | DSH 1024Store' : 'Plugin not found | DSH 1024Store'
+      : language === 'zh' ? 'DeepSeek Harness 插件 | DSH 1024Store' : 'DeepSeek Harness Plugin | DSH 1024Store'
   const seoDescription = detail
     ? fitSeoText(
         language === 'zh'
@@ -168,7 +175,7 @@ export function PackagePage() {
         .map(([engine, version]) => `${engine} ${version}`)
         .join(', ')
     : null
-  const reportUrl = `${detail.url}/issues/new?title=${encodeURIComponent(`[DSH Store] ${detail.name}`)}`
+  const reportUrl = `${detail.url}/issues/new?title=${encodeURIComponent(`[DSH 1024Store] ${detail.name}`)}`
   const branch = github?.defaultBranch ?? 'main'
   const detailOwner = detail.owner
   const detailRepository = repositoryName(detail)
@@ -251,7 +258,78 @@ export function PackagePage() {
         <div className="detail-primary">
           <section className="detail-section install-section" aria-labelledby="install-heading">
             <h2 id="install-heading">{t('install')}</h2>
-            <InstallCommand command={detail.install} prominent />
+            <InstallCommand command={trackedInstallCommand(detail)} prominent />
+            <p className="install-telemetry-note">{t('installTelemetryNote')}</p>
+            <details className="official-install-fallback">
+              <summary>{t('officialInstallFallback')}</summary>
+              <InstallCommand command={detail.install} />
+            </details>
+          </section>
+
+          <section className="detail-section install-activity-section" aria-labelledby="install-activity-heading">
+            <div className="install-activity-heading">
+              <div>
+                <h2 id="install-activity-heading">{t('installActivity')}</h2>
+                <p>{t('anonymousInstallerNote')}</p>
+              </div>
+              <span className="latest-install-time">
+                <Clock3 size={15} aria-hidden="true" />
+                <span>
+                  <small>{t('latestInstall')}</small>
+                  <strong>
+                    {detail.latestInstallAt
+                      ? formatDateTime(detail.latestInstallAt, language)
+                      : t('neverInstalled')}
+                  </strong>
+                </span>
+              </span>
+            </div>
+
+            <dl className="install-stat-grid">
+              <div className="install-stat-primary">
+                <dt><Download size={16} aria-hidden="true" /> {t('installOperations')}</dt>
+                <dd>{formatNumber(detail.installCount ?? 0, language)}</dd>
+              </div>
+              <div className="install-stat-primary">
+                <dt><Users size={16} aria-hidden="true" /> {t('anonymousInstallers')}</dt>
+                <dd>{formatNumber(detail.installerCount ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt>{t('installs24h')}</dt>
+                <dd>{formatNumber(detail.installs24h ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt>{t('installs7d')}</dt>
+                <dd>{formatNumber(detail.installs7d ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt>{t('installs30d')}</dt>
+                <dd>{formatNumber(detail.installs30d ?? 0, language)}</dd>
+              </div>
+            </dl>
+
+            <dl className="install-operation-breakdown">
+              <div>
+                <dt><CheckCircle2 size={14} aria-hidden="true" /> {t('firstInstalls')}</dt>
+                <dd>{formatNumber(detail.firstInstallCount ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt><RefreshCw size={14} aria-hidden="true" /> {t('reinstalls')}</dt>
+                <dd>{formatNumber(detail.reinstallCount ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt><ArrowUp size={14} aria-hidden="true" /> {t('updates')}</dt>
+                <dd>{formatNumber(detail.updateCount ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt><Trash2 size={14} aria-hidden="true" /> {t('removals')}</dt>
+                <dd>{formatNumber(detail.removeCount ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt><XCircle size={14} aria-hidden="true" /> {t('failedOperations')}</dt>
+                <dd>{formatNumber(detail.failureCount ?? 0, language)}</dd>
+              </div>
+            </dl>
           </section>
 
           <div className={`notice verification-notice ${detail.verification.bundleDeclared ? 'notice-success' : 'notice-warning'}`}>

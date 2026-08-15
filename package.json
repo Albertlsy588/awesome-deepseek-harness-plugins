@@ -1,5 +1,5 @@
 {
-  "name": "dsh-store-monorepo",
+  "name": "dsh-1024store-monorepo",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
@@ -7,6 +7,7 @@
   "type": "module",
   "packageManager": "npm@11.16.0",
   "workspaces": [
+    "apps/cli",
     "apps/web",
     "packages/*"
   ],
@@ -17,19 +18,21 @@
     "test:plugin-review": "node --test scripts/review-plugin-submission.test.mjs",
     "test:plugin-merge": "node --test scripts/merge-plugin-submission.test.mjs",
     "test:submit-skill": "node --test scripts/submit-dsh-plugin-skill.test.mjs",
-    "dev": "npm run dev --workspace @dsh-store/web",
-    "build": "npm run build --workspace @dsh-store/web && npm run build --workspace dsh-1024store",
-    "typecheck": "npm run typecheck --workspace @dsh-store/web && npm run typecheck --workspace dsh-1024store",
-    "test": "npm run test:plugin-collector && npm run test:plugin-review && npm run test:plugin-merge && npm run test:submit-skill && npm run test --workspace @dsh-store/web && npm run test --workspace dsh-1024store",
+    "test:cli": "npm test --workspace @dsh-1024store/cli",
+    "dev": "npm run dev --workspace @dsh-1024store/web",
+    "build": "npm run build --workspace @dsh-1024store/web && npm run build --workspace dsh-1024store",
+    "typecheck": "npm run typecheck --workspace @dsh-1024store/web && npm run typecheck --workspace dsh-1024store",
+    "test": "npm run test:plugin-collector && npm run test:plugin-review && npm run test:plugin-merge && npm run test:submit-skill && npm run test:cli && npm run test --workspace @dsh-1024store/web && npm run test --workspace dsh-1024store",
     "market:build": "npm run build --workspace dsh-1024store",
     "market:test": "npm run test --workspace dsh-1024store",
-    "test:visual": "npm run test:visual --workspace @dsh-store/web",
-    "cf-typegen": "npm run cf-typegen --workspace @dsh-store/web",
-    "cf-typecheck": "npm run cf-typecheck --workspace @dsh-store/web",
-    "db:migrate:local": "npm run db:migrate:local --workspace @dsh-store/web",
-    "db:migrate:remote": "npm run db:migrate:remote --workspace @dsh-store/web",
+    "test:visual": "npm run test:visual --workspace @dsh-1024store/web",
+    "cf-typegen": "npm run cf-typegen --workspace @dsh-1024store/web",
+    "cf-typecheck": "npm run cf-typecheck --workspace @dsh-1024store/web",
+    "pack:cli": "npm run pack:check --workspace @dsh-1024store/cli",
+    "db:migrate:local": "npm run db:migrate:local --workspace @dsh-1024store/web",
+    "db:migrate:remote": "npm run db:migrate:remote --workspace @dsh-1024store/web",
     "predeploy": "npm run build",
-    "deploy": "npm run deploy:worker --workspace @dsh-store/web"
+    "deploy": "npm run deploy:worker --workspace @dsh-1024store/web"
   },
   "engines": {
     "node": ">=22",

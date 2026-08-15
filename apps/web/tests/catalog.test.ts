@@ -10,6 +10,7 @@ describe('catalog queries', () => {
       sort: 'stars',
     })
     expect(parseCatalogQuery({ sort: 'growth7d' }).sort).toBe('growth7d')
+    expect(parseCatalogQuery({ sort: 'installs24h' }).sort).toBe('installs24h')
   })
 
   it('searches localized descriptions, filters categories, and does not paginate', () => {
@@ -31,6 +32,10 @@ describe('catalog queries', () => {
     expect(result.packages).toHaveLength(TEST_PLUGINS.length)
     expect(result.packages[0]?.name).toBe('deepseek-harness-tui')
     expect(result.rankings.stars[0]?.name).toBe('dsh-crosstalk')
+    expect(result.rankings.installs[0]?.name).toBe('dsh-crosstalk')
+    expect(result.rankings.installs24h[0]?.name).toBe('dsh-agent-teams')
+    expect(result.rankings.installs7d[0]?.name).toBe('dsh-agent-teams')
+    expect(result.rankings.installs30d[0]?.name).toBe('dsh-crosstalk')
     expect(result.rankings.growth24h[0]?.name).toBe('dsh-agent-teams')
     expect(result.rankings.growth7d[0]?.name).toBe('dsh-agent-teams')
     expect(result.rankings.growth30d[0]?.name).toBe('dsh-crosstalk')
@@ -40,6 +45,31 @@ describe('catalog queries', () => {
     expect(result.rankings.newest).toHaveLength(TEST_PLUGINS.length)
     expect(result.rankings.active).toHaveLength(TEST_PLUGINS.length)
     expect(result.rankings.growth24h).toHaveLength(TEST_PLUGINS.length - 1)
+    expect(result.rankings.installs).toHaveLength(TEST_PLUGINS.length - 1)
+    expect(result.rankings.installs24h).toHaveLength(4)
+  })
+
+  it('keeps installation rankings empty while no tracked installs have arrived', () => {
+    const base = testCatalogResult()
+    const result = buildCatalog({
+      ...base,
+      snapshot: {
+        ...base.snapshot,
+        plugins: base.snapshot.plugins.map((plugin) => ({
+          ...plugin,
+          installCount: 0,
+          installs24h: 0,
+          installs7d: 0,
+          installs30d: 0,
+        })),
+      },
+    }, { q: '', category: '', sort: 'installs' })
+
+    expect(result.packages).toHaveLength(TEST_PLUGINS.length)
+    expect(result.rankings.installs).toEqual([])
+    expect(result.rankings.installs24h).toEqual([])
+    expect(result.rankings.installs7d).toEqual([])
+    expect(result.rankings.installs30d).toEqual([])
   })
 
   it('sorts growth queries and excludes repositories without a complete baseline', () => {
