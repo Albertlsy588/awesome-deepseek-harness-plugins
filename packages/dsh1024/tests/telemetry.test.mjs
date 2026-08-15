@@ -13,7 +13,7 @@ import {
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
 function temporaryDshHome() {
-  return mkdtempSync(join(tmpdir(), 'dsh-1024store-telemetry-'))
+  return mkdtempSync(join(tmpdir(), 'dsh1024-telemetry-'))
 }
 
 function recordingFetcher(status = 200) {

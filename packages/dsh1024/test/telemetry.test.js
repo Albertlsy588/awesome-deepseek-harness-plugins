@@ -49,7 +49,7 @@ function runChild(script, extraEnv) {
 }
 
 test('preserves identity, events, and receipt counts across concurrent processes', async () => {
-  const dshHome = await mkdtemp(join(tmpdir(), 'dsh-1024store-concurrency-'))
+  const dshHome = await mkdtemp(join(tmpdir(), 'dsh1024-concurrency-'))
   const telemetryModule = new URL('../lib/shared/telemetry.js', import.meta.url).href
   const receiptsModule = new URL('../cli/receipts.js', import.meta.url).href
   const childScript = `
@@ -102,7 +102,7 @@ test('preserves identity, events, and receipt counts across concurrent processes
 })
 
 test('does not overwrite an event enqueued while a flush is in flight', async () => {
-  const dshHome = await mkdtemp(join(tmpdir(), 'dsh-1024store-telemetry-'))
+  const dshHome = await mkdtemp(join(tmpdir(), 'dsh1024-telemetry-'))
   const first = event('11111111-1111-4111-8111-111111111116')
   const second = event('11111111-1111-4111-8111-111111111117')
   await enqueueEvent(dshHome, first)
@@ -128,7 +128,7 @@ test('does not overwrite an event enqueued while a flush is in flight', async ()
 })
 
 test('concurrent config initialization returns one stable client identity', async () => {
-  const dshHome = await mkdtemp(join(tmpdir(), 'dsh-1024store-telemetry-'))
+  const dshHome = await mkdtemp(join(tmpdir(), 'dsh1024-telemetry-'))
   const results = await Promise.all(Array.from({ length: 20 }, (_, index) => ensureTelemetryConfig(dshHome, {
     uuid: () => `cccccccc-cccc-4ccc-8ccc-${String(index).padStart(12, '0')}`,
   })))
@@ -137,7 +137,7 @@ test('concurrent config initialization returns one stable client identity', asyn
 })
 
 test('recovers a half-created queue lock under concurrent takeover', async () => {
-  const dshHome = await mkdtemp(join(tmpdir(), 'dsh-1024store-telemetry-'))
+  const dshHome = await mkdtemp(join(tmpdir(), 'dsh1024-telemetry-'))
   const directory = join(dshHome, '.dsh-1024store')
   await mkdir(directory, { recursive: true })
   const abandonedLock = join(directory, 'pending.json.lock')
@@ -163,7 +163,7 @@ test('recovers a half-created queue lock under concurrent takeover', async () =>
 })
 
 test('recovers a queue owner left by a dead process', async () => {
-  const dshHome = await mkdtemp(join(tmpdir(), 'dsh-1024store-telemetry-'))
+  const dshHome = await mkdtemp(join(tmpdir(), 'dsh1024-telemetry-'))
   const directory = join(dshHome, '.dsh-1024store')
   const abandonedLock = join(directory, 'pending.json.lock')
   await mkdir(abandonedLock, { recursive: true })
@@ -178,7 +178,7 @@ test('recovers a queue owner left by a dead process', async () => {
 })
 
 test('skips permanently rejected events and continues with newer events', async () => {
-  const dshHome = await mkdtemp(join(tmpdir(), 'dsh-1024store-telemetry-'))
+  const dshHome = await mkdtemp(join(tmpdir(), 'dsh1024-telemetry-'))
   await enqueueEvent(dshHome, event('11111111-1111-4111-8111-111111111112'))
   await enqueueEvent(dshHome, event('11111111-1111-4111-8111-111111111113'))
   const delivered = []
@@ -198,7 +198,7 @@ test('skips permanently rejected events and continues with newer events', async 
 })
 
 test('retains a rate-limited event and every newer event', async () => {
-  const dshHome = await mkdtemp(join(tmpdir(), 'dsh-1024store-telemetry-'))
+  const dshHome = await mkdtemp(join(tmpdir(), 'dsh1024-telemetry-'))
   await enqueueEvent(dshHome, event('11111111-1111-4111-8111-111111111114'))
   await enqueueEvent(dshHome, event('11111111-1111-4111-8111-111111111115'))
   const result = await flushPending(dshHome, {

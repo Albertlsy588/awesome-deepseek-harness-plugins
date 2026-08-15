@@ -7,7 +7,7 @@ import test from 'node:test'
 import { withFileLock } from '../lib/shared/files.js'
 
 test('does not enter an old generation after its empty lock directory is replaced', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'dsh-1024store-lock-generation-'))
+  const directory = await mkdtemp(join(tmpdir(), 'dsh1024-lock-generation-'))
   const target = join(directory, 'state.json')
   let active = 0
   let maximumActive = 0

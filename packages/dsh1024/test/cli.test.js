@@ -57,7 +57,7 @@ function installProfile(dshHome, profile = 'web', version = '1.2.3') {
 }
 
 async function makeHome() {
-  return mkdtemp(join(tmpdir(), 'dsh-1024store-cli-'))
+  return mkdtemp(join(tmpdir(), 'dsh1024-cli-'))
 }
 
 function installSelfProfile(dshHome, profile = 'web', version = '0.3.1') {

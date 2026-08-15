@@ -20,7 +20,7 @@ const registry = {
     url: 'https://github.com/owner/repo',
     category: 'tools',
     description: { en: 'Plugin', zh: '插件' },
-    install: 'npx @dsh-1024store/cli add owner/repo --profile web',
+    install: 'dsh plugin --profile web add github:owner/repo',
     added: '2026-08-15',
     stars: 42,
   }],
