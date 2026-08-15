@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
+import { spawn as spawnChild } from 'node:child_process'
 import { win32 as win32Path } from 'node:path'
 import { arch as hostArch, execPath as hostExecPath, platform as hostPlatform } from 'node:process'
 import { CLI_VERSION, DEFAULT_DSH_PACKAGE, readCliEnv } from './constants.js'
+import { runPluginCommand } from '../lib/shared/install-runner.js'
 import { readProfileState, inspectInstallation, createReceipt } from './profile.js'
 import { getReceipt, readReceipts, saveReceipt } from './receipts.js'
 import {
@@ -39,29 +40,21 @@ function windowsNpmCli(env, nodeExecutable) {
   )
 }
 
-function officialCliInvocation(officialPackage, command, context) {
-  const officialArgs = [
-    officialPackage,
-    'plugin',
-    '--profile',
-    command.profile,
-    'add',
-    command.source,
-    ...command.passthroughArgs,
-  ]
+function officialCliInvocation(officialPackage, context) {
   if (context.platformName !== 'win32') {
-    return { executable: 'npx', args: ['--yes', ...officialArgs] }
+    return { file: 'npx', prefixArgs: ['--yes', officialPackage], useShell: false }
   }
 
   return {
-    executable: context.nodeExecutable,
-    args: [
+    file: context.nodeExecutable,
+    prefixArgs: [
       windowsNpmCli(context.env, context.nodeExecutable),
       'exec',
       '--yes',
       '--',
-      ...officialArgs,
+      officialPackage,
     ],
+    useShell: false,
   }
 }
 
@@ -70,8 +63,8 @@ function boundedDuration(startedAt, completedAt) {
 }
 
 function failureCode(result, inspection) {
-  if (result.error) return 'SPAWN_FAILED'
-  if (result.status !== 0) return 'OFFICIAL_CLI_FAILED'
+  if (result.error !== null) return 'SPAWN_FAILED'
+  if (result.exitCode !== 0) return 'OFFICIAL_CLI_FAILED'
   if (!inspection.afterPresent) return 'PROFILE_NOT_UPDATED'
   return null
 }
@@ -83,7 +76,7 @@ export async function addPlugin(command, context) {
     stderr,
     now = () => new Date(),
     uuid = randomUUID,
-    spawn = spawnSync,
+    spawn = spawnChild,
     fetchImpl = globalThis.fetch,
     platform: platformName = hostPlatform,
     arch: architecture = hostArch,
@@ -108,15 +101,20 @@ export async function addPlugin(command, context) {
   }
 
   const startedAt = now()
-  const { executable, args } = officialCliInvocation(officialPackage, command, {
+  const invocation = officialCliInvocation(officialPackage, {
     env,
     nodeExecutable,
     platformName,
   })
-  const result = spawn(executable, args, {
-    env,
-    shell: false,
+  const result = await runPluginCommand({
+    invocation,
+    action: 'add',
+    profile: command.profile,
+    target: command.source,
+    extraArgs: command.passthroughArgs,
     stdio: 'inherit',
+    env,
+    spawnImpl: spawn,
   })
   const completedAt = now()
   const after = await readProfileState(dshHome, command.profile)
@@ -140,7 +138,7 @@ export async function addPlugin(command, context) {
     } catch {
       stderr('DSH 1024Store installed the plugin but could not save its local receipt.')
     }
-  } else if (result.status === 0 && !inspection.afterPresent) {
+  } else if (result.exitCode === 0 && !inspection.afterPresent) {
     stderr('DSH 1024Store could not verify the plugin in the selected DSH profile after installation.')
   }
 
@@ -176,5 +174,5 @@ export async function addPlugin(command, context) {
   }
 
   if (succeeded) return 0
-  return Number.isInteger(result.status) && result.status > 0 ? result.status : 1
+  return Number.isInteger(result.exitCode) && result.exitCode > 0 ? result.exitCode : 1
 }

@@ -1,13 +1,13 @@
 /** Local HTTP routes for browsing and managing 1024 Store plugins. */
 
-import { spawn } from 'node:child_process'
-import type { ChildProcess } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { installTarget, loadRegistry, parseGitHubSource } from './registry.ts'
 import type { RegistryPlugin } from './registry.ts'
+import { runPluginCommand } from './shared/install-runner.ts'
+import type { InstallInvocation } from './shared/install-runner.ts'
 import { reportInstallEvent } from './telemetry.ts'
 import { checkForUpdate } from './update.ts'
 
@@ -44,7 +44,6 @@ interface Progress {
 
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/
 const PACKAGE_RE = /^(?:@[a-z0-9._-]+\/)?[A-Za-z0-9._-]+$/
-const TARGET_RE = /^[A-Za-z0-9@:/._#+-]+$/
 const COMMAND_TIMEOUT_MS = 5 * 60 * 1000
 const BODY_LIMIT_BYTES = 4 * 1024
 
@@ -70,84 +69,18 @@ export function readInstalled(profile: string): Record<string, string> {
   }
 }
 
-function cliInvocation(): { file: string; args: string[]; cwd?: string; shell: boolean } {
+function cliInvocation(): InstallInvocation {
   const entry = process.argv[1]
   if (entry !== undefined && /[\\/](?:bin\.(?:js|ts)|dsh)$/.test(entry)) {
     const absoluteEntry = resolve(entry)
     return {
       file: process.execPath,
-      args: [...process.execArgv, absoluteEntry],
+      prefixArgs: [...process.execArgv, absoluteEntry],
       cwd: dirname(absoluteEntry),
-      shell: false,
+      useShell: false,
     }
   }
-  return { file: 'dsh', args: [], shell: process.platform === 'win32' }
-}
-
-function stopChild(child: ChildProcess): void {
-  if (process.platform === 'win32' && child.pid !== undefined) {
-    const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' })
-    killer.once('error', () => { child.kill('SIGKILL') })
-    return
-  }
-  child.kill('SIGKILL')
-}
-
-function lastOutputLine(text: string): string {
-  return text.split('\n').map(line => line.trim()).filter(Boolean).at(-1)?.slice(0, 240) ?? ''
-}
-
-function runPluginCommand(
-  profile: string,
-  args: string[],
-  progress: Progress,
-  action: 'install' | 'uninstall',
-): Promise<CommandResult> {
-  const target = args.at(-1) ?? ''
-  if (!TARGET_RE.test(target)) {
-    return Promise.resolve({ exitCode: 1, timedOut: false, stdout: '', stderr: 'unsafe plugin target' })
-  }
-  const invocation = cliInvocation()
-  progress.active = true
-  progress.action = action
-  progress.target = target
-  progress.startedAt = Date.now()
-  progress.lastLine = ''
-  return new Promise(resolvePromise => {
-    const child = spawn(invocation.file, [...invocation.args, 'plugin', '--profile', profile, ...args], {
-      cwd: invocation.cwd,
-      env: { ...process.env, CI: 'true' },
-      shell: invocation.shell,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    let stdout = ''
-    let stderr = ''
-    let timedOut = false
-    const timer = setTimeout(() => {
-      timedOut = true
-      stopChild(child)
-    }, COMMAND_TIMEOUT_MS)
-    const collect = (kind: 'stdout' | 'stderr', chunk: Buffer): void => {
-      const text = chunk.toString()
-      if (kind === 'stdout') stdout = (stdout + text).slice(-64 * 1024)
-      else stderr = (stderr + text).slice(-64 * 1024)
-      progress.lastLine = lastOutputLine(text) || progress.lastLine
-    }
-    child.stdout.on('data', (chunk: Buffer) => { collect('stdout', chunk) })
-    child.stderr.on('data', (chunk: Buffer) => { collect('stderr', chunk) })
-    child.once('error', error => {
-      clearTimeout(timer)
-      progress.active = false
-      progress.action = null
-      resolvePromise({ exitCode: 127, timedOut: false, stdout, stderr: `${stderr}\n${error.message}` })
-    })
-    child.once('close', code => {
-      clearTimeout(timer)
-      progress.active = false
-      progress.action = null
-      resolvePromise({ exitCode: code, timedOut, stdout, stderr })
-    })
-  })
+  return { file: 'dsh', prefixArgs: [], useShell: process.platform === 'win32' }
 }
 
 function failureCode(result: CommandResult): string {
@@ -160,16 +93,49 @@ function pluginEventId(plugin: RegistryPlugin): string {
   return (parseGitHubSource(plugin.url) ?? plugin.id).toLowerCase()
 }
 
+/** Run one plugin mutation through the shared async runner, tracking progress. */
+async function runTrackedPluginCommand(
+  profile: string,
+  action: 'install' | 'uninstall',
+  target: string,
+  progress: Progress,
+): Promise<CommandResult> {
+  progress.active = true
+  progress.action = action
+  progress.target = target
+  progress.startedAt = Date.now()
+  progress.lastLine = ''
+  try {
+    const result = await runPluginCommand({
+      invocation: cliInvocation(),
+      action: action === 'install' ? 'add' : 'remove',
+      profile,
+      target,
+      stdio: 'capture',
+      timeoutMs: COMMAND_TIMEOUT_MS,
+      env: { ...process.env, CI: 'true' },
+      onLine: line => { progress.lastLine = line },
+    })
+    if (result.error !== null) {
+      return { exitCode: 127, timedOut: false, stdout: result.stdout, stderr: `${result.stderr}\n${result.error}` }
+    }
+    return { exitCode: result.exitCode, timedOut: result.timedOut, stdout: result.stdout, stderr: result.stderr }
+  } finally {
+    progress.active = false
+    progress.action = null
+  }
+}
+
 /** Run one plugin mutation and report its outcome anonymously (fire-and-forget). */
 async function runReportedPluginCommand(
   profile: string,
   plugin: RegistryPlugin,
-  args: string[],
-  progress: Progress,
   action: 'install' | 'uninstall',
+  target: string,
+  progress: Progress,
 ): Promise<CommandResult> {
   const startedAt = new Date()
-  const result = await runPluginCommand(profile, args, progress, action)
+  const result = await runTrackedPluginCommand(profile, action, target, progress)
   const completedAt = new Date()
   const succeeded = result.exitCode === 0 && !result.timedOut
   void reportInstallEvent({
@@ -309,7 +275,7 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
           const target = installTarget(plugin)
           mutating = true
           try {
-            const result = await runReportedPluginCommand(config.profile, plugin, ['add', target], progress, 'install')
+            const result = await runReportedPluginCommand(config.profile, plugin, 'install', target, progress)
             const ok = result.exitCode === 0 && !result.timedOut
             sendJson(response, ok ? 200 : 502, {
               ok,
@@ -360,7 +326,7 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
           }
           mutating = true
           try {
-            const result = await runReportedPluginCommand(config.profile, cataloged, ['remove', name], progress, 'uninstall')
+            const result = await runReportedPluginCommand(config.profile, cataloged, 'uninstall', name, progress)
             const ok = result.exitCode === 0 && !result.timedOut
             sendJson(response, ok ? 200 : 502, {
               ok,

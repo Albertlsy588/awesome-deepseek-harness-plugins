@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { EventEmitter } from 'node:events'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,6 +7,19 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { main } from '../cli/index.js'
 import { CLI_VERSION, EVENT_KEYS, SELF_PLUGIN_ID } from '../cli/constants.js'
+
+function fakeChild({ status = 0, error = null } = {}) {
+  const child = new EventEmitter()
+  child.pid = 4242
+  child.stdout = null
+  child.stderr = null
+  child.kill = () => {}
+  queueMicrotask(() => {
+    if (error !== null) child.emit('error', error)
+    else child.emit('close', status)
+  })
+  return child
+}
 
 function clock(start = '2026-08-15T01:00:00.000Z') {
   let value = new Date(start).getTime()
@@ -89,7 +103,7 @@ test('delegates without a shell, verifies state, receipts locally, and posts the
     spawn(command, args, options) {
       invocation = { command, args, options }
       installProfile(dshHome)
-      return { status: 0 }
+      return fakeChild()
     },
     async fetchImpl(url, options) {
       requests.push({ url, options })
@@ -161,7 +175,7 @@ test('uses the npm JavaScript entrypoint on Windows and preserves argument bound
     spawn(command, args, options) {
       invocation = { command, args, options }
       installProfile(dshHome)
-      return { status: 0 }
+      return fakeChild()
     },
   })
 
@@ -200,7 +214,7 @@ test('bounds the reported DSH version to the Worker contract', async () => {
     ),
     spawn() {
       installProfile(dshHome)
-      return { status: 0 }
+      return fakeChild()
     },
     async fetchImpl(_url, options) {
       events.push(JSON.parse(options.body))
@@ -225,7 +239,7 @@ test('reports reinstall when the plugin already exists', async () => {
       '33333333-3333-4333-8333-333333333333',
       '44444444-4444-4444-8444-444444444444',
     ),
-    spawn() { return { status: 0 } },
+    spawn() { return fakeChild() },
     async fetchImpl(_url, options) {
       events.push(JSON.parse(options.body))
       return { ok: true }
@@ -244,7 +258,7 @@ test('DO_NOT_TRACK disables identity creation, queueing, and upload', async () =
     io: ioCapture().io,
     spawn() {
       installProfile(dshHome)
-      return { status: 0 }
+      return fakeChild()
     },
     async fetchImpl() {
       fetchCalls += 1
@@ -267,7 +281,7 @@ test('legacy DSH_1024STORE_TELEMETRY=0 disables identity creation, queueing, and
     io: ioCapture().io,
     spawn() {
       installProfile(dshHome)
-      return { status: 0 }
+      return fakeChild()
     },
     async fetchImpl() {
       fetchCalls += 1
@@ -289,7 +303,7 @@ test('DSH1024_TELEMETRY=0 disables identity creation, queueing, and upload', asy
     io: ioCapture().io,
     spawn() {
       installProfile(dshHome)
-      return { status: 0 }
+      return fakeChild()
     },
     async fetchImpl() {
       fetchCalls += 1
@@ -326,7 +340,7 @@ test('prefers DSH1024_* over the legacy DSH_1024STORE_* variables', async () => 
     spawn(command, args, options) {
       invocation = { command, args, options }
       installProfile(dshHome)
-      return { status: 0 }
+      return fakeChild()
     },
     async fetchImpl(url, options) {
       requests.push({ url, options })
@@ -354,7 +368,7 @@ test('keeps failed uploads and retries them before the next current event', asyn
     ),
     spawn() {
       installProfile(dshHome)
-      return { status: 0 }
+      return fakeChild()
     },
     async fetchImpl() { throw new Error('offline') },
   })
@@ -369,7 +383,7 @@ test('keeps failed uploads and retries them before the next current event', asyn
     io: ioCapture().io,
     now: clock('2026-08-15T02:00:00.000Z'),
     uuid: uuidSequence('77777777-7777-4777-8777-777777777777'),
-    spawn() { return { status: 0 } },
+    spawn() { return fakeChild() },
     async fetchImpl(_url, options) {
       delivered.push(JSON.parse(options.body))
       return { ok: true }
@@ -395,7 +409,7 @@ test('preserves official exit code and emits a narrow failed event', async () =>
       '88888888-8888-4888-8888-888888888888',
       '99999999-9999-4999-8999-999999999999',
     ),
-    spawn() { return { status: 7 } },
+    spawn() { return fakeChild({ status: 7 }) },
     async fetchImpl(_url, options) {
       events.push(JSON.parse(options.body))
       return { ok: true }
@@ -420,7 +434,7 @@ test('reports spawn errors without exposing the error message', async () => {
       'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
       'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
     ),
-    spawn() { return { status: null, error: new Error('sensitive local spawn detail') } },
+    spawn() { return fakeChild({ error: new Error('sensitive local spawn detail') }) },
     async fetchImpl(_url, options) {
       events.push(JSON.parse(options.body))
       return { ok: true }
@@ -444,7 +458,7 @@ test('turns an unverifiable exit-zero result into a wrapper failure', async () =
       'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
     ),
-    spawn() { return { status: 0 } },
+    spawn() { return fakeChild() },
     async fetchImpl(_url, options) {
       events.push(JSON.parse(options.body))
       return { ok: true }
@@ -472,7 +486,7 @@ test('store installs the self plugin through the official CLI and reports npm-ba
     spawn(command, args, options) {
       invocation = { command, args, options }
       installSelfProfile(dshHome)
-      return { status: 0 }
+      return fakeChild()
     },
     async fetchImpl(_url, options) {
       events.push(JSON.parse(options.body))
@@ -512,7 +526,7 @@ test('store installs the self plugin through the official CLI and reports npm-ba
     io: ioCapture().io,
     now: clock('2026-08-15T02:00:00.000Z'),
     uuid: uuidSequence('30243024-3024-4024-8024-302430243024'),
-    spawn() { return { status: 0 } },
+    spawn() { return fakeChild() },
     async fetchImpl(_url, options) {
       secondRun.push(JSON.parse(options.body))
       return { ok: true }
@@ -536,7 +550,7 @@ test('store uses the npm JavaScript entrypoint on Windows and forwards pass-thro
     spawn(command, args, options) {
       invocation = { command, args, options }
       installSelfProfile(dshHome, 'desktop')
-      return { status: 0 }
+      return fakeChild()
     },
   })
 
@@ -571,7 +585,7 @@ test('store succeeds when the dependency already exists with an unchanged spec a
       '40244024-4024-4024-8024-402440244024',
       '50245024-5024-4024-8024-502450245024',
     ),
-    spawn() { return { status: 0 } },
+    spawn() { return fakeChild() },
     async fetchImpl(_url, options) {
       events.push(JSON.parse(options.body))
       return { ok: true }
