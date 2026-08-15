@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import storeManifest from '../../../packages/dsh-1024store/package.json' with { type: 'json' }
 import { createApp } from '../worker/app'
 import type { PackageDetail } from '../worker/types'
 import { TEST_PLUGINS, testCatalogResult } from './fixtures'
@@ -36,6 +37,15 @@ describe('market API', () => {
     const response = await testApp().request('/api/health')
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toMatchObject({ ok: true, service: 'dsh-store' })
+  })
+
+  it('reports the current dsh-1024store version for automatic update checks', async () => {
+    const response = await testApp().request('/api/dsh-1024store')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      name: 'dsh-1024store',
+      version: storeManifest.version,
+    })
   })
 
   it('serves the generated public registry with cross-origin access', async () => {
