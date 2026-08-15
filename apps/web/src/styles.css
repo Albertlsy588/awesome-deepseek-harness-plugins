@@ -1314,6 +1314,19 @@ main {
   background: rgba(77, 107, 254, 0.045);
 }
 
+.row-link {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.row-link:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
 .ranking-row {
   grid-template-columns: 38px 36px minmax(270px, 1fr) minmax(120px, auto) minmax(230px, auto) 30px;
 }
@@ -1409,7 +1422,7 @@ main {
   gap: 8px;
 }
 
-.row-title-line a {
+.row-title {
   min-width: 0;
   overflow: hidden;
   color: #242a3b;
@@ -1420,11 +1433,12 @@ main {
   white-space: nowrap;
 }
 
-.row-title-line a:hover {
+.package-row:hover .row-title,
+.package-row:has(.row-link:focus-visible) .row-title {
   color: var(--brand-dark);
 }
 
-.row-title-line span {
+.row-owner {
   overflow: hidden;
   color: #9299aa;
   font-family: var(--font-mono);
@@ -1575,6 +1589,8 @@ main {
 }
 
 .install-command-compact {
+  position: relative;
+  z-index: 2;
   display: block;
   width: 32px;
   height: 32px;
@@ -1622,8 +1638,8 @@ main {
   color: #98a0b0;
 }
 
-.row-open:hover {
-  background: var(--brand-soft);
+.package-row:hover .row-open,
+.package-row:has(.row-link:focus-visible) .row-open {
   color: var(--brand-dark);
 }
 
@@ -2600,11 +2616,11 @@ main {
     grid-row: 1;
   }
 
-  .row-title-line a {
+  .row-title {
     font-size: 14px;
   }
 
-  .row-title-line span {
+  .row-owner {
     font-size: 11px;
   }
 
@@ -2989,11 +3005,11 @@ main {
     gap: 10px;
   }
 
-  .row-title-line a {
+  .row-title {
     font-size: 15px;
   }
 
-  .row-title-line span,
+  .row-owner,
   .category-tag {
     font-size: 11px;
   }

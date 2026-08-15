@@ -268,11 +268,11 @@ try {
     '.category-filter button',
     '.segmented-control button',
     '.package-row .icon-button',
-    '.package-row .row-open',
+    '.package-row .row-link',
     '.load-more-row .button',
   ])
   await assertMinFontSize(mobile, 'mobile search input', 'input[type="search"]', 16)
-  await assertMinFontSize(mobile, 'mobile package title', '.row-title-line a', 14)
+  await assertMinFontSize(mobile, 'mobile package title', '.row-title', 14)
   await assertMinFontSize(mobile, 'mobile package description', '.row-identity p', 12)
   await assertMinFontSize(mobile, 'mobile package metrics', '.row-metrics > span', 11)
   await assertMinFontSize(mobile, 'mobile hero description', '.hero-heading > p:last-child', 14)
@@ -302,6 +302,21 @@ try {
   await assertNoHorizontalOverflow(mobile, 'English mobile catalog')
   await mobile.locator('.catalog-hero .language-switch button').first().click()
   await mobile.waitForFunction(() => document.documentElement.lang === 'zh-CN')
+
+  // The visual row is also the primary mobile navigation target. Exercise a
+  // point in its padding, away from the title link and copy button, so this
+  // fails if only those small controls are clickable.
+  const firstMobileRow = mobile.locator('.directory-section .package-row').first()
+  const firstMobileDetailPath = await firstMobileRow.locator('.row-link').getAttribute('href')
+  if (!firstMobileDetailPath) throw new Error('mobile package row is missing its detail path')
+  const detailPopupPromise = mobile.waitForEvent('popup')
+  await firstMobileRow.click({ position: { x: 8, y: 8 } })
+  const detailPopup = await detailPopupPromise
+  await detailPopup.waitForLoadState('domcontentloaded')
+  if (new URL(detailPopup.url()).pathname !== firstMobileDetailPath) {
+    throw new Error(`mobile package row opened the wrong detail page: ${detailPopup.url()}`)
+  }
+  await detailPopup.close()
   await mobile.close()
 
   const mobileRankings = await openPage({ width: 390, height: 844 }, '/rankings', { touch: true })
@@ -311,7 +326,7 @@ try {
   await assertMinTouchTargets(mobileRankings, 'mobile rankings', [
     '.catalog-view-tabs a',
     '.segmented-control button',
-    '.package-row .row-open',
+    '.package-row .row-link',
   ])
   await assertHorizontalTouchScroller(
     mobileRankings,
@@ -404,7 +419,7 @@ try {
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
     '.catalog-view-tabs a',
-    '.package-row .row-open',
+    '.package-row .row-link',
   ])
   await compactMobile.close()
 
