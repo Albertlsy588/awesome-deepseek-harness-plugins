@@ -309,6 +309,19 @@ function rejection(repository: GitHubRepository, error: RepositoryRejection): Re
   }
 }
 
+function repositoryApiRejection(error: GitHubApiError): RepositoryRejection | null {
+  if (error.status === 404 || error.status === 410) {
+    return new RepositoryRejection('repository_unavailable', error.message)
+  }
+  if (error.status === 409) {
+    return new RepositoryRejection('empty_repository', error.message)
+  }
+  if (error.status === 422) {
+    return new RepositoryRejection('invalid_repository_tree', error.message)
+  }
+  return null
+}
+
 export async function inspectRepository(
   client: GitHubClient,
   repository: GitHubRepository,
@@ -365,6 +378,10 @@ export async function inspectRepository(
     throw lastRejection ?? new RepositoryRejection('missing_bundle', 'No package declares dsh.bundle')
   } catch (error) {
     if (error instanceof RepositoryRejection) return rejection(repository, error)
+    if (error instanceof GitHubApiError) {
+      const apiRejection = repositoryApiRejection(error)
+      if (apiRejection) return rejection(repository, apiRejection)
+    }
     throw error
   }
 }
