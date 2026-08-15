@@ -140,8 +140,11 @@ try {
   if ((await rankings.locator('.directory-section').count()) !== 0) {
     throw new Error('desktop rankings unexpectedly renders the directory')
   }
-  if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 10) {
-    throw new Error('rankings should expose four install and six GitHub activity modes')
+  if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 6) {
+    throw new Error('rankings should only expose the six GitHub activity modes')
+  }
+  if (await rankings.locator('.ranking-section .segmented-control button').nth(3).getAttribute('aria-pressed') !== 'true') {
+    throw new Error('rankings should default to stars')
   }
   if ((await rankings.locator('header a[href="https://www.deepseek.com/harness/"]').count()) !== 0) {
     throw new Error('official Harness link should not be rendered in the header')

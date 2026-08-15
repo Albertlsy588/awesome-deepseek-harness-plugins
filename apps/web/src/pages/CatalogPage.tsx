@@ -24,12 +24,6 @@ import { useLiveStats } from '../lib/useLiveStats'
 import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
-const INSTALL_RANKING_MODES: RankingMode[] = [
-  'installs',
-  'installs24h',
-  'installs7d',
-  'installs30d',
-]
 const GITHUB_RANKING_MODES: RankingMode[] = [
   'growth24h',
   'growth7d',
@@ -67,7 +61,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
     ? requestedSort as CatalogSort
     : 'stars'
   const [draftQuery, setDraftQuery] = useState(query)
-  const [rankingMode, setRankingMode] = useState<RankingMode>('installs')
+  const [rankingMode, setRankingMode] = useState<RankingMode>('stars')
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -144,14 +138,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
   }, [catalog, query, rankingMode])
   const isGrowthMode =
     rankingMode === 'growth24h' || rankingMode === 'growth7d' || rankingMode === 'growth30d'
-  const isInstallMode = INSTALL_RANKING_MODES.includes(rankingMode)
-  const installRankingPending = isInstallMode && !query && ranking.length > 0 && !ranking.some((plugin) => {
-    if (rankingMode === 'installs24h') return (plugin.installs24h ?? 0) > 0
-    if (rankingMode === 'installs7d') return (plugin.installs7d ?? 0) > 0
-    if (rankingMode === 'installs30d') return (plugin.installs30d ?? 0) > 0
-    return (plugin.installCount ?? 0) > 0
-  })
-  const isPendingRanking = !query && (isInstallMode || isGrowthMode)
+  const isPendingRanking = !query && isGrowthMode
   const sourceWarning = catalog?.meta.source === 'stale' ? t('stale') : null
   const catalogHref = query ? `/plugin?q=${encodeURIComponent(query)}` : '/plugin'
   const rankingsHref = query ? `/rankings?q=${encodeURIComponent(query)}` : '/rankings'
@@ -333,22 +320,6 @@ export function CatalogPage({ view }: CatalogPageProps) {
             <div className="view-controls">
               <div className="ranking-mode-groups">
                 <div className="ranking-mode-group">
-                  <span>{t('installRankings')}</span>
-                  <div className="segmented-control" role="group" aria-label={t('installRankings')}>
-                    {INSTALL_RANKING_MODES.map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        className={rankingMode === mode ? 'selected' : undefined}
-                        onClick={() => setRankingMode(mode)}
-                        aria-pressed={rankingMode === mode}
-                      >
-                        {t(rankingLabel(mode))}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="ranking-mode-group">
                   <span>{t('githubRankings')}</span>
                   <div className="segmented-control" role="group" aria-label={t('githubRankings')}>
                     {GITHUB_RANKING_MODES.map((mode) => (
@@ -376,22 +347,18 @@ export function CatalogPage({ view }: CatalogPageProps) {
                   {t('retry')}
                 </button>
               </div>
-            ) : catalog && (ranking.length === 0 || installRankingPending) ? (
+            ) : catalog && ranking.length === 0 ? (
               <div className="state-panel">
                 <Search size={27} aria-hidden="true" />
                 <h3>{t(
-                  isInstallMode && !query
-                    ? 'installPendingTitle'
-                    : isGrowthMode && !query
-                      ? 'growthPendingTitle'
-                      : 'emptyTitle',
+                  isGrowthMode && !query
+                    ? 'growthPendingTitle'
+                    : 'emptyTitle',
                 )}</h3>
                 <p>{t(
-                  isInstallMode && !query
-                    ? 'installPendingBody'
-                    : isGrowthMode && !query
-                      ? 'growthPendingBody'
-                      : 'emptyBody',
+                  isGrowthMode && !query
+                    ? 'growthPendingBody'
+                    : 'emptyBody',
                 )}</p>
                 <button
                   className="button button-secondary"
