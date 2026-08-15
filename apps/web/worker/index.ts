@@ -1,7 +1,7 @@
 import { createApp } from './app'
-import { runScheduledCatalogRefresh } from './lib/catalog-store'
+import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
 import { runPluginDiscoveryTask } from './lib/plugin-discovery-task'
-import { metadataForPath, rewriteHtmlResponse } from './seo'
+import { metadataForPath, rewriteHtmlResponse, seoCatalog } from './seo'
 
 const STATS_OBJECT_NAME = 'global'
 const INCREMENTAL_DISCOVERY_CRONS = new Set(['7 * * * *', '37 * * * *'])
@@ -12,7 +12,6 @@ function isWorkerRoute(pathname: string): boolean {
   return pathname === '/' ||
     pathname === '/robots.txt' ||
     pathname === '/sitemap.xml' ||
-    pathname === '/plugins.json' ||
     pathname === '/packages' ||
     pathname.startsWith('/packages/') ||
     pathname.startsWith('/api/')
@@ -53,9 +52,12 @@ const worker = {
     if (trailingSlashRedirect) return trailingSlashRedirect
     if (isWorkerRoute(url.pathname)) return app.fetch(request, env, ctx)
 
-    return env.ASSETS.fetch(request).then((response) => {
+    return env.ASSETS.fetch(request).then(async (response) => {
       if (!response.headers.get('Content-Type')?.includes('text/html')) return response
-      const metadata = metadataForPath(url.pathname)
+      // Fresh KV resolves immediately; stale KV answers now and refreshes via
+      // ctx.waitUntil, so SSR metadata never blocks on a full catalog rebuild.
+      const catalog = await loadCatalogSnapshot(env, ctx)
+      const metadata = metadataForPath(url.pathname, seoCatalog(catalog.snapshot))
       if (isFilteredCollection(url)) metadata.robots = 'noindex,follow'
       return rewriteHtmlResponse(response, metadata)
     })

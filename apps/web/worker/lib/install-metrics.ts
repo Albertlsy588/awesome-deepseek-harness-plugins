@@ -397,14 +397,14 @@ export async function loadInstallMetrics(
           SUM(CASE WHEN bucket_hour >= ? THEN install_count ELSE 0 END) AS installs_30d,
           MAX(latest_install_at) AS latest_install_at
         FROM plugin_hourly_stats
-        WHERE plugin_id IN (${placeholders})
-        GROUP BY plugin_id
+        WHERE plugin_id COLLATE NOCASE IN (${placeholders})
+        GROUP BY plugin_id COLLATE NOCASE
       `).bind(threshold24h, threshold7d, threshold30d, ...batch).all<HourlyStatsRow>(),
       db.prepare(`
         SELECT plugin_id, COUNT(DISTINCT client_hash) AS installer_count
         FROM plugin_client_state
-        WHERE first_installed_at IS NOT NULL AND plugin_id IN (${placeholders})
-        GROUP BY plugin_id
+        WHERE first_installed_at IS NOT NULL AND plugin_id COLLATE NOCASE IN (${placeholders})
+        GROUP BY plugin_id COLLATE NOCASE
       `).bind(...batch).all<InstallerCountRow>(),
     ])
 

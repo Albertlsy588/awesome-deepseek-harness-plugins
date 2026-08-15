@@ -20,19 +20,10 @@ export interface RegistryPlugin {
   added: string
 }
 
-export interface Registry {
-  updated: string
-  count: number
-  revision: string
-  categories: Record<string, RegistryCategory>
-  plugins: RegistryPlugin[]
-}
-
-export type RegistrySource = 'bundled' | 'd1'
-
-export interface RegistryResult {
-  registry: Registry
-  source: RegistrySource
+export interface CategoryDescriptor {
+  id: string
+  order: number
+  label: LocalizedText
 }
 
 export interface RepositoryMetric {
@@ -76,7 +67,7 @@ export interface StoredCatalogSnapshot {
   plugins: CatalogPlugin[]
 }
 
-export type CatalogSource = 'bundled' | 'd1' | 'kv' | 'stale'
+export type CatalogSource = 'd1' | 'kv' | 'stale' | 'empty'
 
 export interface CatalogSnapshotResult {
   snapshot: StoredCatalogSnapshot
@@ -125,6 +116,26 @@ export interface CatalogResponse {
     source: CatalogSource
     metricCoverage: number
   }
+}
+
+export interface RegistryProjectionPlugin {
+  id: string
+  name: string
+  owner: string
+  url: string
+  category: string
+  description: LocalizedText
+  install: string
+  added: string
+  stars: number | null
+}
+
+export interface RegistryProjection {
+  name: string
+  updated: string
+  count: number
+  categories: CategoryDescriptor[]
+  plugins: RegistryProjectionPlugin[]
 }
 
 export interface PackageManifestSummary {

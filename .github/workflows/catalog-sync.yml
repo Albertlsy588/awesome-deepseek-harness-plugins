@@ -1,0 +1,101 @@
+# Pushes catalog/plugins/*.json to the production Worker (POST /api/v1/catalog/sync)
+# and refreshes the README projections from the live catalog API.
+#
+# First-rollout runbook (one-time, BEFORE this workflow can go green):
+#   1. Deploy the Worker so /api/v1/catalog/sync and /api/v1/registry exist.
+#   2. Set CATALOG_SYNC_TOKEN on the Worker (wrangler secret put CATALOG_SYNC_TOKEN)
+#      AND as a repository Actions secret with the same value.
+#   3. Run this workflow via workflow_dispatch (or wait for the next trigger).
+#   The sync step retries for up to ~10 minutes, so a run racing a Worker deploy
+#   normally self-heals; a run started before the secrets exist must be re-run.
+#
+# Branch protection: the final step pushes README commits to main as
+# github-actions[bot]. The main ruleset's bypass list must therefore include the
+# GitHub Actions app (Integration bypass) in addition to the emergency
+# maintainer account — see CONTRIBUTING.md "Repository owners must protect main".
+name: Catalog sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'catalog/plugins/**'
+      - 'catalog/categories.json'
+  schedule:
+    - cron: '15 5 * * *'
+  # Re-run after every successful Worker deploy: a sync racing an in-flight
+  # deploy (old Worker: 404 route or stale baked-in category table) is
+  # automatically retried once the new Worker is live. Extra runs are harmless
+  # because the sync endpoint is an idempotent full reconciliation.
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalog-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Sync catalog entries to the D1 catalog
+        env:
+          CATALOG_SYNC_TOKEN: ${{ secrets.CATALOG_SYNC_TOKEN }}
+        run: |
+          if [ -z "$CATALOG_SYNC_TOKEN" ]; then
+            echo "::error::The CATALOG_SYNC_TOKEN repository secret is not configured. Catalog entries were NOT synced to production. Create the secret with the Worker's CATALOG_SYNC_TOKEN value."
+            exit 1
+          fi
+          # Retry with backoff: a push that changes catalog/categories.json (or the
+          # first rollout) triggers Deploy in parallel, and the still-running old
+          # Worker rejects the sync until the new Worker is live. The endpoint is an
+          # idempotent upsert reconciliation, so retries are safe.
+          for attempt in $(seq 1 20); do
+            if npm run catalog:sync; then
+              exit 0
+            fi
+            echo "Catalog sync attempt ${attempt} failed; retrying in 30s (a Worker deploy may still be rolling out)."
+            sleep 30
+          done
+          echo "::error::Catalog sync failed after 20 attempts."
+          exit 1
+      - name: Rebuild the README projections from the catalog API
+        run: npm run readme:build
+      - name: Commit refreshed README projections
+        run: |
+          if git diff --quiet -- README.md catalog/README.md; then
+            echo "README projections are already current; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md catalog/README.md
+          git commit -m "docs: refresh catalog readme"
+          # main may have advanced while this run was installing/syncing (for
+          # example an auto-merged plugin PR). Rebase and retry instead of failing
+          # on a non-fast-forward push; rebase conflicts cannot occur because this
+          # bot is the only writer of the generated README files and runs are
+          # serialized by the catalog-sync concurrency group.
+          for attempt in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            echo "git push attempt ${attempt} rejected; rebasing onto the latest main and retrying."
+            git pull --rebase origin main
+          done
+          git push

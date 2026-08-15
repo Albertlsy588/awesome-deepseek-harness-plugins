@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { BUNDLED_REGISTRY } from '../worker/lib/registry'
-import { buildRobotsTxt, buildSitemap, metadataForPath } from '../worker/seo'
+import { buildRobotsTxt, buildSitemap, metadataForPath, seoCatalog, type SeoCatalog } from '../worker/seo'
+import { TEST_PLUGINS, testCatalogResult } from './fixtures'
+
+function testSeoCatalog(): SeoCatalog {
+  return seoCatalog(testCatalogResult().snapshot)
+}
 
 describe('SEO metadata', () => {
   it('builds unique canonical metadata for collection and plugin pages', () => {
-    const catalog = metadataForPath('/plugin')
-    const rankings = metadataForPath('/rankings')
-    const plugin = BUNDLED_REGISTRY.plugins[0]
-    const detail = metadataForPath(`/plugin/${plugin.owner}/${new URL(plugin.url).pathname.split('/')[2]}`)
+    const catalogPages = testSeoCatalog()
+    const catalog = metadataForPath('/plugin', catalogPages)
+    const rankings = metadataForPath('/rankings', catalogPages)
+    const plugin = TEST_PLUGINS[0]!
+    const detail = metadataForPath(`/plugin/${plugin.owner}/${plugin.repository}`, catalogPages)
 
     expect(catalog.canonical).toBe('https://deepseek1024.com/plugin')
     expect(rankings.canonical).toBe('https://deepseek1024.com/rankings')
@@ -19,17 +24,25 @@ describe('SEO metadata', () => {
     expect(detail.description.length).toBeLessThanOrEqual(160)
   })
 
+  it('brands structured data with the unified site name', () => {
+    const rankings = metadataForPath('/rankings', testSeoCatalog())
+    expect(JSON.stringify(rankings.schema)).toContain('"name":"DSH 1024Store"')
+  })
+
   it('marks unknown pages as noindex soft-404 replacements', () => {
-    const missing = metadataForPath('/plugin/example/missing')
+    const missing = metadataForPath('/plugin/example/missing', testSeoCatalog())
     expect(missing.status).toBe(404)
     expect(missing.robots).toBe('noindex,follow')
   })
 
-  it('lists every canonical page in the sitemap and keeps APIs out of search', () => {
-    const sitemap = buildSitemap()
+  it('lists every snapshot plugin in the sitemap and keeps APIs out of search', () => {
+    const sitemap = buildSitemap(testSeoCatalog())
     const urlCount = (sitemap.match(/<url>/g) ?? []).length
-    expect(urlCount).toBe(BUNDLED_REGISTRY.plugins.length + 2)
+    expect(urlCount).toBe(TEST_PLUGINS.length + 2)
     expect(sitemap).toContain('<loc>https://deepseek1024.com/rankings</loc>')
+    for (const plugin of TEST_PLUGINS) {
+      expect(sitemap).toContain(`/plugin/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(plugin.repository)}</loc>`)
+    }
     expect(sitemap).not.toContain('/packages/')
     expect(buildRobotsTxt()).toContain('Disallow: /api/')
   })

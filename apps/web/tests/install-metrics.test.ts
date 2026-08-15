@@ -28,7 +28,7 @@ const VALID_EVENT = {
   arch: 'arm64',
   isCi: false,
   errorCode: null,
-  sourceChannel: 'cli',
+  sourceChannel: 'dsh-1024store-cli',
 } as const
 
 interface PreparedCall {

@@ -26,20 +26,10 @@ import { CategoryTag } from '../components/CategoryTag'
 import { InstallCommand } from '../components/InstallCommand'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
-import { getPackage, repositoryName, trackedInstallCommand, type CategoryResult, type PackageDetail } from '../lib/api'
+import { getPackage, repositoryName, trackedInstallCommand, type PackageDetail } from '../lib/api'
 import { formatDate, formatDateTime, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { fitSeoText, SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
-
-const CATEGORY_LABELS: Record<string, CategoryResult> = {
-  ui: { id: 'ui', en: 'UI Enhancements', zh: 'UI 增强', count: 0 },
-  session: { id: 'session', en: 'Sessions & Messages', zh: '会话与消息', count: 0 },
-  tools: { id: 'tools', en: 'Tools & Capabilities', zh: '工具与能力', count: 0 },
-  workflow: { id: 'workflow', en: 'Workflow & Automation', zh: '工作流与自动化', count: 0 },
-  notify: { id: 'notify', en: 'Notifications & Integrations', zh: '通知与集成', count: 0 },
-  dev: { id: 'dev', en: 'Development & Runtime', zh: '开发与运行时', count: 0 },
-  fun: { id: 'fun', en: 'Just for Fun', zh: '娱乐', count: 0 },
-}
 
 export function PackagePage() {
   const { owner = '', name = '' } = useParams()
@@ -170,6 +160,9 @@ export function PackagePage() {
 
   const github = detail.github
   const manifest = detail.manifest
+  const category = detail.category
+    ? { id: detail.category.id, en: detail.category.label.en, zh: detail.category.label.zh, count: 0 }
+    : undefined
   const runtime = manifest?.engines
     ? Object.entries(manifest.engines)
         .map(([engine, version]) => `${engine} ${version}`)
@@ -216,7 +209,7 @@ export function PackagePage() {
         <div className="detail-heading">
           <div className="detail-title-row">
             <h1>{detail.name}</h1>
-            <CategoryTag category={CATEGORY_LABELS[detail.category]} />
+            <CategoryTag category={category} />
           </div>
           <p className="detail-owner">{t('by')} <a href={`https://github.com/${detail.owner}`} target="_blank" rel="noreferrer">{detail.owner}</a></p>
           <p className="detail-description">{detail.description[language]}</p>

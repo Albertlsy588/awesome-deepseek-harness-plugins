@@ -1,10 +1,19 @@
 import { findPlugin, repositoryName } from './lib/catalog'
-import { BUNDLED_REGISTRY } from './lib/registry'
-import type { Registry, RegistryPlugin } from './types'
+import type { RegistryPlugin, StoredCatalogSnapshot } from './types'
 
 export const SITE_ORIGIN = 'https://deepseek1024.com'
-const SITE_NAME = 'DeepSeek Harness Plugin Store'
+const SITE_NAME = 'DSH 1024Store'
 const DEFAULT_IMAGE = `${SITE_ORIGIN}/deepseek1024-icon.png`
+
+/** The slice of the runtime catalog snapshot the SEO surfaces render from. */
+export interface SeoCatalog {
+  updated: string
+  plugins: RegistryPlugin[]
+}
+
+export function seoCatalog(snapshot: StoredCatalogSnapshot): SeoCatalog {
+  return { updated: snapshot.registryUpdated, plugins: snapshot.plugins }
+}
 
 export interface PageMetadata {
   title: string
@@ -95,7 +104,7 @@ function safeDecode(value: string): string | null {
 
 export function metadataForPath(
   pathname: string,
-  registry: Registry = BUNDLED_REGISTRY,
+  catalog: SeoCatalog,
 ): PageMetadata {
   if (pathname === '/' || pathname === '/rankings') {
     const title = 'DeepSeek Harness Plugin Rankings | DSH 1024Store'
@@ -127,7 +136,7 @@ export function metadataForPath(
   if (match) {
     const owner = safeDecode(match[1] ?? '')
     const repository = safeDecode(match[2] ?? '')
-    const plugin = owner && repository ? findPlugin(registry.plugins, owner, repository) : undefined
+    const plugin = owner && repository ? findPlugin(catalog.plugins, owner, repository) : undefined
     if (plugin) {
       const canonicalPath = `/plugin/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
       const canonical = absolute(canonicalPath)
@@ -173,11 +182,11 @@ function xmlEscape(value: string): string {
     .replaceAll("'", '&apos;')
 }
 
-export function buildSitemap(registry: Registry = BUNDLED_REGISTRY): string {
+export function buildSitemap(catalog: SeoCatalog): string {
   const pages = [
-    { path: '/rankings', lastModified: registry.updated },
-    { path: '/plugin', lastModified: registry.updated },
-    ...registry.plugins.map((plugin) => ({
+    { path: '/rankings', lastModified: catalog.updated },
+    { path: '/plugin', lastModified: catalog.updated },
+    ...catalog.plugins.map((plugin) => ({
       path: `/plugin/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`,
       lastModified: plugin.added,
     })),

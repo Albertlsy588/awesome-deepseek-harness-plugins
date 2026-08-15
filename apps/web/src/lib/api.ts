@@ -69,12 +69,20 @@ export interface CatalogResponse {
     updated: string
     generatedAt: string
     revision: string
-    source: 'bundled' | 'd1' | 'kv' | 'stale'
+    source: 'd1' | 'kv' | 'stale' | 'empty'
     metricCoverage: number
   }
 }
 
-export interface PackageDetail extends RegistryPlugin, InstallMetrics {
+export interface CategoryDescriptor {
+  id: string
+  order: number
+  label: Record<Language, string>
+}
+
+export interface PackageDetail extends Omit<RegistryPlugin, 'category'>, InstallMetrics {
+  /** Category descriptor resolved by the Worker from catalog/categories.json. */
+  category: CategoryDescriptor | null
   github: {
     stars: number
     forks: number
@@ -136,12 +144,12 @@ export function getCatalog(params: CatalogParams, signal?: AbortSignal): Promise
   if (params.q) search.set('q', params.q)
   if (params.category) search.set('category', params.category)
   if (params.sort) search.set('sort', params.sort)
-  return requestJson<CatalogResponse>(`/api/plugin?${search.toString()}`, signal)
+  return requestJson<CatalogResponse>(`/api/v1/plugins?${search.toString()}`, signal)
 }
 
 export function getPackage(owner: string, name: string, signal?: AbortSignal): Promise<PackageDetail> {
   return requestJson<PackageDetail>(
-    `/api/plugin/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+    `/api/v1/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
     signal,
   )
 }

@@ -13,4 +13,4 @@ List the real command and result used to test plugin behavior and compatibility.
 - [ ] Plugin behavior and compatibility were tested by the author
 - [ ] `dsh-plugin` topic added
 - [ ] English and Chinese descriptions are neutral and accurate
-- [ ] I understand that a non-draft PR passing the static review is merged automatically
+- [ ] I understand that a non-draft PR passing the static review is merged automatically, and the website catalog and README directories refresh automatically afterwards

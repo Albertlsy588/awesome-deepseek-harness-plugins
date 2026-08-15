@@ -4,14 +4,13 @@
 
 GitHub repositories carrying the `dsh-plugin` topic are the primary discovery source. The
 checked-in `catalog/plugins/*.json` entries contributed through pull requests remain the
-secondary, curated source.
+secondary, curated source; GitHub CI pushes them into D1 through
+`POST /api/v1/catalog/sync` after every merge to `main`. Nothing is bundled into the Worker.
 
 ```text
-GitHub topic search ──> repository validation ──> D1 primary catalog ──> KV snapshot ──> API
-                                                    ▲
-checked-in PR catalog ──> curated bilingual metadata ┘
-
-bundled generated catalog ────────────────────────────────────────────> last-resort fallback
+GitHub topic search ──> repository validation ──────> D1 catalog ──> KV snapshot ──> /api/v1/*
+                                                        ▲
+checked-in PR catalog ──> CI POST /api/v1/catalog/sync ─┘
 ```
 
 D1 keeps repository facts and source attribution separate. A GitHub numeric repository ID is
@@ -110,7 +109,7 @@ committed `.dev.vars` value. Check Cron invocations and D1 row metrics in the Cl
 dashboard after the first backfill. Alert on failed Cron invocations, a stale `discovery_watermark`, or
 repeated runs that stop at the 500-call GitHub reserve.
 
-The API reads a fresh KV snapshot first, refreshes it from D1 when stale, and falls back to the
-last KV value or the bundled PR registry during D1/GitHub failures. `/plugins.json` uses the same
-dynamic catalog loader as `/api/plugin`, so external consumers see the D1 primary source without
-a public route change.
+The API reads a fresh KV snapshot first, refreshes it from D1 when stale, and serves the last
+KV value during D1/GitHub failures. Stale KV is the only degradation mode; there is no bundled
+registry fallback. External consumers read the same D1-backed catalog through
+`GET /api/v1/registry` (see [API reference](api.md)).

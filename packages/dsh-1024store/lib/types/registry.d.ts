@@ -1,5 +1,11 @@
-/** Fetch and validate the public 1024 Store catalog API. */
+/** Fetch and validate the public 1024 Store registry API. */
+export interface RegistryCategory {
+    id: string;
+    order: number;
+    label: Record<string, string>;
+}
 export interface RegistryPlugin {
+    id: string;
     name: string;
     owner: string;
     url: string;
@@ -10,25 +16,20 @@ export interface RegistryPlugin {
     stars?: number | null;
 }
 export interface Registry {
+    name: string;
     updated: string;
     count: number;
-    categories: Record<string, Record<string, string>>;
+    categories: RegistryCategory[];
     plugins: RegistryPlugin[];
 }
 export type RegistrySource = 'api' | 'cache';
-export declare const DEFAULT_REGISTRY_URL = "https://deepseek1024.com/api/plugin?sort=stars";
+export declare const DEFAULT_REGISTRY_URL = "https://deepseek1024.com/api/v1/registry";
 /**
  * Validate untrusted registry JSON before it can become an installation allowlist.
- * @param value - parsed JSON value.
+ * @param value - parsed `/api/v1/registry` response.
  * @returns the validated registry.
  */
 export declare function validateRegistry(value: unknown): Registry;
-/**
- * Normalize the richer public catalog API into the compact market model.
- * @param value - parsed `/api/plugin` response.
- * @returns the validated registry used by the local installer allowlist.
- */
-export declare function validateCatalogResponse(value: unknown): Registry;
 /**
  * Parse the only repository URL form accepted by the installer.
  * @param url - curated plugin repository URL.
@@ -45,7 +46,7 @@ export declare function installTarget(plugin: RegistryPlugin): string;
 export declare function clearRegistryCache(): void;
 /**
  * Load the registry from the configured HTTPS API, with a last-good response cache.
- * @param registryUrl - public 1024 Store catalog API endpoint.
+ * @param registryUrl - public 1024 Store registry API endpoint.
  * @param fetcher - injectable fetch implementation for deterministic tests.
  * @returns the registry and whether it is fresh API data or a stale fallback cache.
  */

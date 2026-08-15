@@ -186,7 +186,7 @@ try {
     throw new Error('catalog cards do not use the canonical singular plugin path')
   }
   const rankingSearchResponse = rankings.waitForResponse(
-    (response) => response.url().includes('/api/plugin?') && response.url().includes('q=crosstalk'),
+    (response) => response.url().includes('/api/v1/plugins?') && response.url().includes('q=crosstalk'),
   )
   await rankings.locator('input[type="search"]').fill('crosstalk')
   await rankingSearchResponse
@@ -231,7 +231,7 @@ try {
   await mobile.waitForURL((url) => !url.searchParams.has('category'))
 
   const searchResponse = mobile.waitForResponse(
-    (response) => response.url().includes('/api/plugin?') && response.url().includes('q=crosstalk'),
+    (response) => response.url().includes('/api/v1/plugins?') && response.url().includes('q=crosstalk'),
   )
   await mobile.locator('input[type="search"]').fill('crosstalk')
   await searchResponse

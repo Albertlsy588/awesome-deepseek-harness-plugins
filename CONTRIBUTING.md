@@ -10,7 +10,7 @@ Catalog entries are maintained as one JSON file per repository in `catalog/plugi
 4. Copy an existing plugin JSON file and name it `<owner>--<repository>.json` in lowercase, with non-alphanumeric runs converted to `-`.
 5. Keep both descriptions factual, neutral, and specific. Avoid superlatives, calls to action, and unsupported claims.
 6. Set `added` to the submission date.
-7. Commit only that one new `catalog/plugins/*.json` file. Do not change README files, generated registries, workflows, application code, or any other path in the same pull request.
+7. Commit only that one new `catalog/plugins/*.json` file. Do not change README files, workflows, application code, or any other path in the same pull request. `README.md` and `catalog/README.md` are bot-generated projections and are refreshed automatically.
 
 Example:
 
@@ -35,11 +35,13 @@ Every pull request receives one deliberately narrow static gate. The workflow re
 
 The trusted workflow comments on the pull request with the exact failure reason. A non-draft pull request that passes `Plugin submission review / static-review` is squash-merged automatically. Draft pull requests are validated but remain open until marked ready for review.
 
+After the merge everything is automated — there is no maintainer step. The catalog-sync workflow pushes all `catalog/plugins/*.json` entries to the website's `POST /api/v1/catalog/sync` endpoint, so the plugin is synced automatically into the production D1 catalog, and then rebuilds `README.md` and `catalog/README.md` from the live catalog API, committing any changes as `github-actions[bot]`. Your plugin appears on [deepseek1024.com](https://deepseek1024.com/) and in both README directories without further action. See [docs/api.md](docs/api.md) for the endpoint contract.
+
 Repository owners must protect `main` in GitHub Rules or branch protection:
 
 1. Require changes to be made through a pull request, without requiring an approving review.
 2. Require only `Plugin submission review / static-review` before merging.
-3. Block force pushes and branch deletion, and leave the ruleset bypass list empty except for an explicit emergency maintainer account used for trusted maintenance changes.
+3. Block force pushes and branch deletion, and leave the ruleset bypass list empty except for two explicit entries: an emergency maintainer account used for trusted maintenance changes, and the GitHub Actions app (an Integration-type bypass actor). The Actions bypass is required because the catalog-sync workflow commits the regenerated `README.md` / `catalog/README.md` directly to `main` as `github-actions[bot]`; without it the automated README refresh is rejected by the pull-request rule.
 
 The workflow runs trusted code from the pull request's base revision and treats the submitted checkout only as data. The review job can read repository contents and update its pull request review comment. Only after that job succeeds, a separate merge job receives write permission and squash-merges the exact reviewed head SHA. A newer push makes the old run stale and prevents it from merging.
 
@@ -55,6 +57,6 @@ Non-catalog changes are rejected by the public pull request gate. Maintainers us
 2. Run `npm run cf-typecheck`, `npm run typecheck`, `npm test`, and `npm run build`.
 3. Run `npm run test:visual` and attach screenshots for visible UI changes.
 4. Review the complete diff, then use the emergency bypass deliberately when merging the maintenance pull request.
-5. Avoid unrelated formatting and generated-file churn.
+5. Avoid unrelated formatting churn, and never hand-edit the bot-generated `README.md` or `catalog/README.md`; run `npm run readme:build` instead.
 
 Never commit `.dev.vars`, GitHub tokens, Cloudflare credentials, or other secrets.

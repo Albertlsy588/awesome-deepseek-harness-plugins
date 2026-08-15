@@ -8,7 +8,6 @@ import {
   saveRepositoryInspections,
   setCatalogState,
   startScanRun,
-  syncBundledRegistry,
   upsertDiscoveredRepositories,
   type ScanCounters,
 } from './catalog-db'
@@ -19,7 +18,6 @@ import {
   incrementalStart,
   inspectRepository,
 } from './github-discovery'
-import { BUNDLED_REGISTRY } from './registry'
 
 const DEFAULT_TOPIC = 'dsh-plugin'
 const DISCOVERY_CHUNK_SIZE = 40
@@ -80,7 +78,6 @@ export async function runPluginDiscoveryTask(
   try {
     leaseClaimed = await claimScanLease(env.CATALOG_DB, runId, runAt, LEASE_MS)
     if (!leaseClaimed) return { ...counters, mode, skipped: true }
-    await syncBundledRegistry(env.CATALOG_DB, BUNDLED_REGISTRY, end)
     const watermark = await getCatalogState(env.CATALOG_DB, 'discovery_watermark')
     mode = requestedMode ?? (watermark === null ? 'full' : 'incremental')
     await startScanRun(env.CATALOG_DB, runId, mode, end)

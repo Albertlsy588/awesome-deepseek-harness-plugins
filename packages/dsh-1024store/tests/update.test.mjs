@@ -2,9 +2,17 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   CURRENT_VERSION,
+  DEFAULT_RELEASE_URL,
+  DEFAULT_UPDATE_FALLBACK_URL,
+  DEFAULT_UPDATE_URL,
   checkForUpdate,
   compareVersions,
 } from '../lib/update.js'
+
+test('the npm registry is the preferred update source', () => {
+  assert.equal(DEFAULT_UPDATE_URL, 'https://registry.npmjs.org/dsh-1024store/latest')
+  assert.match(DEFAULT_UPDATE_FALLBACK_URL, /^https:\/\/api\.github\.com\//)
+})
 
 test('semantic version comparison handles releases and prereleases', () => {
   assert.equal(compareVersions('0.2.0', '0.1.9') > 0, true)
@@ -13,20 +21,26 @@ test('semantic version comparison handles releases and prereleases', () => {
   assert.equal(compareVersions('1.0.0-rc.2', '1.0.0-rc.10') < 0, true)
 })
 
-test('automatic update check reports a newer first-party version', async () => {
-  const fetcher = async () => new Response(JSON.stringify({
-    version: '0.2.0',
-    releaseUrl: 'https://store.example/releases/0.2.0',
-  }), { status: 200 })
+test('automatic update check reads the published npm manifest first', async () => {
+  const requested = []
+  const fetcher = async (url) => {
+    requested.push(String(url))
+    return new Response(JSON.stringify({
+      name: 'dsh-1024store',
+      version: '99.0.0',
+      dist: { tarball: 'https://registry.npmjs.org/dsh-1024store/-/dsh-1024store-99.0.0.tgz' },
+    }), { status: 200 })
+  }
   const result = await checkForUpdate(
-    'https://store.example/api/dsh-1024store',
+    'https://registry.npmjs.org/dsh-1024store/latest',
     'https://fallback.example/package.json',
     fetcher,
   )
+  assert.deepEqual(requested, ['https://registry.npmjs.org/dsh-1024store/latest'])
   assert.equal(result.currentVersion, CURRENT_VERSION)
-  assert.equal(result.latestVersion, '0.2.0')
+  assert.equal(result.latestVersion, '99.0.0')
   assert.equal(result.updateAvailable, true)
-  assert.equal(result.releaseUrl, 'https://store.example/releases/0.2.0')
+  assert.equal(result.releaseUrl, DEFAULT_RELEASE_URL)
 })
 
 test('update check falls back to the repository API', async () => {
@@ -38,7 +52,7 @@ test('update check falls back to the repository API', async () => {
       : new Response(JSON.stringify({ version: CURRENT_VERSION }), { status: 200 })
   }
   const result = await checkForUpdate(
-    'https://store.example/api/dsh-1024store',
+    'https://registry.npmjs.org/dsh-1024store/latest',
     'https://fallback.example/package.json',
     fetcher,
   )
@@ -50,7 +64,7 @@ test('update check falls back to the repository API', async () => {
 test('an unavailable update service never blocks the market', async () => {
   const fetcher = async () => new Response('unavailable', { status: 503 })
   const result = await checkForUpdate(
-    'https://store.example/api/dsh-1024store',
+    'https://registry.npmjs.org/dsh-1024store/latest',
     'https://fallback.example/package.json',
     fetcher,
   )

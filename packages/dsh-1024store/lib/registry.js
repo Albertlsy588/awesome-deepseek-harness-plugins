@@ -1,5 +1,5 @@
-/** Fetch and validate the public 1024 Store catalog API. */
-export const DEFAULT_REGISTRY_URL = 'https://deepseek1024.com/api/plugin?sort=stars';
+/** Fetch and validate the public 1024 Store registry API. */
+export const DEFAULT_REGISTRY_URL = 'https://deepseek1024.com/api/v1/registry';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8_000;
 let cache = null;
@@ -8,16 +8,25 @@ function isStringMap(value) {
         return false;
     return Object.values(value).every(item => typeof item === 'string');
 }
-function isPlugin(value, categories) {
+function isCategory(value) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+        return false;
+    const category = value;
+    return typeof category.id === 'string'
+        && typeof category.order === 'number'
+        && isStringMap(category.label);
+}
+function isPlugin(value, categoryIds) {
     if (value === null || typeof value !== 'object' || Array.isArray(value))
         return false;
     const plugin = value;
-    return typeof plugin.name === 'string'
+    return typeof plugin.id === 'string'
+        && typeof plugin.name === 'string'
         && typeof plugin.owner === 'string'
         && typeof plugin.url === 'string'
         && parseGitHubSource(plugin.url) !== null
         && typeof plugin.category === 'string'
-        && plugin.category in categories
+        && categoryIds.has(plugin.category)
         && isStringMap(plugin.description)
         && typeof plugin.install === 'string'
         && typeof plugin.added === 'string'
@@ -25,7 +34,7 @@ function isPlugin(value, categories) {
 }
 /**
  * Validate untrusted registry JSON before it can become an installation allowlist.
- * @param value - parsed JSON value.
+ * @param value - parsed `/api/v1/registry` response.
  * @returns the validated registry.
  */
 export function validateRegistry(value) {
@@ -33,62 +42,22 @@ export function validateRegistry(value) {
         throw new Error('registry must be an object');
     }
     const registry = value;
-    if (typeof registry.updated !== 'string' || typeof registry.count !== 'number') {
+    if (typeof registry.name !== 'string' || typeof registry.updated !== 'string' || typeof registry.count !== 'number') {
         throw new Error('registry metadata is invalid');
     }
-    if (registry.categories === null || typeof registry.categories !== 'object' || Array.isArray(registry.categories)) {
+    if (!Array.isArray(registry.categories) || !registry.categories.every(isCategory)) {
         throw new Error('registry categories are invalid');
     }
-    const categories = registry.categories;
-    if (!Object.values(categories).every(isStringMap))
-        throw new Error('registry category labels are invalid');
-    const typedCategories = categories;
+    const categoryIds = new Set(registry.categories.map(category => category.id));
     if (!Array.isArray(registry.plugins) || registry.plugins.length === 0) {
         throw new Error('registry plugins are empty');
     }
     if (registry.count !== registry.plugins.length)
         throw new Error('registry count does not match plugins');
-    if (!registry.plugins.every(plugin => isPlugin(plugin, typedCategories))) {
+    if (!registry.plugins.every(plugin => isPlugin(plugin, categoryIds))) {
         throw new Error('registry contains an invalid plugin');
     }
     return registry;
-}
-/**
- * Normalize the richer public catalog API into the compact market model.
- * @param value - parsed `/api/plugin` response.
- * @returns the validated registry used by the local installer allowlist.
- */
-export function validateCatalogResponse(value) {
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-        throw new Error('catalog API response must be an object');
-    }
-    const catalog = value;
-    if (!Array.isArray(catalog.categories) || !Array.isArray(catalog.packages)) {
-        throw new Error('catalog API collections are invalid');
-    }
-    if (catalog.meta === null || typeof catalog.meta !== 'object' || Array.isArray(catalog.meta)) {
-        throw new Error('catalog API metadata is invalid');
-    }
-    const categories = catalog.categories;
-    const validCategory = (item) => {
-        if (item === null || typeof item !== 'object' || Array.isArray(item))
-            return false;
-        const category = item;
-        return typeof category.id === 'string'
-            && typeof category.en === 'string'
-            && typeof category.zh === 'string';
-    };
-    if (!categories.every(validCategory))
-        throw new Error('catalog API categories are invalid');
-    const categoryMap = Object.fromEntries(categories.map(category => [category.id, { en: category.en, zh: category.zh }]));
-    const meta = catalog.meta;
-    const normalized = {
-        updated: meta.updated,
-        count: meta.catalogTotal,
-        categories: categoryMap,
-        plugins: catalog.packages,
-    };
-    return validateRegistry(normalized);
 }
 /**
  * Parse the only repository URL form accepted by the installer.
@@ -116,7 +85,7 @@ export function clearRegistryCache() {
 }
 /**
  * Load the registry from the configured HTTPS API, with a last-good response cache.
- * @param registryUrl - public 1024 Store catalog API endpoint.
+ * @param registryUrl - public 1024 Store registry API endpoint.
  * @param fetcher - injectable fetch implementation for deterministic tests.
  * @returns the registry and whether it is fresh API data or a stale fallback cache.
  */
@@ -127,14 +96,14 @@ export async function loadRegistry(registryUrl = DEFAULT_REGISTRY_URL, fetcher =
     try {
         const url = new URL(registryUrl);
         if (url.protocol !== 'https:')
-            throw new Error('catalog API URL must use HTTPS');
+            throw new Error('registry API URL must use HTTPS');
         const response = await fetcher(url, {
             headers: { accept: 'application/json' },
             signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         });
         if (!response.ok)
-            throw new Error(`catalog API HTTP ${response.status}`);
-        const registry = validateCatalogResponse(await response.json());
+            throw new Error(`registry API HTTP ${response.status}`);
+        const registry = validateRegistry(await response.json());
         cache = { url: registryUrl, at: Date.now(), registry };
         return { registry, source: 'api' };
     }
@@ -143,6 +112,6 @@ export async function loadRegistry(registryUrl = DEFAULT_REGISTRY_URL, fetcher =
             return { registry: cache.registry, source: 'cache' };
         }
         const detail = error instanceof Error ? error.message : String(error);
-        throw new Error(`catalog API unavailable: ${detail}`);
+        throw new Error(`registry API unavailable: ${detail}`);
     }
 }
