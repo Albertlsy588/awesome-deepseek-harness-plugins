@@ -27,6 +27,7 @@ import { InstallCommand } from '../components/InstallCommand'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
 import { getPackage, repositoryName, trackedInstallCommand, type PackageDetail } from '../lib/api'
+import { publicAsset } from '../lib/assets'
 import { formatDate, formatDateTime, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { fitSeoText, SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
@@ -187,7 +188,7 @@ export function PackagePage() {
     <div className="page-container package-detail-page">
       <div className="detail-utility">
         <Link className="detail-brand" to="/" aria-label="DeepSeek Harness Store homepage">
-          <img className="brand-mark" src="/deepseek1024-icon.png" alt="" aria-hidden="true" />
+          <img className="brand-mark" src={publicAsset('deepseek1024-icon.png')} alt="" aria-hidden="true" />
           <span>DeepSeek Harness <strong>{t('market')}</strong></span>
         </Link>
         <LanguageSwitch />
@@ -377,11 +378,29 @@ export function PackagePage() {
                   h1: ({ children }) => <h3>{children}</h3>,
                   h2: ({ children }) => <h3>{children}</h3>,
                   h3: ({ children }) => <h4>{children}</h4>,
-                  a: ({ href, children }) => (
-                    <a href={readmeLink(href)} target={href?.startsWith('#') ? undefined : '_blank'} rel="noreferrer">
-                      {children}
-                    </a>
-                  ),
+                  a: ({ href, children }) => {
+                    if (href?.startsWith('#')) {
+                      // Fragment links must never reach the router: under hash-based
+                      // routing the fragment is the route and would 404.
+                      return (
+                        <a
+                          href={href}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            const target = document.getElementById(decodeURIComponent(href.slice(1)))
+                            target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          }}
+                        >
+                          {children}
+                        </a>
+                      )
+                    }
+                    return (
+                      <a href={readmeLink(href)} target="_blank" rel="noreferrer">
+                        {children}
+                      </a>
+                    )
+                  },
                   img: ({ src, alt }) => <img src={readmeImage(src)} alt={alt ?? ''} loading="lazy" />,
                 }}
               >

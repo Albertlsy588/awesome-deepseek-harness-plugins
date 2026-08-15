@@ -18,6 +18,7 @@ import {
   type Language,
   type RankingMode,
 } from '../lib/api'
+import { publicAsset } from '../lib/assets'
 import { formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { useLiveStats } from '../lib/useLiveStats'
@@ -249,7 +250,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 target="_blank"
                 rel="noreferrer"
               >
-                <img src="/github-mark.svg" alt="" aria-hidden="true" />
+                <img src={publicAsset('github-mark.svg')} alt="" aria-hidden="true" />
                 <span>GitHub</span>
                 <ArrowUpRight size={12} aria-hidden="true" />
               </a>
@@ -270,7 +271,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
             <div className="hero-heading">
               <div className="hero-lockup">
                 <span className="hero-lockup-mark" aria-hidden="true">
-                  <img src="/deepseek1024.png" alt="" />
+                  <img src={publicAsset('deepseek1024.png')} alt="" />
                 </span>
                 <div className="hero-lockup-copy">
                   <p className="hero-eyebrow">{t('heroEyebrow')}</p>

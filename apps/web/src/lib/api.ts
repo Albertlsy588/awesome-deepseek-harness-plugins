@@ -121,6 +121,9 @@ interface ErrorResponse {
   error?: string
 }
 
+// Absolute origin for the plugin API; empty keeps same-origin requests for the default deployment.
+export const API_ORIGIN: string = (import.meta.env.VITE_API_ORIGIN ?? '').trim().replace(/\/+$/, '')
+
 async function requestJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, {
     signal,
@@ -144,12 +147,12 @@ export function getCatalog(params: CatalogParams, signal?: AbortSignal): Promise
   if (params.q) search.set('q', params.q)
   if (params.category) search.set('category', params.category)
   if (params.sort) search.set('sort', params.sort)
-  return requestJson<CatalogResponse>(`/api/v1/plugins?${search.toString()}`, signal)
+  return requestJson<CatalogResponse>(`${API_ORIGIN}/api/v1/plugins?${search.toString()}`, signal)
 }
 
 export function getPackage(owner: string, name: string, signal?: AbortSignal): Promise<PackageDetail> {
   return requestJson<PackageDetail>(
-    `/api/v1/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+    `${API_ORIGIN}/api/v1/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
     signal,
   )
 }
