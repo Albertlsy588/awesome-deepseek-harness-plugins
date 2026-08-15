@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "dhicoc/dsh-reverse-skill",
+  "name": "dsh-reverse-skill",
+  "repository": "https://github.com/dhicoc/dsh-reverse-skill",
+  "category": "skill",
+  "description": {
+    "en": "A DeepSeek Harness Cordis plugin that registers 85 reverse-engineering, authorized penetration-testing, and security-research skills.",
+    "zh": "一个为 DeepSeek Harness 注册 85 个逆向工程、授权渗透测试与安全研究技能的 Cordis 插件。"
+  },
+  "added": "2026-08-15"
+}
