@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-1024store/cli",
+  "name": "@imsai/dsh-1024store",
   "version": "0.1.0",
   "description": "DSH 1024Store's tracked, privacy-conscious plugin installer for DeepSeek Harness",
   "license": "MIT",

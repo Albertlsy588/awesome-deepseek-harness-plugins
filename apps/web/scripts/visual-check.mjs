@@ -265,7 +265,7 @@ try {
   const detail = await openPage({ width: 1440, height: 1000 }, '/plugin/openma-ai/deepseek-harness-tui')
   await detail.locator('.detail-header').waitFor()
   await detail.locator('.install-activity-section').waitFor()
-  if (!(await detail.locator('.install-section .install-command code').first().textContent())?.includes('@dsh-1024store/cli')) {
+  if (!(await detail.locator('.install-section .install-command code').first().textContent())?.includes('@imsai/dsh-1024store')) {
     throw new Error('detail page is missing the tracked wrapper CLI command')
   }
   await assertSeo(detail, 'desktop detail', '/plugin/openma-ai/deepseek-harness-tui')

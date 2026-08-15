@@ -1,4 +1,4 @@
-# @dsh-1024store/cli
+# @imsai/dsh-1024store
 
 `dsh-1024store` is DSH 1024Store's thin, verifiable wrapper around the official
 DeepSeek Harness plugin command. It installs a catalog plugin, checks that the
@@ -10,7 +10,7 @@ outcome to the DSH 1024Store statistics API.
 Node.js 22 or newer is required.
 
 ```sh
-npx @dsh-1024store/cli add omdsh-dev/dsh-deep-research --profile web
+npx @imsai/dsh-1024store add omdsh-dev/dsh-deep-research --profile web
 ```
 
 The wrapper executes this command without a shell:
@@ -22,7 +22,7 @@ npx --yes @deepseek-ai/dsh plugin --profile web add github:omdsh-dev/dsh-deep-re
 `web` is the default profile. A Git ref is optional:
 
 ```sh
-npx @dsh-1024store/cli add owner/repository#v1.2.0
+npx @imsai/dsh-1024store add owner/repository#v1.2.0
 ```
 
 ### Official CLI argument pass-through
@@ -34,7 +34,7 @@ first, and use `--` when an official argument could otherwise look like a
 wrapper option:
 
 ```sh
-npx @dsh-1024store/cli add owner/repository --profile web -- \
+npx @imsai/dsh-1024store add owner/repository --profile web -- \
   --ignore-scripts --reporter append-only --config.confirmModulesPurge=false
 ```
 
@@ -81,10 +81,10 @@ overwrite each other; network requests run outside those locks.
 ## Controls
 
 ```sh
-npx @dsh-1024store/cli telemetry status
-npx @dsh-1024store/cli telemetry disable
-npx @dsh-1024store/cli telemetry enable
-npx @dsh-1024store/cli telemetry reset
+npx @imsai/dsh-1024store telemetry status
+npx @imsai/dsh-1024store telemetry disable
+npx @imsai/dsh-1024store telemetry enable
+npx @imsai/dsh-1024store telemetry reset
 ```
 
 `reset` rotates the local anonymous identity and clears the pending queue while

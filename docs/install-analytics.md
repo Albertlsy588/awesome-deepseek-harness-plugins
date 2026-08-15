@@ -5,7 +5,7 @@ wrapper delegates package management to the official DeepSeek Harness CLI and
 only reports an event after checking the profile state on disk.
 
 ```text
-npx @dsh-1024store/cli add owner/repository --profile web
+npx @imsai/dsh-1024store add owner/repository --profile web
         |
         +-- official @deepseek-ai/dsh plugin command
         +-- before/after profile verification
@@ -64,7 +64,7 @@ in-flight upload is retained.
 The CLI does **not** send command output, file paths, usernames, environment
 variables, source files, session contents, prompts, raw errors, IP addresses,
 or a host-derived User-Agent. Requests use the fixed identifier
-`@dsh-1024store/cli`. The Worker HMACs the client UUID with
+`@imsai/dsh-1024store`. The Worker HMACs the client UUID with
 `INSTALL_CLIENT_HASH_SECRET` and never writes the raw UUID to D1. Cloudflare may
 still process ordinary connection metadata as the hosting provider.
 
@@ -73,7 +73,7 @@ before execution with either `DO_NOT_TRACK=1` or
 `DSH_1024STORE_TELEMETRY=0`, or persistently with:
 
 ```bash
-npx @dsh-1024store/cli telemetry disable
+npx @imsai/dsh-1024store telemetry disable
 ```
 
 Use `telemetry status` to inspect the local setting, `telemetry enable` to opt
@@ -119,12 +119,12 @@ Publish the wrapper package after verifying its exact tarball contents:
 ```bash
 npm run test:cli
 npm run pack:cli
-npm publish --workspace @dsh-1024store/cli --access public
+npm publish --workspace @imsai/dsh-1024store --access public
 ```
 
-The `@dsh-1024store` npm organization must exist and the publisher must have access
-to it. Do not switch the website to another package name without updating the
-CLI package, UI command builder, tests, and this document together.
+The publisher must own the `@imsai` npm account scope. Do not switch the website
+to another package name without updating the CLI package, UI command builder,
+tests, and this document together.
 
 Apply D1 migrations and set a high-entropy Worker secret before deploying:
 

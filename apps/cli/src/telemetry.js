@@ -170,7 +170,7 @@ export async function flushPending(dshHome, options = {}) {
         headers: {
           accept: 'application/json',
           'content-type': 'application/json',
-          'user-agent': '@dsh-1024store/cli',
+          'user-agent': '@imsai/dsh-1024store',
         },
         body: JSON.stringify(event),
         signal: AbortSignal.timeout(timeoutMs),

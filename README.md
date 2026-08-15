@@ -15,12 +15,12 @@
 网站现在优先提供开源包装 CLI；它会调用官方 DeepSeek Harness 插件命令、校验 profile 的真实安装结果，并把匿名安装结果可靠地上报到排行榜：
 
 ```bash
-npx @dsh-1024store/cli add <owner>/<repository> --profile web
+npx @imsai/dsh-1024store add <owner>/<repository> --profile web
 ```
 
 仓库标识和 `--profile` 之外的参数会原样传给官方 CLI；参数可能与包装器冲突时可放到 `--` 后，例如 `... -- --ignore-scripts --reporter append-only`。透传参数不会写入遥测或本地 receipt。
 
-统计身份是保存在 `$DSH_HOME/.dsh-1024store/` 的随机安装实例 ID，不是实名用户或账号。CLI 不上传命令输出、路径、用户名、环境变量、会话内容或原始错误；可用 `npx @dsh-1024store/cli telemetry disable`、`DO_NOT_TRACK=1` 或 `DSH_1024STORE_TELEMETRY=0` 关闭。直接使用官方 `dsh plugin` 命令仍然可用，但不会计入 DSH 1024Store 安装统计。详细字段、口径、存储和部署方式见 [安装统计设计](docs/install-analytics.md)，CLI 源码见 [`apps/cli`](apps/cli)。
+统计身份是保存在 `$DSH_HOME/.dsh-1024store/` 的随机安装实例 ID，不是实名用户或账号。CLI 不上传命令输出、路径、用户名、环境变量、会话内容或原始错误；可用 `npx @imsai/dsh-1024store telemetry disable`、`DO_NOT_TRACK=1` 或 `DSH_1024STORE_TELEMETRY=0` 关闭。直接使用官方 `dsh plugin` 命令仍然可用，但不会计入 DSH 1024Store 安装统计。详细字段、口径、存储和部署方式见 [安装统计设计](docs/install-analytics.md)，CLI 源码见 [`apps/cli`](apps/cli)。
 
 ## 提交插件
 
@@ -44,7 +44,7 @@ npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plug
 
 欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置，通过后自动合并。
 
-安装命令：`npx @dsh-1024store/cli add <owner>/<repository> --profile web`。
+安装命令：`npx @imsai/dsh-1024store add <owner>/<repository> --profile web`。
 
 ## 项目定位
 

@@ -162,7 +162,7 @@ export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): st
 export function trackedInstallCommand(
   plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
 ): string {
-  return `npx @dsh-1024store/cli add ${plugin.owner}/${repositoryName(plugin)} --profile web`
+  return `npx @imsai/dsh-1024store add ${plugin.owner}/${repositoryName(plugin)} --profile web`
 }
 
 export function githubAvatar(owner: string): string {

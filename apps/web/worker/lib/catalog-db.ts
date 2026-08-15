@@ -611,7 +611,7 @@ export async function loadCatalogSnapshotFromD1(
         en: row.description_en ?? description,
         zh: row.description_zh ?? description,
       },
-      install: `npx @dsh-1024store/cli add ${row.full_name} --profile web`,
+      install: `npx @imsai/dsh-1024store add ${row.full_name} --profile web`,
       added: row.added ?? (row.github_updated_at ?? now).slice(0, 10),
       stars: row.stars,
       forks: row.forks,

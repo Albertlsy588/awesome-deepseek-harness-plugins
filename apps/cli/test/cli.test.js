@@ -117,7 +117,7 @@ test('delegates without a shell, verifies state, receipts locally, and posts the
   assert.equal(event.dshVersion, '0.1.0-rc.5')
   assert.equal(event.sourceChannel, 'dsh-1024store-cli')
   assert.equal(event.isCi, true)
-  assert.equal(requests[0].options.headers['user-agent'], '@dsh-1024store/cli')
+  assert.equal(requests[0].options.headers['user-agent'], '@imsai/dsh-1024store')
   assert.equal('packageNames' in event, false)
   assert.equal(requests[0].options.body.includes('--ignore-scripts'), false)
   assert.equal(requests[0].options.body.includes('append-only'), false)

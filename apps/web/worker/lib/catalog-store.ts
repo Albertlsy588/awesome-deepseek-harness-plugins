@@ -226,7 +226,7 @@ export async function refreshCatalogSnapshot(
       : emptyStarGrowth()
     return {
       ...plugin,
-      install: `npx @dsh-1024store/cli add ${plugin.owner}/${repositoryName(plugin)} --profile web`,
+      install: `npx @imsai/dsh-1024store add ${plugin.owner}/${repositoryName(plugin)} --profile web`,
       ...previousGrowth,
       ...(previous ? installMetricsFrom(previous) : emptyInstallMetrics()),
       repository: repositoryName(plugin),

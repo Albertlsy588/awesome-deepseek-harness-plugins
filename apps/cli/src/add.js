@@ -100,7 +100,7 @@ export async function addPlugin(command, context) {
       telemetryConfig = (await ensureTelemetryConfig(dshHome, { now, uuid })).config
     }
     if (effectiveTelemetryEnabled(telemetryConfig, env) && await markNoticeShown(dshHome, telemetryConfig, now)) {
-      stderr('DSH 1024Store records anonymous plugin install outcomes and timestamps. Disable with `npx @dsh-1024store/cli telemetry disable`, `DO_NOT_TRACK=1`, or `DSH_1024STORE_TELEMETRY=0`. Details: https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/docs/install-analytics.md')
+      stderr('DSH 1024Store records anonymous plugin install outcomes and timestamps. Disable with `npx @imsai/dsh-1024store telemetry disable`, `DO_NOT_TRACK=1`, or `DSH_1024STORE_TELEMETRY=0`. Details: https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/docs/install-analytics.md')
     }
   } catch {
     // Telemetry storage must never block an installation.
