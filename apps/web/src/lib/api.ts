@@ -170,7 +170,25 @@ export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): st
 export function trackedInstallCommand(
   plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
 ): string {
-  return `npx @dsh-1024store/cli add ${plugin.owner}/${repositoryName(plugin)} --profile web`
+  return `npx dsh1024 add ${plugin.owner}/${repositoryName(plugin)}`
+}
+
+export function officialInstallCommand(
+  plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
+): string {
+  return `dsh plugin --profile web add github:${plugin.owner}/${repositoryName(plugin)}`
+}
+
+export const SELF_TRACKED_COMMAND = 'npx dsh1024 store'
+export const SELF_OFFICIAL_COMMAND = 'dsh plugin --profile web add dsh1024'
+
+export async function getSelfInstallStats(signal?: AbortSignal): Promise<InstallMetrics | null> {
+  const response = await fetch('/api/v1/self/install-stats', {
+    signal,
+    headers: { Accept: 'application/json' },
+  })
+  if (!response.ok) return null
+  return (await response.json()) as InstallMetrics
 }
 
 export function githubAvatar(owner: string): string {

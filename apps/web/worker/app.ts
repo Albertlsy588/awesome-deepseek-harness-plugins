@@ -33,6 +33,7 @@ interface AppDependencies {
 }
 
 const CACHE_HEADER = 'public, max-age=30, s-maxage=300, stale-while-revalidate=3600'
+const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
 const REGISTRY_CACHE_HEADER = 'public, max-age=300, s-maxage=3600'
 const MAX_INSTALL_EVENT_BYTES = 8 * 1024
 const MAX_CATALOG_SYNC_BYTES = 2 * 1024 * 1024
@@ -269,6 +270,15 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     })
   })
 
+  app.get('/api/v1/self/install-stats', async (context) => {
+    const db = context.env?.CATALOG_DB
+    const metrics = db
+      ? await dependencies.installStatsLoader(db, SELF_PLUGIN_ID, dependencies.clock())
+      : emptyInstallMetrics()
+    context.header('Cache-Control', CACHE_HEADER)
+    return context.json(metrics)
+  })
+
   app.get('/api/v1/registry', async (context) => {
     const result = await dependencies.catalogLoader(
       context.env,
@@ -289,7 +299,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         url: plugin.url,
         category: plugin.category,
         description: plugin.description,
-        install: `npx @dsh-1024store/cli add ${plugin.owner}/${plugin.repository} --profile web`,
+        install: `dsh plugin --profile web add github:${plugin.owner}/${plugin.repository}`,
         added: plugin.added,
         stars: plugin.stars,
       })),
