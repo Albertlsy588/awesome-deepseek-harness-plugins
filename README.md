@@ -26,11 +26,11 @@ npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plug
 使用 $submit-dsh-plugin 检查并提交我的 DeepSeek Harness 插件。
 ```
 
-该 Skill 会检查插件仓库、生成唯一允许提交的目录 JSON、验证变更范围，并在获得授权后创建 PR。贡献者不需要修改 README 或生成的 registry。查看 [Skill 源码](skills/submit-dsh-plugin/SKILL.md)。
+该 Skill 会检查插件仓库、生成唯一允许提交的目录 JSON、验证变更范围，并在获得授权后创建 PR。静态审查通过的非草稿 PR 会自动合并；贡献者不需要修改 README 或生成的 registry。查看 [Skill 源码](skills/submit-dsh-plugin/SKILL.md)。
 
 ### 手动提交
 
-欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置。
+欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置，通过后自动合并。
 
 安装命令：`dsh plugin --profile web add github:<owner>/<repository>`。
 

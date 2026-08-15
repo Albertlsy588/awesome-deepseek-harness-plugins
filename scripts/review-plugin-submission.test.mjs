@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 
 import {
   findHarnessBundle,
-  hasPluginCatalogChange,
   parseNameStatus,
   pullRequestChanges,
+  readCatalogEntry,
   reviewComment,
   reviewRepository,
   upsertReviewComment,
@@ -111,6 +114,20 @@ test('validates the submitted catalog entry', () => {
   )
 })
 
+test('reads only regular catalog entry files', async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'plugin-review-entry-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  await mkdir(path.join(directory, 'catalog/plugins'), { recursive: true })
+  const entry = { id: 'owner/plugin' }
+  await writeFile(path.join(directory, 'entry.json'), JSON.stringify(entry))
+  await symlink('../../entry.json', path.join(directory, 'catalog/plugins/owner--plugin.json'))
+
+  await assert.rejects(
+    readCatalogEntry(directory, 'catalog/plugins/owner--plugin.json'),
+    /must be a regular file/,
+  )
+})
+
 test('rejects catalog entries with extra fields or a mismatched filename', () => {
   const entry = {
     $schema: '../schema/plugin.schema.json',
@@ -131,23 +148,17 @@ test('rejects catalog entries with extra fields or a mismatched filename', () =>
   )
 })
 
-test('detects added, updated, deleted, and renamed plugin entries', () => {
-  for (const change of [
-    { status: 'A', file: 'catalog/plugins/owner--plugin.json' },
-    { status: 'M', file: 'catalog/plugins/owner--plugin.json' },
-    { status: 'D', file: 'catalog/plugins/owner--plugin.json' },
-    { status: 'R', oldPath: 'catalog/plugins/owner--old.json', file: 'moved.json' },
-  ]) {
-    assert.equal(hasPluginCatalogChange([change]), true)
-  }
-  assert.equal(hasPluginCatalogChange([{ status: 'M', file: 'README.md' }]), false)
-})
-
 test('rejects unrelated files', () => {
   assert.throws(() => validateSubmissionChanges([
     { status: 'A', file: 'catalog/plugins/owner--plugin.json' },
     { status: 'M', file: 'SECURITY.md' },
   ]), /unexpected change: M SECURITY\.md/)
+})
+
+test('rejects pull requests without a catalog plugin entry', () => {
+  assert.throws(() => validateSubmissionChanges([
+    { status: 'M', file: 'apps/web/src/App.tsx' },
+  ]), /must add exactly one.*found 0/)
 })
 
 test('rejects multiple plugin entries', () => {

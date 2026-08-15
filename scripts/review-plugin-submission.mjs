@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { lstat, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -303,11 +303,11 @@ export function validateSubmissionChanges(changes) {
   return pluginFile
 }
 
-export function hasPluginCatalogChange(changes) {
-  return changes.some(change => (
-    change.file.startsWith(catalogPrefix)
-    || (change.oldPath?.startsWith(catalogPrefix) ?? false)
-  ))
+export async function readCatalogEntry(rootDirectory, file) {
+  const target = path.join(rootDirectory, file)
+  const metadata = await lstat(target)
+  assert(metadata.isFile(), `${file} must be a regular file`)
+  return JSON.parse(await readFile(target, 'utf8'))
 }
 
 function changedFiles(base, head) {
@@ -332,32 +332,26 @@ async function main() {
   const repository = process.env.PLUGIN_REVIEW_REPOSITORY
   const pullNumber = process.env.PLUGIN_REVIEW_PULL_NUMBER
   let file = catalogPrefix
-  let applicable = false
   try {
     const changes = repository === undefined && pullNumber === undefined
       ? changedFiles(base, head)
       : await pullRequestChanges(repository, pullNumber, client)
-    if (!hasPluginCatalogChange(changes)) {
-      console.log('No catalog plugin entry changed; strict plugin submission review is not applicable.')
-      return
-    }
-    applicable = true
     file = validateSubmissionChanges(changes)
-    const entry = JSON.parse(await readFile(path.join(root, file), 'utf8'))
+    const entry = await readCatalogEntry(root, file)
     const categories = JSON.parse(await readFile(path.join(root, 'catalog/categories.json'), 'utf8'))
     const categoryIds = new Set(categories?.categories?.map(category => category?.id))
     validateCatalogEntry(entry, file, categoryIds)
     const result = await reviewRepository(entry, client)
     console.log(`PASS ${entry.id}: ${result.packagePath} -> ${result.patchPath}`)
     if (repository !== undefined && pullNumber !== undefined) {
-      const detail = 'All static checks passed. A maintainer must review this pull request and merge it manually after `CI / verify` succeeds.'
+      const detail = 'All static checks passed. The validated pull request will be squash-merged automatically.'
       await upsertReviewComment(repository, pullNumber, client, reviewComment('passed', detail))
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     workflowError(file, message)
     console.error(`FAIL ${file}\n${message}`)
-    if (applicable && repository !== undefined && pullNumber !== undefined) {
+    if (repository !== undefined && pullNumber !== undefined) {
       try {
         await upsertReviewComment(repository, pullNumber, client, reviewComment('failed', message))
       } catch (commentError) {

@@ -2,7 +2,12 @@ name: Plugin submission review
 
 on:
   pull_request_target:
+    branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: plugin-submission-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -40,3 +45,30 @@ jobs:
           PLUGIN_REVIEW_REPOSITORY: ${{ github.repository }}
           PLUGIN_REVIEW_PULL_NUMBER: ${{ github.event.pull_request.number }}
           PLUGIN_REVIEW_ROOT: ${{ github.workspace }}/submission
+
+  merge:
+    needs: static-review
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out trusted merger
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: reviewer
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Squash-merge the validated head
+        run: node reviewer/scripts/merge-plugin-submission.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PLUGIN_REVIEW_REPOSITORY: ${{ github.repository }}
+          PLUGIN_REVIEW_PULL_NUMBER: ${{ github.event.pull_request.number }}
+          PLUGIN_REVIEW_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PLUGIN_REVIEW_EXPECTED_BASE_REF: main
