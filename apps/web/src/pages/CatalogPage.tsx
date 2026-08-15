@@ -199,9 +199,9 @@ export function CatalogPage({ view }: CatalogPageProps) {
   const isGrowthMode =
     rankingMode === 'growth24h' || rankingMode === 'growth7d' || rankingMode === 'growth30d'
   const isPendingRanking = !query && isGrowthMode
-  const catalogHref = query ? `/plugin?q=${encodeURIComponent(query)}` : '/plugin'
-  const rankingsHref = query ? `/rankings?q=${encodeURIComponent(query)}` : '/rankings'
-  const canonicalPath = view === 'catalog' ? '/plugin' : '/rankings'
+  const catalogHref = query ? `/plugins?q=${encodeURIComponent(query)}` : '/plugins'
+  const rankingsHref = query ? `/?q=${encodeURIComponent(query)}` : '/'
+  const canonicalPath = view === 'catalog' ? '/plugins' : '/'
   const seoTitle = t(view === 'catalog' ? 'catalogSeoTitle' : 'rankingsSeoTitle')
   const seoDescription = t(
     view === 'catalog' ? 'catalogSeoDescription' : 'rankingsSeoDescription',

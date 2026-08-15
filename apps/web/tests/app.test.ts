@@ -117,18 +117,18 @@ function syncRequest(body: unknown, token: string | null = SYNC_TOKEN): RequestI
 }
 
 describe('market API', () => {
-  it('publishes crawl controls and redirects the root to the canonical rankings page', async () => {
+  it('publishes crawl controls without intercepting the asset-served site root', async () => {
     const app = testApp()
     const root = await app.request('https://store.example/')
     const robots = await app.request('https://store.example/robots.txt')
     const sitemap = await app.request('https://store.example/sitemap.xml')
 
-    expect(root.status).toBe(301)
-    expect(root.headers.get('Location')).toBe('https://store.example/rankings')
+    expect(root.status).toBe(404)
+    expect(root.headers.get('Location')).toBeNull()
     expect(await robots.text()).toContain('Sitemap: https://deepseek1024.com/sitemap.xml')
     expect(sitemap.headers.get('Content-Type')).toContain('application/xml')
     const sitemapBody = await sitemap.text()
-    expect(sitemapBody).toContain('<loc>https://deepseek1024.com/plugin</loc>')
+    expect(sitemapBody).toContain('<loc>https://deepseek1024.com/plugins</loc>')
     expect((sitemapBody.match(/<url>/g) ?? []).length).toBe(TEST_PLUGINS.length + 2)
   })
 
@@ -155,21 +155,31 @@ describe('market API', () => {
     }
   })
 
-  it('permanently redirects legacy package pages to canonical plugin paths', async () => {
+  it('permanently redirects singular and legacy package pages to canonical plugins paths', async () => {
     const app = testApp()
+    const singularCatalog = await app.request('https://store.example/plugin?q=terminal')
+    const singularDetail = await app.request(
+      'https://store.example/plugin/openma-ai/deepseek-harness-tui?source=singular',
+    )
     const catalog = await app.request('https://store.example/packages?q=terminal')
     const trailingCatalog = await app.request('https://store.example/packages/?q=terminal')
     const detail = await app.request(
       'https://store.example/packages/openma-ai/deepseek-harness-tui?source=legacy',
     )
 
+    expect(singularCatalog.status).toBe(301)
+    expect(singularCatalog.headers.get('Location')).toBe('https://store.example/plugins?q=terminal')
+    expect(singularDetail.status).toBe(301)
+    expect(singularDetail.headers.get('Location')).toBe(
+      'https://store.example/plugins/openma-ai/deepseek-harness-tui?source=singular',
+    )
     expect(catalog.status).toBe(301)
-    expect(catalog.headers.get('Location')).toBe('https://store.example/plugin?q=terminal')
+    expect(catalog.headers.get('Location')).toBe('https://store.example/plugins?q=terminal')
     expect(trailingCatalog.status).toBe(301)
-    expect(trailingCatalog.headers.get('Location')).toBe('https://store.example/plugin?q=terminal')
+    expect(trailingCatalog.headers.get('Location')).toBe('https://store.example/plugins?q=terminal')
     expect(detail.status).toBe(301)
     expect(detail.headers.get('Location')).toBe(
-      'https://store.example/plugin/openma-ai/deepseek-harness-tui?source=legacy',
+      'https://store.example/plugins/openma-ai/deepseek-harness-tui?source=legacy',
     )
   })
 

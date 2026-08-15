@@ -54,7 +54,7 @@ export function PackagePage() {
 
   const canonicalOwner = detail?.owner ?? owner
   const canonicalRepository = detail ? repositoryName(detail) : name
-  const canonicalPath = `/plugin/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`
+  const canonicalPath = `/plugins/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`
   const canonicalUrl = `${SITE_ORIGIN}${canonicalPath}`
   const seoTitle = detail
     ? fitSeoText(
@@ -106,7 +106,7 @@ export function PackagePage() {
                 '@type': 'ListItem',
                 position: 1,
                 name: t('catalog'),
-                item: `${SITE_ORIGIN}/plugin`,
+                item: `${SITE_ORIGIN}/plugins`,
               },
               {
                 '@type': 'ListItem',
@@ -136,7 +136,7 @@ export function PackagePage() {
         <h1>{t('notFound')}</h1>
         <p>{error}</p>
         <div className="state-actions">
-          <Link className="button button-primary" to="/plugin">
+          <Link className="button button-primary" to="/plugins">
             <ArrowLeft size={16} aria-hidden="true" />
             {t('back')}
           </Link>
@@ -194,7 +194,7 @@ export function PackagePage() {
         <LanguageSwitch />
       </div>
 
-      <Link className="back-link" to="/plugin">
+      <Link className="back-link" to="/plugins">
         <ArrowLeft size={16} aria-hidden="true" />
         {t('back')}
       </Link>

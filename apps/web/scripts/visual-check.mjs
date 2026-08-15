@@ -117,12 +117,19 @@ async function assertLiveStats(page) {
 try {
   const defaultView = await openPage({ width: 1440, height: 1000 }, '/')
   await defaultView.locator('.ranking-section').waitFor()
-  if (!defaultView.url().endsWith('/rankings')) {
-    throw new Error('root route did not default to rankings')
+  if (new URL(defaultView.url()).pathname !== '/') {
+    throw new Error('root route changed the visible URL while rendering rankings')
   }
+  await assertSeo(defaultView, 'default rankings', '/')
   await defaultView.close()
 
-  const desktop = await openPage({ width: 1440, height: 1000 }, '/plugin')
+  const legacyCatalog = await openPage({ width: 1440, height: 1000 }, '/plugin?q=crosstalk')
+  if (new URL(legacyCatalog.url()).pathname !== '/plugins' || new URL(legacyCatalog.url()).searchParams.get('q') !== 'crosstalk') {
+    throw new Error('singular plugin route did not preserve its query while redirecting to /plugins')
+  }
+  await legacyCatalog.close()
+
+  const desktop = await openPage({ width: 1440, height: 1000 }, '/plugins')
   await desktop.locator('.directory-section .package-list').waitFor()
   if ((await desktop.locator('.ranking-section').count()) !== 0) {
     throw new Error('desktop catalog unexpectedly renders rankings')
@@ -131,7 +138,7 @@ try {
     throw new Error('directory sort controls should only contain stars, newest, and active')
   }
   await assertLiveStats(desktop)
-  await assertSeo(desktop, 'desktop catalog', '/plugin')
+  await assertSeo(desktop, 'desktop catalog', '/plugins')
   await assertNoHorizontalOverflow(desktop, 'desktop catalog')
   await desktop.close()
 
@@ -176,14 +183,14 @@ try {
   if ((await rankings.locator('footer, .reset-button').count()) !== 0) {
     throw new Error('removed footer or refresh control is still rendered')
   }
-  await assertSeo(rankings, 'desktop rankings', '/rankings')
+  await assertSeo(rankings, 'desktop rankings', '/')
   await rankings.locator('.ranking-section .segmented-control button').last().click()
   await rankings.locator('.ranking-section .package-row').first().waitFor()
   if ((await rankings.locator('.ranking-section .package-row').count()) !== 100) {
     throw new Error('GitHub activity rankings did not render the top 100 packages')
   }
-  if ((await rankings.locator('a[href^="/plugin/"]').count()) === 0) {
-    throw new Error('catalog cards do not use the canonical singular plugin path')
+  if ((await rankings.locator('a[href^="/plugins/"]').count()) === 0) {
+    throw new Error('catalog cards do not use the canonical plural plugins path')
   }
   const rankingSearchResponse = rankings.waitForResponse(
     (response) => response.url().includes('/api/v1/plugins?') && response.url().includes('q=crosstalk'),
@@ -201,7 +208,7 @@ try {
   await assertNoHorizontalOverflow(rankings, 'desktop rankings')
   await rankings.close()
 
-  const mobile = await openPage({ width: 390, height: 844 }, '/plugin', { touch: true })
+  const mobile = await openPage({ width: 390, height: 844 }, '/plugins', { touch: true })
   await mobile.locator('.directory-section .package-list').waitFor()
   await assertLiveStats(mobile)
   await assertMobileEnvironment(mobile, 'mobile catalog')
@@ -235,7 +242,7 @@ try {
   )
   await mobile.locator('input[type="search"]').fill('crosstalk')
   await searchResponse
-  await assertSeo(mobile, 'filtered mobile catalog', '/plugin', 'noindex,follow')
+  await assertSeo(mobile, 'filtered mobile catalog', '/plugins', 'noindex,follow')
   if ((await mobile.locator('.directory-section .package-row').count()) === 0) {
     throw new Error('search returned no package rows')
   }
@@ -268,20 +275,20 @@ try {
   }
   await mobileRankings.close()
 
-  const detail = await openPage({ width: 1440, height: 1000 }, '/plugin/openma-ai/deepseek-harness-tui')
+  const detail = await openPage({ width: 1440, height: 1000 }, '/plugins/openma-ai/deepseek-harness-tui')
   await detail.locator('.detail-header').waitFor()
   await detail.locator('.install-activity-section').waitFor()
   if (!(await detail.locator('.install-section .install-command code').first().textContent())?.includes('@dsh-1024store/cli')) {
     throw new Error('detail page is missing the tracked wrapper CLI command')
   }
-  await assertSeo(detail, 'desktop detail', '/plugin/openma-ai/deepseek-harness-tui')
+  await assertSeo(detail, 'desktop detail', '/plugins/openma-ai/deepseek-harness-tui')
   await assertNoHorizontalOverflow(detail, 'desktop detail')
   await detail.locator('.detail-brand').click()
-  await detail.waitForURL('**/rankings')
+  await detail.waitForURL((url) => url.pathname === '/')
   await detail.locator('.ranking-section').waitFor()
   await detail.close()
 
-  const scoped = await openPage({ width: 390, height: 844 }, '/plugin/zhaoolee/notes', { touch: true })
+  const scoped = await openPage({ width: 390, height: 844 }, '/plugins/zhaoolee/notes', { touch: true })
   await scoped.locator('.detail-header').waitFor()
   await assertMobileEnvironment(scoped, 'mobile package detail')
   await assertNoHorizontalOverflow(scoped, 'scoped package detail')
@@ -321,7 +328,7 @@ try {
   await scoped.locator('.install-command-prominent .icon-button').click()
   await scoped.locator('.install-command-prominent .icon-button[aria-label="已复制"]').waitFor()
   await scoped.locator('.detail-brand').click()
-  await scoped.waitForURL('**/rankings')
+  await scoped.waitForURL((url) => url.pathname === '/')
   await scoped.locator('.ranking-section').waitFor()
   await scoped.close()
 

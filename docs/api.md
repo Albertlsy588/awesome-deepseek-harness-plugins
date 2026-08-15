@@ -112,4 +112,4 @@ Returns exactly `{"status":"ok"}`. No scan or database internals are exposed.
 
 ## Page redirects
 
-`/` serves the rankings page; `/packages*` returns `301` to the matching `/plugin*` page.
+`/` serves the rankings page without changing the browser URL. `/plugins*` is the canonical catalog path; singular `/plugin*` and legacy `/packages*` paths return `301` to the matching `/plugins*` page.

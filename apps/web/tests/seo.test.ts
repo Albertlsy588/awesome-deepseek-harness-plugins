@@ -9,16 +9,18 @@ function testSeoCatalog(): SeoCatalog {
 describe('SEO metadata', () => {
   it('builds unique canonical metadata for collection and plugin pages', () => {
     const catalogPages = testSeoCatalog()
-    const catalog = metadataForPath('/plugin', catalogPages)
+    const catalog = metadataForPath('/plugins', catalogPages)
+    const home = metadataForPath('/', catalogPages)
     const rankings = metadataForPath('/rankings', catalogPages)
     const plugin = TEST_PLUGINS[0]!
-    const detail = metadataForPath(`/plugin/${plugin.owner}/${plugin.repository}`, catalogPages)
+    const detail = metadataForPath(`/plugins/${plugin.owner}/${plugin.repository}`, catalogPages)
 
-    expect(catalog.canonical).toBe('https://deepseek1024.com/plugin')
-    expect(rankings.canonical).toBe('https://deepseek1024.com/rankings')
+    expect(catalog.canonical).toBe('https://deepseek1024.com/plugins')
+    expect(home.canonical).toBe('https://deepseek1024.com/')
+    expect(rankings.canonical).toBe(home.canonical)
     expect(catalog.title).not.toBe(rankings.title)
     expect(detail.status).toBe(200)
-    expect(detail.canonical).toContain(`/plugin/${plugin.owner}/`)
+    expect(detail.canonical).toContain(`/plugins/${plugin.owner}/`)
     expect(detail.title).toContain(plugin.name)
     expect(detail.title.length).toBeLessThanOrEqual(60)
     expect(detail.description.length).toBeLessThanOrEqual(160)
@@ -30,7 +32,7 @@ describe('SEO metadata', () => {
   })
 
   it('marks unknown pages as noindex soft-404 replacements', () => {
-    const missing = metadataForPath('/plugin/example/missing', testSeoCatalog())
+    const missing = metadataForPath('/plugins/example/missing', testSeoCatalog())
     expect(missing.status).toBe(404)
     expect(missing.robots).toBe('noindex,follow')
   })
@@ -39,10 +41,12 @@ describe('SEO metadata', () => {
     const sitemap = buildSitemap(testSeoCatalog())
     const urlCount = (sitemap.match(/<url>/g) ?? []).length
     expect(urlCount).toBe(TEST_PLUGINS.length + 2)
-    expect(sitemap).toContain('<loc>https://deepseek1024.com/rankings</loc>')
+    expect(sitemap).toContain('<loc>https://deepseek1024.com/</loc>')
+    expect(sitemap).not.toContain('<loc>https://deepseek1024.com/rankings</loc>')
     for (const plugin of TEST_PLUGINS) {
-      expect(sitemap).toContain(`/plugin/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(plugin.repository)}</loc>`)
+      expect(sitemap).toContain(`/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(plugin.repository)}</loc>`)
     }
+    expect(sitemap).not.toContain('<loc>https://deepseek1024.com/plugin</loc>')
     expect(sitemap).not.toContain('/packages/')
     expect(buildRobotsTxt()).toContain('Disallow: /api/')
   })

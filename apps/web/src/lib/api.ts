@@ -158,7 +158,7 @@ export function getPackage(owner: string, name: string, signal?: AbortSignal): P
 }
 
 export function packagePath(plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>): string {
-  return `/plugin/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
+  return `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
 }
 
 export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): string {

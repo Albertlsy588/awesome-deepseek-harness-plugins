@@ -85,7 +85,7 @@ function pluginSchema(plugin: RegistryPlugin, canonical: string, description: st
             '@type': 'ListItem',
             position: 1,
             name: 'Plugin catalog',
-            item: `${SITE_ORIGIN}/plugin`,
+            item: `${SITE_ORIGIN}/plugins`,
           },
           { '@type': 'ListItem', position: 2, name: plugin.name, item: canonical },
         ],
@@ -112,33 +112,33 @@ export function metadataForPath(
     return {
       title,
       description,
-      canonical: absolute('/rankings'),
+      canonical: absolute('/'),
       robots: 'index,follow',
-      schema: collectionSchema(title, description, '/rankings'),
+      schema: collectionSchema(title, description, '/'),
       status: 200,
     }
   }
 
-  if (pathname === '/plugin') {
+  if (pathname === '/plugins') {
     const title = 'DeepSeek Harness Plugins & Extensions | DSH 1024Store'
     const description = 'Browse curated DeepSeek Harness plugins and extensions. Compare GitHub activity, explore categories, and copy install commands from the community catalog.'
     return {
       title,
       description,
-      canonical: absolute('/plugin'),
+      canonical: absolute('/plugins'),
       robots: 'index,follow',
-      schema: collectionSchema(title, description, '/plugin'),
+      schema: collectionSchema(title, description, '/plugins'),
       status: 200,
     }
   }
 
-  const match = pathname.match(/^\/plugin\/([^/]+)\/([^/]+)\/?$/)
+  const match = pathname.match(/^\/plugins\/([^/]+)\/([^/]+)\/?$/)
   if (match) {
     const owner = safeDecode(match[1] ?? '')
     const repository = safeDecode(match[2] ?? '')
     const plugin = owner && repository ? findPlugin(catalog.plugins, owner, repository) : undefined
     if (plugin) {
-      const canonicalPath = `/plugin/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
+      const canonicalPath = `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
       const canonical = absolute(canonicalPath)
       const title = fitText(`${plugin.name} DeepSeek Harness Plugin | DSH 1024Store`, 60)
       const description = fitText(
@@ -184,10 +184,10 @@ function xmlEscape(value: string): string {
 
 export function buildSitemap(catalog: SeoCatalog): string {
   const pages = [
-    { path: '/rankings', lastModified: catalog.updated },
-    { path: '/plugin', lastModified: catalog.updated },
+    { path: '/', lastModified: catalog.updated },
+    { path: '/plugins', lastModified: catalog.updated },
     ...catalog.plugins.map((plugin) => ({
-      path: `/plugin/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`,
+      path: `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`,
       lastModified: plugin.added,
     })),
   ]

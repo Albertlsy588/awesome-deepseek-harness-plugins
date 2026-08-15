@@ -20,7 +20,7 @@ export function NotFoundPage() {
       <SearchX size={36} aria-hidden="true" />
       <h1>{t('notFound')}</h1>
       <p>{t('notFoundBody')}</p>
-      <Link className="button button-primary" to="/plugin">
+      <Link className="button button-primary" to="/plugins">
         <ArrowLeft size={16} aria-hidden="true" />
         {t('back')}
       </Link>
