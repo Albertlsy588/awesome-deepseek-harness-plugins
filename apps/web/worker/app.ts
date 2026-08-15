@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
+import storeManifest from '../../../packages/dsh-1024store/package.json' with { type: 'json' }
 import { buildCatalog, findPlugin, parseCatalogQuery, repositoryName } from './lib/catalog'
 import { loadCatalogSnapshot } from './lib/catalog-store'
 import { fetchPackageDetail } from './lib/github'
@@ -169,6 +170,15 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       runtime: 'cloudflare-workers',
     }),
   )
+
+  app.get('/api/dsh-1024store', (context) => {
+    context.header('Cache-Control', 'public, max-age=300, s-maxage=3600')
+    return context.json({
+      name: storeManifest.name,
+      version: storeManifest.version,
+      releaseUrl: 'https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh-1024store',
+    })
+  })
 
   app.post('/api/v1/install-events', async (context) => {
     const contentType = context.req.header('Content-Type')?.split(';', 1)[0]?.trim().toLocaleLowerCase()

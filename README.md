@@ -61,6 +61,7 @@ catalog/generated/  生成的公开目录数据
 skills/             面向贡献者的可安装 Agent Skills
 apps/web/src/       React + Vite 前端
 apps/web/worker/    Cloudflare Worker API 与数据刷新
+packages/dsh-1024store/  1024 品牌的 DSH 设置页内插件市场
 scripts/            插件发现、校验和测试脚本
 ```
 
