@@ -1574,6 +1574,51 @@ main {
   color: #fff;
 }
 
+.install-options {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.install-option {
+  min-width: 0;
+}
+
+.install-option-recommended {
+  padding: 11px 11px 9px;
+  border: 0.5px solid var(--brand);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.install-option-badge {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.install-benefits {
+  margin: 9px 2px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.install-option-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--subtle);
+  font-size: 11px;
+  font-weight: 620;
+}
+
 .row-open {
   display: grid;
   width: 30px;
@@ -1827,29 +1872,6 @@ main {
   font-family: var(--font-display);
   font-size: 15px;
   font-weight: 700;
-}
-
-.install-telemetry-note {
-  margin: 9px 2px 0;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.55;
-}
-
-.official-install-fallback {
-  margin-top: 10px;
-  color: var(--subtle);
-}
-
-.official-install-fallback summary {
-  width: fit-content;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 620;
-}
-
-.official-install-fallback[open] summary {
-  margin-bottom: 8px;
 }
 
 .install-activity-section {
@@ -2800,6 +2822,15 @@ main {
 
   .install-command-prominent .icon-button {
     min-height: 48px;
+  }
+
+  .install-options {
+    gap: 12px;
+  }
+
+  .install-benefits,
+  .install-option-label {
+    font-size: 12px;
   }
 
   .site-bottom-link p,
