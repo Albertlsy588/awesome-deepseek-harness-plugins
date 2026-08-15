@@ -120,7 +120,7 @@ export async function addPlugin(command, context) {
   })
   const completedAt = now()
   const after = await readProfileState(dshHome, command.profile)
-  const inspection = inspectInstallation(before, after, command.pluginId, previousReceipt)
+  const inspection = inspectInstallation(before, after, command.pluginId, previousReceipt, command.knownPackageNames ?? [])
   const errorCode = failureCode(result, inspection)
   const operation = inspection.beforePresent ? 'reinstall' : 'install'
   const succeeded = errorCode === null

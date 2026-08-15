@@ -1,4 +1,4 @@
-import { DEFAULT_PROFILE } from './constants.js'
+import { DEFAULT_PROFILE, SELF_PACKAGE_NAME, SELF_PLUGIN_ID } from './constants.js'
 
 const PROFILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 const REPOSITORY_PART_PATTERN = /^[A-Za-z0-9_.-]{1,100}$/
@@ -25,6 +25,10 @@ export function parseArgs(argv) {
       throw new UsageError('telemetry action must be status, enable, disable, or reset')
     }
     return { command: 'telemetry', action }
+  }
+
+  if (argv[0] === 'store') {
+    return parseStore(argv)
   }
 
   if (argv[0] !== 'add') {
@@ -74,6 +78,50 @@ export function parseArgs(argv) {
   }
 
   return { command: 'add', profile, passthroughArgs, ...parseRepository(repository) }
+}
+
+function parseStore(argv) {
+  let profile = DEFAULT_PROFILE
+  const passthroughArgs = []
+  let passthroughOnly = false
+
+  for (let index = 1; index < argv.length; index += 1) {
+    const value = argv[index]
+    if (passthroughOnly) {
+      passthroughArgs.push(value)
+      continue
+    }
+    if (value === '--') {
+      passthroughOnly = true
+      continue
+    }
+    if (value === '--profile' || value === '-p') {
+      const next = argv[index + 1]
+      if (!next) throw new UsageError('--profile requires a value')
+      profile = next
+      index += 1
+      continue
+    }
+    if (value.startsWith('--profile=')) {
+      profile = value.slice('--profile='.length)
+      continue
+    }
+    throw new UsageError('store accepts only --profile; put official CLI arguments after --')
+  }
+
+  if (!PROFILE_PATTERN.test(profile)) {
+    throw new UsageError('profile must contain only letters, numbers, dot, underscore, or hyphen (1-64 characters)')
+  }
+
+  return {
+    command: 'add',
+    profile,
+    passthroughArgs,
+    pluginId: SELF_PLUGIN_ID,
+    requestedRef: null,
+    source: SELF_PACKAGE_NAME,
+    knownPackageNames: [SELF_PACKAGE_NAME],
+  }
 }
 
 export function parseRepository(input) {

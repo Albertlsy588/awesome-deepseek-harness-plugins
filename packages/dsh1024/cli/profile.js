@@ -42,11 +42,12 @@ function dependencyMatchesPlugin(spec, pluginId) {
   return normalized.includes(id) || normalized.includes(`github.com/${id}`)
 }
 
-function receiptNamesPresent(state, receipt) {
-  return (receipt?.packageNames ?? []).some((name) => name in state.dependencies || state.bundles.includes(name))
+function receiptNamesPresent(state, names) {
+  return names.some((name) => name in state.dependencies || state.bundles.includes(name))
 }
 
-export function inspectInstallation(before, after, pluginId, previousReceipt = null) {
+export function inspectInstallation(before, after, pluginId, previousReceipt = null, knownPackageNames = []) {
+  const knownNames = [...new Set([...(previousReceipt?.packageNames ?? []), ...knownPackageNames])]
   const beforeMatches = Object.entries(before.dependencies)
     .filter(([, spec]) => dependencyMatchesPlugin(spec, pluginId))
     .map(([name]) => name)
@@ -56,17 +57,17 @@ export function inspectInstallation(before, after, pluginId, previousReceipt = n
   const changed = Object.keys(after.dependencies)
     .filter((name) => before.dependencies[name] !== after.dependencies[name])
   const changedBundles = changed.filter((name) => after.bundles.includes(name))
-  const receiptMatches = (previousReceipt?.packageNames ?? [])
+  const receiptMatches = knownNames
     .filter((name) => name in after.dependencies || after.bundles.includes(name))
   const packageNames = [...new Set([...afterMatches, ...changedBundles, ...receiptMatches])].sort()
-  const beforePresent = beforeMatches.length > 0 || receiptNamesPresent(before, previousReceipt)
+  const beforePresent = beforeMatches.length > 0 || receiptNamesPresent(before, knownNames)
   const afterPresent = after.exists && packageNames.length > 0
 
   return {
     beforePresent,
     afterPresent,
     packageNames,
-    beforeVersion: selectVersion(before, [...beforeMatches, ...(previousReceipt?.packageNames ?? [])]),
+    beforeVersion: selectVersion(before, [...beforeMatches, ...knownNames]),
     afterVersion: selectVersion(after, packageNames),
   }
 }

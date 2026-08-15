@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { inspectInstallation } from '../cli/profile.js'
+import { SELF_PLUGIN_ID } from '../cli/constants.js'
 
 const emptyState = {
   exists: false,
@@ -37,6 +38,46 @@ test('uses a local receipt to verify normalized dependency specs', () => {
   assert.equal(result.beforePresent, true)
   assert.equal(result.afterPresent, true)
   assert.deepEqual(result.packageNames, ['plugin'])
+})
+
+test('verifies an npm semver dependency through known package names', () => {
+  const after = {
+    exists: true,
+    dependencies: { dsh1024: '^0.3.0' },
+    bundles: [],
+    installedVersions: { dsh1024: '0.3.1' },
+  }
+  assert.deepEqual(inspectInstallation(emptyState, after, SELF_PLUGIN_ID, null, ['dsh1024']), {
+    beforePresent: false,
+    afterPresent: true,
+    packageNames: ['dsh1024'],
+    beforeVersion: null,
+    afterVersion: '0.3.1',
+  })
+})
+
+test('reports a pre-existing known package as present before for reinstall detection', () => {
+  const state = {
+    exists: true,
+    dependencies: { dsh1024: '^0.3.0' },
+    bundles: [],
+    installedVersions: { dsh1024: '0.3.1' },
+  }
+  const result = inspectInstallation(state, state, SELF_PLUGIN_ID, null, ['dsh1024'])
+  assert.equal(result.beforePresent, true)
+  assert.equal(result.afterPresent, true)
+  assert.equal(result.beforeVersion, '0.3.1')
+  assert.equal(result.afterVersion, '0.3.1')
+})
+
+test('without known package names an npm semver dependency stays unverifiable', () => {
+  const after = {
+    exists: true,
+    dependencies: { dsh1024: '^0.3.0' },
+    bundles: [],
+    installedVersions: { dsh1024: '0.3.1' },
+  }
+  assert.equal(inspectInstallation(emptyState, after, SELF_PLUGIN_ID).afterPresent, false)
 })
 
 test('does not accept an exit-zero command without observable profile state', () => {

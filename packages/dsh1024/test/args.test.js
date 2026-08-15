@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { parseArgs, parseRepository, UsageError } from '../cli/args.js'
+import { SELF_PACKAGE_NAME, SELF_PLUGIN_ID } from '../cli/constants.js'
 
 test('parses add commands, default profile, and refs', () => {
   assert.deepEqual(parseArgs(['add', 'Owner/Plugin']), {
@@ -56,6 +57,28 @@ test('passes every non-wrapper argument unchanged and stops parsing after --', (
     '../belongs-to-official-cli',
     '--',
   ])
+})
+
+test('parses store as a normalized self-install add command', () => {
+  assert.deepEqual(parseArgs(['store']), {
+    command: 'add',
+    profile: 'web',
+    passthroughArgs: [],
+    pluginId: SELF_PLUGIN_ID,
+    requestedRef: null,
+    source: SELF_PACKAGE_NAME,
+    knownPackageNames: [SELF_PACKAGE_NAME],
+  })
+  assert.equal(parseArgs(['store', '-p', 'demo']).profile, 'demo')
+  assert.equal(parseArgs(['store', '--profile=desktop']).profile, 'desktop')
+  assert.deepEqual(parseArgs(['store', '--', '--ignore-scripts']).passthroughArgs, ['--ignore-scripts'])
+})
+
+test('store rejects positional arguments and unsafe profiles', () => {
+  assert.throws(() => parseArgs(['store', 'extra']), UsageError)
+  assert.throws(() => parseArgs(['store', '--ignore-scripts']), UsageError)
+  assert.throws(() => parseArgs(['store', '--profile']), UsageError)
+  assert.throws(() => parseArgs(['store', '--profile', '../secret']), UsageError)
 })
 
 test('parses telemetry controls', () => {

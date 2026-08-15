@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { main } from '../cli/index.js'
-import { CLI_VERSION, EVENT_KEYS } from '../cli/constants.js'
+import { CLI_VERSION, EVENT_KEYS, SELF_PLUGIN_ID } from '../cli/constants.js'
 
 function clock(start = '2026-08-15T01:00:00.000Z') {
   let value = new Date(start).getTime()
@@ -44,6 +44,16 @@ function installProfile(dshHome, profile = 'web', version = '1.2.3') {
 
 async function makeHome() {
   return mkdtemp(join(tmpdir(), 'dsh-1024store-cli-'))
+}
+
+function installSelfProfile(dshHome, profile = 'web', version = '0.3.1') {
+  const directory = join(dshHome, 'profiles', profile)
+  const moduleDirectory = join(directory, 'node_modules', 'dsh1024')
+  mkdirSync(moduleDirectory, { recursive: true })
+  writeFileSync(join(directory, 'package.json'), JSON.stringify({
+    dependencies: { dsh1024: '^0.3.0' },
+  }))
+  writeFileSync(join(moduleDirectory, 'package.json'), JSON.stringify({ name: 'dsh1024', version }))
 }
 
 test('delegates without a shell, verifies state, receipts locally, and posts the strict event schema', async () => {
@@ -443,6 +453,136 @@ test('turns an unverifiable exit-zero result into a wrapper failure', async () =
   assert.equal(exitCode, 1)
   assert.equal(events[0].errorCode, 'PROFILE_NOT_UPDATED')
   assert.match(output.stderr.join('\n'), /could not verify/)
+})
+
+test('store installs the self plugin through the official CLI and reports npm-backed metadata', async () => {
+  const dshHome = await makeHome()
+  const events = []
+  let invocation
+  const exitCode = await main(['store'], {
+    dshHome,
+    env: {},
+    io: ioCapture().io,
+    platform: 'linux',
+    now: clock(),
+    uuid: uuidSequence(
+      '10241024-1024-4024-8024-102410241024',
+      '20242024-2024-4024-8024-202420242024',
+    ),
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installSelfProfile(dshHome)
+      return { status: 0 }
+    },
+    async fetchImpl(_url, options) {
+      events.push(JSON.parse(options.body))
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(invocation.command, 'npx')
+  assert.deepEqual(invocation.args, [
+    '--yes',
+    '@deepseek-ai/dsh',
+    'plugin',
+    '--profile',
+    'web',
+    'add',
+    'dsh1024',
+  ])
+  assert.equal(invocation.options.shell, false)
+  assert.deepEqual(Object.keys(events[0]), EVENT_KEYS)
+  assert.equal(events[0].pluginId, SELF_PLUGIN_ID)
+  assert.equal(events[0].requestedRef, null)
+  assert.equal(events[0].operation, 'install')
+  assert.equal(events[0].status, 'success')
+  assert.equal(events[0].afterVersion, '0.3.1')
+  assert.equal(events[0].sourceChannel, 'dsh-1024store-cli')
+
+  const receipt = JSON.parse(await readFile(join(dshHome, '.dsh-1024store', 'receipts.json'), 'utf8'))
+  const installed = Object.values(receipt.plugins)[0]
+  assert.deepEqual(installed.packageNames, ['dsh1024'])
+  assert.equal(installed.packages.dsh1024.version, '0.3.1')
+
+  const secondRun = []
+  assert.equal(await main(['store'], {
+    dshHome,
+    env: {},
+    io: ioCapture().io,
+    now: clock('2026-08-15T02:00:00.000Z'),
+    uuid: uuidSequence('30243024-3024-4024-8024-302430243024'),
+    spawn() { return { status: 0 } },
+    async fetchImpl(_url, options) {
+      secondRun.push(JSON.parse(options.body))
+      return { ok: true }
+    },
+  }), 0)
+  assert.equal(secondRun.at(-1).operation, 'reinstall')
+  assert.equal(secondRun.at(-1).pluginId, SELF_PLUGIN_ID)
+})
+
+test('store uses the npm JavaScript entrypoint on Windows and forwards pass-through arguments', async () => {
+  const dshHome = await makeHome()
+  const nodeExecutable = 'C:\\Program Files\\nodejs\\node.exe'
+  const npmExecPath = 'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js'
+  let invocation
+  const exitCode = await main(['store', '--profile', 'desktop', '--', '--ignore-scripts'], {
+    dshHome,
+    env: { DO_NOT_TRACK: '1', npm_execpath: npmExecPath },
+    execPath: nodeExecutable,
+    platform: 'win32',
+    io: ioCapture().io,
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installSelfProfile(dshHome, 'desktop')
+      return { status: 0 }
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(invocation.command, nodeExecutable)
+  assert.deepEqual(invocation.args, [
+    npmExecPath,
+    'exec',
+    '--yes',
+    '--',
+    '@deepseek-ai/dsh',
+    'plugin',
+    '--profile',
+    'desktop',
+    'add',
+    'dsh1024',
+    '--ignore-scripts',
+  ])
+  assert.equal(invocation.options.shell, false)
+})
+
+test('store succeeds when the dependency already exists with an unchanged spec and no receipt', async () => {
+  const dshHome = await makeHome()
+  installSelfProfile(dshHome)
+  const events = []
+  const exitCode = await main(['store'], {
+    dshHome,
+    env: {},
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(
+      '40244024-4024-4024-8024-402440244024',
+      '50245024-5024-4024-8024-502450245024',
+    ),
+    spawn() { return { status: 0 } },
+    async fetchImpl(_url, options) {
+      events.push(JSON.parse(options.body))
+      return { ok: true }
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(events[0].status, 'success')
+  assert.equal(events[0].errorCode, null)
+  assert.equal(events[0].operation, 'reinstall')
+  assert.equal(events[0].afterVersion, '0.3.1')
 })
 
 test('telemetry controls persist status and reset identity plus queue', async () => {

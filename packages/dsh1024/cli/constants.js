@@ -4,6 +4,8 @@ const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.me
 
 export const CLI_VERSION = packageJson.version
 export const DEFAULT_PROFILE = 'web'
+export const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
+export const SELF_PACKAGE_NAME = 'dsh1024'
 export const DEFAULT_DSH_PACKAGE = '@deepseek-ai/dsh'
 export const DEFAULT_TELEMETRY_URL = 'https://deepseek1024.com/api/v1/install-events'
 export const TELEMETRY_NOTICE_VERSION = 1

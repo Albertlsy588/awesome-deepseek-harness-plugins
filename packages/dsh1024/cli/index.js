@@ -14,6 +14,7 @@ const HELP = `dsh1024 ${CLI_VERSION}
 
 Usage:
   dsh1024 add <owner/repository> [--profile <name>] [official arguments...]
+  dsh1024 store [--profile <name>]  Install the 1024 Store plugin into DeepSeek Harness
   dsh1024 telemetry [status|enable|disable|reset]
 
 Examples:
