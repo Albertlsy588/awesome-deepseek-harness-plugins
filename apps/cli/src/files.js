@@ -130,7 +130,7 @@ async function removeStaleLock(lockDirectory) {
       return true
     } catch (error) {
       if (error?.code === 'ENOENT') return true
-      if (error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST') return false
+      if (isTransientRemovalError(error)) return false
       throw error
     }
   }
@@ -153,9 +153,18 @@ async function removeStaleLock(lockDirectory) {
     return true
   } catch (error) {
     if (error?.code === 'ENOENT') return true
-    if (error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST') return false
+    if (isTransientRemovalError(error)) return false
     throw error
   }
+}
+
+// Windows can transiently refuse to remove a directory whose entries were just
+// unlinked (open handles, antivirus scans). Treat those refusals like "lock is
+// still busy" instead of crashing; acquisition already handles leftover empty
+// lock directories via the stale-lock path.
+function isTransientRemovalError(error) {
+  return error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST'
+    || error?.code === 'EPERM' || error?.code === 'EBUSY'
 }
 
 async function ownerIsStale(ownerPath) {
@@ -190,10 +199,15 @@ async function releaseOwnedLock(lockDirectory, ownerPath) {
     if (error?.code === 'ENOENT') return
     throw error
   }
-  try {
-    await rmdir(lockDirectory)
-  } catch (error) {
-    if (error?.code !== 'ENOENT' && error?.code !== 'ENOTEMPTY' && error?.code !== 'EEXIST') throw error
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await rmdir(lockDirectory)
+      return
+    } catch (error) {
+      if (error?.code === 'ENOENT') return
+      if (!isTransientRemovalError(error)) throw error
+      await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)))
+    }
   }
 }
 
