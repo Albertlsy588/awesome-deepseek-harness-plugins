@@ -1619,6 +1619,87 @@ main {
   font-weight: 620;
 }
 
+/* Self-install banner: invites visitors to put the store itself inside
+   DeepSeek Harness. Reuses the hero panel's paper + grid backdrop; desktop
+   pairs copy with commands side by side, mobile stacks them. */
+.self-install-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
+  gap: 16px 32px;
+  align-items: center;
+  margin-bottom: 26px;
+  padding: 18px 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background-color: #f7f3ea;
+  background-image:
+    linear-gradient(rgba(53, 49, 40, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(53, 49, 40, 0.055) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.self-install-copy h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 740;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.self-install-copy p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.self-install-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 11px;
+  padding: 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 640;
+}
+
+.self-install-commands {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.self-install-recommended {
+  padding: 9px 10px 10px;
+  border: 0.5px solid var(--brand);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.self-install-recommended .install-option-badge {
+  margin-bottom: 7px;
+}
+
+.self-install-official .install-option-label {
+  margin-bottom: 5px;
+}
+
+@media (max-width: 860px) {
+  .self-install-banner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    padding: 16px 14px;
+  }
+}
+
 .split-install {
   display: inline-flex;
   align-items: stretch;

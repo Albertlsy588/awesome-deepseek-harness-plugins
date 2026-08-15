@@ -11,6 +11,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { LoadingState } from '../components/LoadingState'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { PackageRow } from '../components/PackageRow'
+import { SelfInstallBanner } from '../components/SelfInstallBanner'
 import {
   getCatalog,
   type CatalogResponse,
@@ -342,6 +343,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
       </section>
 
       <div className="page-container catalog-content">
+        <SelfInstallBanner />
 
         {view === 'catalog' && (
           <section className="category-section" aria-labelledby="categories-heading">
