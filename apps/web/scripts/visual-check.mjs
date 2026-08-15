@@ -130,6 +130,15 @@ try {
   if ((await desktop.locator('.directory-section .sort-segments button').count()) !== 3) {
     throw new Error('directory sort controls should only contain stars, newest, and active')
   }
+  if ((await desktop.locator('.self-install-banner').count()) !== 1) {
+    throw new Error('directory view is missing the self install banner')
+  }
+  if (!(await desktop.locator('.self-install-banner').textContent())?.includes('npx dsh1024 store')) {
+    throw new Error('directory self install banner is missing the npx dsh1024 store command')
+  }
+  if ((await desktop.locator('.directory-section .package-row .split-install-main').count()) === 0) {
+    throw new Error('directory rows are missing the split install button')
+  }
   await assertLiveStats(desktop)
   await assertSeo(desktop, 'desktop catalog', '/plugin')
   await assertNoHorizontalOverflow(desktop, 'desktop catalog')
@@ -176,11 +185,33 @@ try {
   if ((await rankings.locator('footer, .reset-button').count()) !== 0) {
     throw new Error('removed footer or refresh control is still rendered')
   }
+  if ((await rankings.locator('.self-install-banner').count()) !== 1) {
+    throw new Error('rankings view is missing the self install banner')
+  }
+  if (!(await rankings.locator('.self-install-banner').textContent())?.includes('npx dsh1024 store')) {
+    throw new Error('rankings self install banner is missing the npx dsh1024 store command')
+  }
   await assertSeo(rankings, 'desktop rankings', '/rankings')
   await rankings.locator('.ranking-section .segmented-control button').last().click()
   await rankings.locator('.ranking-section .package-row').first().waitFor()
   if ((await rankings.locator('.ranking-section .package-row').count()) !== 100) {
     throw new Error('GitHub activity rankings did not render the top 100 packages')
+  }
+  if ((await rankings.locator('.ranking-section .package-row .split-install-main').count()) === 0) {
+    throw new Error('ranking rows are missing the split install button')
+  }
+  await rankings.locator('.ranking-section .package-row .split-install-toggle').first().click()
+  await rankings.locator('.split-install-menu').waitFor()
+  if ((await rankings.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
+    throw new Error('split install menu does not expose exactly two command options')
+  }
+  const splitMenuText = await rankings.locator('.split-install-menu').textContent()
+  if (!splitMenuText?.includes('npx dsh1024 add ') || !splitMenuText.includes('dsh plugin --profile web add github:')) {
+    throw new Error('split install menu is missing the tracked or official install command')
+  }
+  await rankings.keyboard.press('Escape')
+  if ((await rankings.locator('.split-install-menu').count()) !== 0) {
+    throw new Error('split install menu did not close on Escape')
   }
   if ((await rankings.locator('a[href^="/plugin/"]').count()) === 0) {
     throw new Error('catalog cards do not use the canonical singular plugin path')
@@ -214,7 +245,8 @@ try {
     '.catalog-view-tabs a',
     '.category-filter button',
     '.segmented-control button',
-    '.package-row .icon-button',
+    '.package-row .split-install-main',
+    '.package-row .split-install-toggle',
     '.package-row .row-open',
   ])
   await assertMinFontSize(mobile, 'mobile search input', 'input[type="search"]', 16)
@@ -239,8 +271,19 @@ try {
   if ((await mobile.locator('.directory-section .package-row').count()) === 0) {
     throw new Error('search returned no package rows')
   }
-  await mobile.locator('.directory-section .package-row .icon-button').first().click()
-  await mobile.locator('.directory-section .package-row .icon-button[aria-label="已复制"]').waitFor()
+  await mobile.locator('.directory-section .package-row .split-install-main').first().click()
+  await mobile.locator('.directory-section .package-row .split-install-main[aria-label="已复制"]').waitFor()
+  await mobile.locator('.directory-section .package-row .split-install-toggle').first().click()
+  await mobile.locator('.split-install-menu').waitFor()
+  if ((await mobile.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
+    throw new Error('mobile split install menu does not expose exactly two command options')
+  }
+  await assertMinTouchTargets(mobile, 'mobile split install menu', ['.split-install-menu [role="menuitem"]'])
+  await assertNoHorizontalOverflow(mobile, 'mobile catalog with the install menu open')
+  await mobile.keyboard.press('Escape')
+  if ((await mobile.locator('.split-install-menu').count()) !== 0) {
+    throw new Error('mobile split install menu did not close on Escape')
+  }
   await mobile.locator('.catalog-hero .language-switch button').last().click()
   await mobile.waitForFunction(() => document.documentElement.lang === 'en')
   await assertNoHorizontalOverflow(mobile, 'English mobile catalog')
@@ -271,8 +314,15 @@ try {
   const detail = await openPage({ width: 1440, height: 1000 }, '/plugin/openma-ai/deepseek-harness-tui')
   await detail.locator('.detail-header').waitFor()
   await detail.locator('.install-activity-section').waitFor()
-  if (!(await detail.locator('.install-section .install-command code').first().textContent())?.includes('@dsh-1024store/cli')) {
-    throw new Error('detail page is missing the tracked wrapper CLI command')
+  const detailInstallCommands = await detail.locator('.install-section .install-command code:visible').allTextContents()
+  if (!detailInstallCommands.some((text) => text.includes('npx dsh1024 add '))) {
+    throw new Error('detail page is missing the tracked dsh1024 install command')
+  }
+  if (!detailInstallCommands.some((text) => text.includes('dsh plugin --profile web add github:'))) {
+    throw new Error('detail page is missing the official CLI install command')
+  }
+  if (detailInstallCommands.some((text) => text.includes('@dsh-1024store/cli'))) {
+    throw new Error('detail page still renders the legacy @dsh-1024store/cli command')
   }
   await assertSeo(detail, 'desktop detail', '/plugin/openma-ai/deepseek-harness-tui')
   await assertNoHorizontalOverflow(detail, 'desktop detail')
@@ -290,7 +340,7 @@ try {
     '.detail-utility .language-switch button',
     '.back-link',
     '.detail-actions .button',
-    '.install-command-prominent .icon-button',
+    '.install-options .icon-button',
     '.site-bottom-link a',
   ])
   await assertMinFontSize(scoped, 'mobile detail prose', '.detail-description', 15)
@@ -336,12 +386,25 @@ try {
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
     '.catalog-view-tabs a',
+    '.package-row .split-install-main',
+    '.package-row .split-install-toggle',
     '.package-row .row-open',
   ])
+  await compactMobile.locator('.ranking-section .package-row .split-install-toggle').first().click()
+  await compactMobile.locator('.split-install-menu').waitFor()
+  if ((await compactMobile.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
+    throw new Error('compact split install menu does not expose exactly two command options')
+  }
+  await assertMinTouchTargets(compactMobile, 'compact split install menu', ['.split-install-menu [role="menuitem"]'])
+  await assertNoHorizontalOverflow(compactMobile, 'compact mobile rankings with the install menu open')
+  await compactMobile.keyboard.press('Escape')
+  if ((await compactMobile.locator('.split-install-menu').count()) !== 0) {
+    throw new Error('compact split install menu did not close on Escape')
+  }
   await compactMobile.close()
 
   if (errors.length > 0) throw new Error(`browser errors:\n${errors.join('\n')}`)
-  console.log('Visual smoke check passed: desktop, touch-enabled 390px mobile, compact 320px mobile, search, copy actions, local scrollers, and package details.')
+  console.log('Visual smoke check passed: desktop, touch-enabled 390px mobile, compact 320px mobile, search, split install menus, self install banner, copy actions, local scrollers, and package details.')
 } finally {
   await desktopContext.close()
   await mobileContext.close()

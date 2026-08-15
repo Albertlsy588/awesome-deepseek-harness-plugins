@@ -2995,6 +2995,11 @@ main {
     min-height: 48px;
   }
 
+  .install-command:not(.install-command-prominent) .icon-button {
+    width: 44px;
+    min-height: 44px;
+  }
+
   .install-options {
     gap: 12px;
   }
