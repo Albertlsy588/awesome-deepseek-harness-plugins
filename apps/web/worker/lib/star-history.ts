@@ -4,8 +4,10 @@ const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 const HISTORY_RETENTION_MS = 45 * DAY_MS
 const BASELINE_TOLERANCE_MS = 2 * HOUR_MS
+const MIN_PARTIAL_BASELINE_AGE_MS = HOUR_MS
 const INSERT_ROWS_PER_STATEMENT = 25
 const REPOSITORIES_PER_LOOKUP = 80
+const EARLIEST_LOOKUPS_PER_BATCH = 50
 
 const WINDOWS = {
   growth24h: DAY_MS,
@@ -92,6 +94,44 @@ export async function recordStarSnapshots(
   }
 }
 
+async function loadEarliestSnapshots(
+  db: D1Database,
+  repositories: string[],
+): Promise<Map<string, SnapshotRow>> {
+  const earliest = new Map<string, SnapshotRow>()
+  for (const repositoryBatch of chunks(repositories, EARLIEST_LOOKUPS_PER_BATCH)) {
+    const statements = repositoryBatch.map((repository) => db.prepare(`
+      SELECT repository, bucket_hour, captured_at, star_count
+      FROM github_star_snapshots
+      WHERE repository = ?
+      ORDER BY bucket_hour ASC
+      LIMIT 1
+    `).bind(repository))
+    const results = await db.batch<SnapshotRow>(statements)
+    for (const result of results) {
+      const row = result.results?.[0]
+      if (row) earliest.set(row.repository.toLocaleLowerCase(), row)
+    }
+  }
+  return earliest
+}
+
+// A window falls back to the repository's earliest snapshot only while the
+// recorded history is shorter than the window itself; a gap around the target
+// inside otherwise-sufficient history stays null instead of overstating the
+// window. The baseline must also be at least an hour old so a repository that
+// was first snapshotted moments ago does not report a meaningless zero.
+function partialBaselineStars(
+  first: SnapshotRow | undefined,
+  target: number,
+  capturedAt: number,
+): number | null {
+  if (!first) return null
+  if (first.captured_at <= target + BASELINE_TOLERANCE_MS) return null
+  if (first.captured_at > capturedAt - MIN_PARTIAL_BASELINE_AGE_MS) return null
+  return first.star_count
+}
+
 export async function loadStarGrowth(
   db: D1Database,
   plugins: CatalogPlugin[],
@@ -148,14 +188,31 @@ export async function loadStarGrowth(
     }
   }
 
+  const needsFallback = repositories.filter((repository) => {
+    const repositoryCandidates = candidates.get(repository)
+    return (Object.keys(WINDOWS) as GrowthField[]).some(
+      (field) => !repositoryCandidates?.[field],
+    )
+  })
+  const earliest = needsFallback.length > 0
+    ? await loadEarliestSnapshots(db, needsFallback)
+    : new Map<string, SnapshotRow>()
+
   return new Map(
     repositories.map((repository) => {
       const stars = currentStars.get(repository) as number
       const baseline = candidates.get(repository)
+      const first = earliest.get(repository)
+      const growthFor = (field: GrowthField): number | null => {
+        const exact = baseline?.[field]
+        if (exact) return stars - exact.stars
+        const partial = partialBaselineStars(first, targets[field], capturedAt)
+        return partial === null ? null : stars - partial
+      }
       return [repository, {
-        growth24h: baseline?.growth24h ? stars - baseline.growth24h.stars : null,
-        growth7d: baseline?.growth7d ? stars - baseline.growth7d.stars : null,
-        growth30d: baseline?.growth30d ? stars - baseline.growth30d.stars : null,
+        growth24h: growthFor('growth24h'),
+        growth7d: growthFor('growth7d'),
+        growth30d: growthFor('growth30d'),
       }]
     }),
   )
