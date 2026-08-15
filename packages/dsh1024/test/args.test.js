@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseArgs, parseRepository, UsageError } from '../src/args.js'
+import { parseArgs, parseRepository, UsageError } from '../cli/args.js'
 
 test('parses add commands, default profile, and refs', () => {
   assert.deepEqual(parseArgs(['add', 'Owner/Plugin']), {

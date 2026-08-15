@@ -4,8 +4,8 @@ import { mkdir, mkdtemp, readFile, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { enqueueEvent, ensureTelemetryConfig, flushPending } from '../src/telemetry.js'
-import { EVENT_KEYS } from '../src/constants.js'
+import { enqueueEvent, ensureTelemetryConfig, flushPending } from '../cli/telemetry.js'
+import { EVENT_KEYS } from '../cli/constants.js'
 
 function event(eventId) {
   return Object.fromEntries(EVENT_KEYS.map((key) => [key, ({
@@ -50,8 +50,8 @@ function runChild(script, extraEnv) {
 
 test('preserves identity, events, and receipt counts across concurrent processes', async () => {
   const dshHome = await mkdtemp(join(tmpdir(), 'dsh-1024store-concurrency-'))
-  const telemetryModule = new URL('../src/telemetry.js', import.meta.url).href
-  const receiptsModule = new URL('../src/receipts.js', import.meta.url).href
+  const telemetryModule = new URL('../cli/telemetry.js', import.meta.url).href
+  const receiptsModule = new URL('../cli/receipts.js', import.meta.url).href
   const childScript = `
     const { enqueueEvent, ensureTelemetryConfig } = await import(process.env.DSH_TEST_TELEMETRY_MODULE)
     const { saveReceipt } = await import(process.env.DSH_TEST_RECEIPTS_MODULE)
@@ -144,7 +144,7 @@ test('recovers a half-created queue lock under concurrent takeover', async () =>
   await mkdir(abandonedLock)
   const staleTime = new Date(Date.now() - 10_000)
   await utimes(abandonedLock, staleTime, staleTime)
-  const telemetryModule = new URL('../src/telemetry.js', import.meta.url).href
+  const telemetryModule = new URL('../cli/telemetry.js', import.meta.url).href
   const childScript = `
     const { enqueueEvent } = await import(process.env.DSH_TEST_TELEMETRY_MODULE)
     const waitMs = Math.max(0, Number(process.env.DSH_TEST_START_AT) - Date.now())

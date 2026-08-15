@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import test from 'node:test'
-import { withFileLock } from '../src/files.js'
+import { withFileLock } from '../cli/files.js'
 
 test('does not enter an old generation after its empty lock directory is replaced', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-1024store-lock-generation-'))

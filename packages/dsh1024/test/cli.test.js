@@ -4,8 +4,8 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { main } from '../src/index.js'
-import { EVENT_KEYS } from '../src/constants.js'
+import { main } from '../cli/index.js'
+import { EVENT_KEYS } from '../cli/constants.js'
 
 function clock(start = '2026-08-15T01:00:00.000Z') {
   let value = new Date(start).getTime()

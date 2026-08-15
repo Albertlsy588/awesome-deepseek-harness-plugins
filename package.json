@@ -7,7 +7,6 @@
   "type": "module",
   "packageManager": "npm@11.16.0",
   "workspaces": [
-    "apps/cli",
     "apps/web",
     "packages/*"
   ],
@@ -21,7 +20,7 @@
     "test:submit-skill": "node --test scripts/submit-dsh-plugin-skill.test.mjs",
     "test:catalog-sync": "node --test scripts/sync-catalog.test.mjs",
     "test:readme-build": "node --test scripts/build-readme.test.mjs",
-    "test:cli": "npm test --workspace @dsh-1024store/cli",
+    "test:cli": "npm test --workspace dsh1024",
     "dev": "npm run dev --workspace @dsh-1024store/web",
     "build": "npm run build --workspace @dsh-1024store/web && npm run build --workspace dsh-1024store",
     "typecheck": "npm run typecheck --workspace @dsh-1024store/web && npm run typecheck --workspace dsh-1024store",
@@ -31,7 +30,7 @@
     "test:visual": "npm run test:visual --workspace @dsh-1024store/web",
     "cf-typegen": "npm run cf-typegen --workspace @dsh-1024store/web",
     "cf-typecheck": "npm run cf-typecheck --workspace @dsh-1024store/web",
-    "pack:cli": "npm run pack:check --workspace @dsh-1024store/cli",
+    "pack:cli": "npm run pack:check --workspace dsh1024",
     "db:migrate:local": "npm run db:migrate:local --workspace @dsh-1024store/web",
     "db:migrate:remote": "npm run db:migrate:remote --workspace @dsh-1024store/web",
     "predeploy": "npm run build",

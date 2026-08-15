@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { inspectInstallation } from '../src/profile.js'
+import { inspectInstallation } from '../cli/profile.js'
 
 const emptyState = {
   exists: false,
