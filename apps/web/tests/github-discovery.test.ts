@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createGitHubClient,
+  discoveryInternals,
   discoverRepositories,
   incrementalStart,
   inspectRepository,
@@ -33,13 +34,19 @@ function encodedJson(value: unknown): string {
 }
 
 describe('Cloudflare GitHub discovery', () => {
-  it('uses an overlap window and exhausts incremental search pages', async () => {
+  it('uses an overlap window and combines created and pushed incremental searches', async () => {
     expect(incrementalStart('2026-08-14T12:00:00Z')).toBe('2026-08-14T11:55:00Z')
-    const request = vi.fn(async (_path: string) => ({
-      total_count: 1,
-      incomplete_results: false,
-      items: [repository()],
-    }))
+    const request = vi.fn(async (path: string) => path.includes('created%3A')
+      ? {
+          total_count: 1,
+          incomplete_results: false,
+          items: [repository()],
+        }
+      : {
+          total_count: 2,
+          incomplete_results: false,
+          items: [repository(), repository({ id: 43, full_name: 'owner/second-plugin' })],
+        })
     const repositories = await discoverRepositories(
       { request } as unknown as ReturnType<typeof createGitHubClient>,
       'dsh-plugin',
@@ -48,9 +55,26 @@ describe('Cloudflare GitHub discovery', () => {
       '2026-08-14T12:30:00Z',
     )
 
-    expect(repositories.map((item) => item.id)).toEqual([42])
-    expect(request).toHaveBeenCalledOnce()
-    expect(request.mock.calls[0]?.[0]).toContain('updated%3A2026-08-14T11%3A55%3A00Z..2026-08-14T12%3A30%3A00Z')
+    expect(repositories.map((item) => item.id)).toEqual([42, 43])
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(request.mock.calls[0]?.[0]).toContain('created%3A2026-08-14T11%3A55%3A00Z..2026-08-14T12%3A30%3A00Z')
+    expect(request.mock.calls[1]?.[0]).toContain('pushed%3A2026-08-14T11%3A55%3A00Z..2026-08-14T12%3A30%3A00Z')
+    expect(request.mock.calls[0]?.[0]).toContain('sort=updated')
+    expect(request.mock.calls[1]?.[0]).toContain('sort=updated')
+    expect(request.mock.calls.flat().join(' ')).not.toContain('updated%3A')
+  })
+
+  it('forces one full discovery when the search strategy version changes', () => {
+    const watermark = '2026-08-14T12:00:00Z'
+    expect(discoveryInternals.selectMode(undefined, null, null)).toBe('full')
+    expect(discoveryInternals.selectMode(undefined, watermark, null)).toBe('full')
+    expect(discoveryInternals.selectMode(
+      undefined,
+      watermark,
+      discoveryInternals.strategyVersion,
+    )).toBe('incremental')
+    expect(discoveryInternals.selectMode('full', watermark, discoveryInternals.strategyVersion))
+      .toBe('full')
   })
 
   it('validates a nested monorepo package without downloading dependencies', async () => {

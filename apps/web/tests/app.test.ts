@@ -312,6 +312,21 @@ describe('market API', () => {
     expect(curatedSyncer).not.toHaveBeenCalled()
   })
 
+  it('fails closed when the configured catalog sync token is too short', async () => {
+    const { app, curatedSyncer } = syncApp()
+    const response = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({ source: 'github_ci', entries: [VALID_SYNC_ENTRY] }, 'short-token'),
+      {
+        CATALOG_DB: {},
+        CATALOG_SYNC_TOKEN: 'short-token',
+      } as unknown as Env,
+    )
+
+    expect(response.status).toBe(503)
+    expect(curatedSyncer).not.toHaveBeenCalled()
+  })
+
   it('validates the catalog sync payload', async () => {
     const { app, curatedSyncer } = syncApp()
 
@@ -348,6 +363,26 @@ describe('market API', () => {
       SYNC_ENV,
     )
     expect(extraField.status).toBe(400)
+
+    const nonGitHubRepository = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({
+        source: 'github_ci',
+        entries: [{ ...VALID_SYNC_ENTRY, repository: 'https://example.com/openma-ai/deepseek-harness-tui' }],
+      }),
+      SYNC_ENV,
+    )
+    expect(nonGitHubRepository.status).toBe(400)
+
+    const mismatchedRepository = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({
+        source: 'github_ci',
+        entries: [{ ...VALID_SYNC_ENTRY, repository: 'https://github.com/attacker/other-repository' }],
+      }),
+      SYNC_ENV,
+    )
+    expect(mismatchedRepository.status).toBe(400)
     expect(curatedSyncer).not.toHaveBeenCalled()
   })
 

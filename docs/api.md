@@ -78,9 +78,12 @@ Full-catalog reconciliation from GitHub CI — one of exactly two catalog write 
 other is the Worker's own cron topic scan).
 
 Authentication: `Authorization: Bearer <CATALOG_SYNC_TOKEN>` where the token is a Cloudflare
-Worker secret. Responses:
+Worker secret of at least 32 bytes. The endpoint is not a public submission API: anonymous and
+incorrectly authenticated callers cannot create or update catalog entries. Every accepted
+repository URL must be the canonical `https://github.com/<owner>/<repository>` URL matching the
+entry ID. Responses:
 
-- `503` when the secret is not configured on the Worker;
+- `503` when the secret is missing or too short on the Worker;
 - `401` when the token does not match (constant-time comparison);
 - `200 {"ok": true, "total": N, "removedSources": M}` on success.
 
