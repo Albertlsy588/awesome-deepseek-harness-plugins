@@ -26,7 +26,7 @@ import { CategoryTag } from '../components/CategoryTag'
 import { InstallCommand } from '../components/InstallCommand'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
-import { getPackage, repositoryName, trackedInstallCommand, type PackageDetail } from '../lib/api'
+import { getPackage, repositoryName, type PackageDetail } from '../lib/api'
 import { publicAsset } from '../lib/assets'
 import { formatDate, formatDateTime, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
@@ -252,12 +252,7 @@ export function PackagePage() {
         <div className="detail-primary">
           <section className="detail-section install-section" aria-labelledby="install-heading">
             <h2 id="install-heading">{t('install')}</h2>
-            <InstallCommand command={trackedInstallCommand(detail)} prominent />
-            <p className="install-telemetry-note">{t('installTelemetryNote')}</p>
-            <details className="official-install-fallback">
-              <summary>{t('officialInstallFallback')}</summary>
-              <InstallCommand command={detail.install} />
-            </details>
+            <InstallCommand command={detail.install} prominent />
           </section>
 
           <section className="detail-section install-activity-section" aria-labelledby="install-activity-heading">

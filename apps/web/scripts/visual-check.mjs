@@ -329,22 +329,18 @@ try {
   const detail = await openPage({ width: 1440, height: 1000 }, '/plugins/openma-ai/deepseek-harness-tui')
   await detail.locator('.detail-header').waitFor()
   await detail.locator('.install-activity-section').waitFor()
-  if (!(await detail.locator('.install-section .install-command code').first().textContent())?.includes('@dsh-1024store/cli')) {
-    throw new Error('detail page is missing the tracked wrapper CLI command')
-  }
-  // The collapsible fallback must show the OFFICIAL DeepSeek Harness CLI
-  // command, never the wrapper again (regression: registry install field was
-  // once overwritten with the wrapper command).
-  await detail.locator('.official-install-fallback summary').click()
-  const fallbackCommand = await detail
-    .locator('.official-install-fallback .install-command code')
+  // Only the OFFICIAL DeepSeek Harness CLI command is shown for now; the
+  // wrapper CLI must not appear anywhere on the page (regression: the
+  // registry install field was once overwritten with the wrapper command).
+  const installCommand = await detail
+    .locator('.install-section .install-command code')
     .first()
     .textContent()
-  if (!fallbackCommand?.trim().startsWith('dsh plugin --profile')) {
-    throw new Error(`official install fallback is not the official CLI command: ${fallbackCommand}`)
+  if (!installCommand?.trim().startsWith('dsh plugin --profile')) {
+    throw new Error(`detail install command is not the official CLI command: ${installCommand}`)
   }
-  if (fallbackCommand.includes('@dsh-1024store/cli')) {
-    throw new Error('official install fallback still shows the wrapper CLI command')
+  if ((await detail.locator('.detail-layout').textContent())?.includes('@dsh-1024store/cli')) {
+    throw new Error('detail page still shows the wrapper CLI command')
   }
   await assertSeo(detail, 'desktop detail', '/plugins/openma-ai/deepseek-harness-tui')
   await assertNoHorizontalOverflow(detail, 'desktop detail')

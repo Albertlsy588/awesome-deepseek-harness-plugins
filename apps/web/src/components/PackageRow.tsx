@@ -2,7 +2,7 @@ import { ArrowUpRight, CalendarDays, Download, Star, TrendingUp, Users } from 'l
 import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
-import { packagePath, trackedInstallCommand } from '../lib/api'
+import { packagePath } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { CategoryTag } from './CategoryTag'
@@ -140,7 +140,7 @@ export const PackageRow = memo(function PackageRow({
         )}
       </div>
 
-      {!ranking && <InstallCommand command={trackedInstallCommand(plugin)} compact />}
+      {!ranking && <InstallCommand command={plugin.install} compact />}
 
       <Link
         className="row-open"
