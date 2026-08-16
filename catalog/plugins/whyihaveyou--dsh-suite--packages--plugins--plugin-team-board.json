@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "whyihaveyou/dsh-suite/packages/plugins/plugin-team-board",
+  "name": "plugin-team-board",
+  "repository": "https://github.com/whyihaveyou/dsh-suite",
+  "category": "workflow",
+  "description": {
+    "en": "Shared multi-agent task board (create/claim/transition/query) over a Cordis service key.",
+    "zh": "基于 Cordis 服务键的多 Agent 共享任务看板：创建、认领、流转与查询。"
+  },
+  "added": "2026-08-16"
+}

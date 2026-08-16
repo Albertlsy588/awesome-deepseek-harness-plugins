@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "wsxwj123/dsh-plugins/packages/dsh-session-manager",
+  "name": "dsh-session-manager",
+  "repository": "https://github.com/wsxwj123/dsh-plugins",
+  "category": "session",
+  "description": {
+    "en": "Delete sessions with a 5-second undo and a recycle bin, plus an archive view to browse and unarchive, for the DSH Web GUI.",
+    "zh": "DSH Web GUI 会话管理：删除支持 5 秒撤销与回收站，归档视图可浏览与取消归档。"
+  },
+  "added": "2026-08-16"
+}

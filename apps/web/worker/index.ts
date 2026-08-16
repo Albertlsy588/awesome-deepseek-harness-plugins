@@ -30,7 +30,7 @@ function isFilteredCollection(url: URL): boolean {
 function canonicalTrailingSlashRedirect(url: URL): Response | null {
   const shouldRedirect = url.pathname === '/plugins/' ||
     url.pathname === '/rankings/' ||
-    /^\/plugins\/[^/]+\/[^/]+\/$/.test(url.pathname)
+    /^\/plugins\/[^/]+(?:\/[^/]+)+\/$/.test(url.pathname)
   if (!shouldRedirect) return null
   const canonical = new URL(url)
   canonical.pathname = canonical.pathname.slice(0, -1)

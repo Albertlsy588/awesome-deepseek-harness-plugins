@@ -90,13 +90,25 @@ function repositoryOf(url) {
   return match ? match[1] : null
 }
 
+function subPathOf(plugin) {
+  const segments = String(plugin.id || '').split('/')
+  return segments.length > 2 ? segments.slice(2).join('/') : ''
+}
+
 function installedName(plugin, installed) {
   if (installed[plugin.name] !== undefined) return plugin.name
   const repository = repositoryOf(plugin.url)
   if (repository === null) return null
   const needle = ('github:' + repository).toLowerCase()
+  // Monorepo siblings share a repository, so the spec's path: fragment is what
+  // distinguishes them.
+  const wantedPath = subPathOf(plugin).toLowerCase()
   for (const [name, spec] of Object.entries(installed)) {
-    if (String(spec).toLowerCase().includes(needle)) return name
+    const normalized = String(spec).toLowerCase()
+    if (!normalized.includes(needle)) continue
+    const match = /[#&]path:\/*([^&]*)/.exec(normalized)
+    const specPath = (match ? match[1] : '').replace(/\/+$/, '')
+    if (specPath === wantedPath) return name
   }
   return null
 }
@@ -190,7 +202,7 @@ function MarketTab({ locale }) {
     fetch('/dsh-1024store/' + kind, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(kind === 'install' ? { url: value.url } : { name: value }),
+      body: JSON.stringify(kind === 'install' ? { id: value.id } : { name: value }),
     })
       .then(responseJson)
       .then(({ status, body }) => {
@@ -246,7 +258,7 @@ function MarketTab({ locale }) {
     const categoryLabel = categoryLabels[plugin.category]?.[lang]
       || categoryLabels[plugin.category]?.en
       || plugin.category
-    return h('article', { className: 'dsm-card', key: plugin.url },
+    return h('article', { className: 'dsm-card', key: plugin.id },
       h('div', { className: 'dsm-card-head' },
         h('div', { className: 'dsm-avatar', style: { '--dsm-avatar': avatarColor(plugin.name) } },
           plugin.name.replace(/^dsh[-_]/i, '').charAt(0).toUpperCase() || 'P'),

@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "wsxwj123/dsh-plugins/packages/pet-bridge",
+  "name": "pet-bridge",
+  "repository": "https://github.com/wsxwj123/dsh-plugins",
+  "category": "notify",
+  "description": {
+    "en": "Bridge dsh session status to the cc-pet desktop pet bubble: thinking, tool calls, and completion in real time.",
+    "zh": "把 dsh 会话状态桥接到 cc-pet 桌宠气泡：实时显示思考、工具调用与完成状态。"
+  },
+  "added": "2026-08-16"
+}

@@ -51,7 +51,7 @@ export function normalizeRegistry(data) {
   return {
     updated: updatedDate(data.updated),
     plugins: data.plugins.map(plugin => {
-      assert(isObject(plugin) && typeof plugin.id === 'string' && /^[^/]+\/[^/]+$/.test(plugin.id), 'Registry plugins must carry an owner/repository id')
+      assert(isObject(plugin) && typeof plugin.id === 'string' && /^[^/]+\/[^/]+(\/[^/]+)*$/.test(plugin.id), 'Registry plugins must carry an owner/repository[/sub/dir] id')
       return normalizePlugin(plugin, plugin.id, Number.isInteger(plugin.stars) ? plugin.stars : null)
     }),
   }
@@ -169,10 +169,10 @@ ${generatedNotice.zh}
 网站优先提供开源包装 CLI；它会调用官方 DeepSeek Harness 插件命令、校验 profile 的真实安装结果，并把匿名安装结果可靠地上报到排行榜：
 
 \`\`\`bash
-npx @dsh-1024store/cli add <owner>/<repository> --profile web
+npx @dsh-1024store/cli add <owner>/<repository>[/<sub/dir>] --profile web
 \`\`\`
 
-仓库标识和 \`--profile\` 之外的参数会原样传给官方 CLI；参数可能与包装器冲突时可放到 \`--\` 后，例如 \`... -- --ignore-scripts --reporter append-only\`。透传参数不会写入遥测或本地 receipt。
+插件标识支持 monorepo 子目录形式（如 \`owner/repo/packages/foo\`），会以官方 \`github:owner/repo#path:packages/foo\` 安装 spec 传给官方 CLI。插件标识和 \`--profile\` 之外的参数会原样传给官方 CLI；参数可能与包装器冲突时可放到 \`--\` 后，例如 \`... -- --ignore-scripts --reporter append-only\`。透传参数不会写入遥测或本地 receipt。
 
 统计身份是保存在 \`$DSH_HOME/.dsh-1024store/\` 的随机安装实例 ID，不是实名用户或账号。CLI 不上传命令输出、路径、用户名、环境变量、会话内容或原始错误；可用 \`npx @dsh-1024store/cli telemetry disable\`、\`DO_NOT_TRACK=1\` 或 \`DSH_1024STORE_TELEMETRY=0\` 关闭。直接使用官方 \`dsh plugin\` 命令仍然可用，但不会计入 DSH 1024Store 安装统计。详细字段、口径、存储和部署方式见 [安装统计设计](docs/install-analytics.md)，CLI 源码见 [\`apps/cli\`](apps/cli)。
 
@@ -198,7 +198,7 @@ npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plug
 
 欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置，通过后自动合并，并由 CI 自动同步到网站与本 README。
 
-安装命令：\`npx @dsh-1024store/cli add <owner>/<repository> --profile web\`。
+安装命令：\`npx @dsh-1024store/cli add <owner>/<repository>[/<sub/dir>] --profile web\`。
 
 ## 项目定位
 
@@ -292,10 +292,10 @@ The **DSH 1024Store** community catalog for [DeepSeek Harness](https://github.co
 Install any plugin and count it on the leaderboard with:
 
 \`\`\`bash
-npx @dsh-1024store/cli add <owner>/<repository> --profile web
+npx @dsh-1024store/cli add <owner>/<repository>[/<sub/dir>] --profile web
 \`\`\`
 
-Merged submissions are synced to the website database and into this file automatically; no manual list editing is involved.
+Monorepo subpackage plugins use the subdirectory form (for example \`owner/repo/packages/foo\`), forwarded to the official CLI as the \`github:owner/repo#path:packages/foo\` install spec. Merged submissions are synced to the website database and into this file automatically; no manual list editing is involved.
 
 ## Categories
 

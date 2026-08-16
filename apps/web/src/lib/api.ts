@@ -1,6 +1,10 @@
+import { pluginDetailPath } from '../../worker/lib/plugin-id'
+
 export type Language = 'en' | 'zh'
 
 export interface RegistryPlugin {
+  /** Full plugin id: `owner/repository[/sub/dir]`. */
+  id: string
   name: string
   owner: string
   url: string
@@ -104,6 +108,8 @@ export interface PackageDetail extends Omit<RegistryPlugin, 'category'>, Install
     engines: Record<string, string> | null
   } | null
   readme: string | null
+  /** Directory the README came from, relative to the repository root. */
+  readmeBasePath?: string
   verification: {
     repositoryReachable: boolean
     bundleDeclared: boolean
@@ -136,15 +142,13 @@ export async function requestJson<T>(url: string, signal?: AbortSignal): Promise
   return (await response.json()) as T
 }
 
-export function getPackage(owner: string, name: string, signal?: AbortSignal): Promise<PackageDetail> {
-  return requestJson<PackageDetail>(
-    `${API_ORIGIN}/api/v1/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
-    signal,
-  )
+export function getPackage(id: string, signal?: AbortSignal): Promise<PackageDetail> {
+  const encoded = id.split('/').map(encodeURIComponent).join('/')
+  return requestJson<PackageDetail>(`${API_ORIGIN}/api/v1/plugins/${encoded}`, signal)
 }
 
-export function packagePath(plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>): string {
-  return `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
+export function packagePath(plugin: Pick<RegistryPlugin, 'id'>): string {
+  return pluginDetailPath(plugin.id)
 }
 
 export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): string {
@@ -156,10 +160,10 @@ export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): st
   }
 }
 
-export function trackedInstallCommand(
-  plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
-): string {
-  return `npx @dsh-1024store/cli add ${plugin.owner}/${repositoryName(plugin)} --profile web`
+export function trackedInstallCommand(plugin: Pick<RegistryPlugin, 'id'>): string {
+  // The full id (including any monorepo subdirectory) is what the wrapper CLI
+  // maps to the official `github:owner/repo#path:sub/dir` install spec.
+  return `npx @dsh-1024store/cli add ${plugin.id} --profile web`
 }
 
 export function githubAvatar(owner: string): string {

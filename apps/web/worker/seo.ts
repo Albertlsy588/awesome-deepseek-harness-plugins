@@ -1,4 +1,5 @@
-import { findPlugin, repositoryName } from './lib/catalog'
+import { findPluginById } from './lib/catalog'
+import { pluginDetailPath } from './lib/plugin-id'
 import type { RegistryPlugin, StoredCatalogSnapshot } from './types'
 
 export const SITE_ORIGIN = 'https://deepseek1024.com'
@@ -170,13 +171,17 @@ export function metadataForPath(
     }
   }
 
-  const match = pathname.match(/^\/plugins\/([^/]+)\/([^/]+)\/?$/)
+  // Any depth: a monorepo plugin's detail path carries its in-repo directory.
+  // Without this the page would be served as a 404 + noindex shell.
+  const match = pathname.match(/^\/plugins\/([^/]+(?:\/[^/]+)+)\/?$/)
   if (match) {
-    const owner = safeDecode(match[1] ?? '')
-    const repository = safeDecode(match[2] ?? '')
-    const plugin = owner && repository ? findPlugin(catalog.plugins, owner, repository) : undefined
+    const segments = (match[1] ?? '').split('/').map(safeDecode)
+    const requestedId = segments.every((segment) => segment !== null && segment.length > 0)
+      ? segments.join('/')
+      : ''
+    const plugin = requestedId ? findPluginById(catalog.plugins, requestedId) : undefined
     if (plugin) {
-      const canonicalPath = `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
+      const canonicalPath = pluginDetailPath(plugin.id)
       const canonical = absolute(canonicalPath)
       const title = fitText(`${plugin.name} DeepSeek Harness Plugin | DSH 1024Store`, 60)
       const description = fitText(
@@ -226,7 +231,7 @@ export function buildSitemap(catalog: SeoCatalog): string {
     { path: '/plugins', lastModified: catalog.updated },
     { path: '/docs/api', lastModified: catalog.updated },
     ...catalog.plugins.map((plugin) => ({
-      path: `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`,
+      path: pluginDetailPath(plugin.id),
       lastModified: plugin.added,
     })),
   ]

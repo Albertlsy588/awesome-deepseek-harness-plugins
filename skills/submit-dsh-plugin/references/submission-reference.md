@@ -23,26 +23,31 @@
 ## 元数据规则
 
 - 只能使用以下字段：`$schema`、`id`、`name`、`repository`、`category`、`description`、`added`。
-- 将 `repository` 固定为 `https://github.com/<id>`。
-- 根据全小写 owner 和 repository 生成文件名，把连续的非字母数字字符替换成 `-`：`<owner>--<repository>.json`。
+- `id` 为 `owner/repository`，monorepo 子包插件为 `owner/repository/sub/dir`：前两段之后的路径段指向仓库内子目录。各段仅限 `A-Za-z0-9_.-` 字符，路径段不得是 `.` 或 `..`，总长不超过 201 字符。
+- 唯一性按完整 `id`（不区分大小写）判断：同一仓库可以以不同子目录路径出现在多个条目中，重复的 `id` 必须拒绝。
+- 将 `repository` 固定为由 `id` 前两段推导的仓库根 URL `https://github.com/<owner>/<repository>`；子目录路径只出现在 `id` 中，绝不出现在 `repository` URL 里。
+- `name` 默认取 `id` 的最后一段（两段 ID 即仓库名，子目录 ID 即子包目录名）。
+- 根据完整 `id` 生成文件名：每个 `/` 分隔的段转为全小写、把连续的非字母数字字符替换成 `-`，再用 `--` 连接。示例：`owner/repository` → `<owner>--<repository>.json`；`owner/repository/packages/foo` → `owner--repository--packages--foo.json`。文件平铺在 `catalog/plugins/` 下。
+- 目录由 `id` 推导安装规格：两段 ID 安装为 `github:owner/repository`，子目录 ID 安装为 `github:owner/repository#path:sub/dir`，因此子目录 ID 的路径必须恰好指向声明 `dsh.bundle.patch` 的 `package.json` 所在目录。
 - 保持 `description.en` 和 `description.zh` 客观、中性且具体。
 - 避免最高级、号召性语言、排名、Star 数量以及仓库证据无法支持的宣传。
 - `added` 使用提交日期。
 
 ## PR 正文模板
 
-替换所有占位符，并填写真实的测试证据。
+替换所有占位符，并填写真实的测试证据。摘要里的链接文本使用完整插件 ID，链接目标始终是仓库根 URL。`子目录` 一行仅子目录 ID 保留（其值等于 ID 前两段之后的路径），两段 ID 删除该行；子目录 ID 的 `Manifest` 必须恰好是 `<sub/dir>/package.json`。
 
 自动审查失败时，PR 会保持打开以便继续推送修复；非草稿 PR 通过后会自动 squash merge，并由 GitHub 记录为已合并。
 
 ```markdown
 ## 摘要
 
-将 [`owner/repository`](https://github.com/owner/repository) 添加到 DeepSeek Harness 插件目录。
+将 [`<插件 ID>`](https://github.com/owner/repository) 添加到 DeepSeek Harness 插件目录。
 
 ## 插件验证
 
 - Manifest：`<path>/package.json`
+- 子目录：`<sub/dir>`（安装为 `github:owner/repository#path:sub/dir`；仅子目录 ID 保留本行）
 - Bundle patch：`<path/to/patch>`
 - 测试命令：`<实际执行的命令>`
 - 测试结果：`<简洁的真实结果>`

@@ -16,6 +16,7 @@ export interface TestRegistry {
 
 const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
   {
+    id: 'openma-ai/deepseek-harness-tui',
     name: 'deepseek-harness-tui',
     owner: 'openma-ai',
     url: 'https://github.com/openma-ai/deepseek-harness-tui',
@@ -28,6 +29,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
     added: '2026-08-14',
   },
   {
+    id: 'Jesse-njx/dsh-crosstalk',
     name: 'dsh-crosstalk',
     owner: 'Jesse-njx',
     url: 'https://github.com/Jesse-njx/dsh-crosstalk',
@@ -40,6 +42,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
     added: '2026-08-14',
   },
   {
+    id: 'MAXeaglet/dsh-bash-terminal',
     name: 'dsh-bash-terminal',
     owner: 'MAXeaglet',
     url: 'https://github.com/MAXeaglet/dsh-bash-terminal',
@@ -52,6 +55,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
     added: '2026-08-14',
   },
   {
+    id: 'NanmiCoder/dsh-agent-teams',
     name: 'dsh-agent-teams',
     owner: 'NanmiCoder',
     url: 'https://github.com/NanmiCoder/dsh-agent-teams',
@@ -64,6 +68,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
     added: '2026-08-13',
   },
   {
+    id: 'omdsh-dev/dsh-notification',
     name: 'dsh-notification',
     owner: 'omdsh-dev',
     url: 'https://github.com/omdsh-dev/dsh-notification',
@@ -76,6 +81,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
     added: '2026-08-13',
   },
   {
+    id: 'omdsh-dev/fabric',
     name: 'fabric',
     owner: 'omdsh-dev',
     url: 'https://github.com/omdsh-dev/fabric',
@@ -88,6 +94,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
     added: '2026-08-13',
   },
   {
+    id: 'omdsh-dev/dsh-gomoku',
     name: 'dsh-gomoku',
     owner: 'omdsh-dev',
     url: 'https://github.com/omdsh-dev/dsh-gomoku',
@@ -98,6 +105,36 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
     },
     install: 'dsh plugin --profile web add github:omdsh-dev/dsh-gomoku',
     added: '2026-08-13',
+  },
+  // A monorepo subpackage: its url is the repository root, its id carries the
+  // in-repo path, and its install spec gains `#path:`.
+  {
+    id: 'omdsh-dev/dsh-suite/packages/dsh-inspector',
+    name: 'dsh-inspector',
+    owner: 'omdsh-dev',
+    url: 'https://github.com/omdsh-dev/dsh-suite',
+    category: 'tools',
+    description: {
+      en: 'Inspector panel shipped as one package of a plugin monorepo.',
+      zh: '以 monorepo 子包形式发布的检查器面板。',
+    },
+    install: 'dsh plugin --profile web add github:omdsh-dev/dsh-suite#path:packages/dsh-inspector',
+    added: '2026-08-16',
+  },
+  // Its sibling in the same repository: shares repository facts, keeps its own
+  // identity, install spec, and install metrics.
+  {
+    id: 'omdsh-dev/dsh-suite/packages/dsh-timeline',
+    name: 'dsh-timeline',
+    owner: 'omdsh-dev',
+    url: 'https://github.com/omdsh-dev/dsh-suite',
+    category: 'tools',
+    description: {
+      en: 'Timeline panel shipped as one package of a plugin monorepo.',
+      zh: '以 monorepo 子包形式发布的时间线面板。',
+    },
+    install: 'dsh plugin --profile web add github:omdsh-dev/dsh-suite#path:packages/dsh-timeline',
+    added: '2026-08-16',
   },
 ]
 
@@ -117,7 +154,9 @@ export const TEST_REGISTRY: TestRegistry = {
   plugins: TEST_REGISTRY_PLUGINS,
 }
 
-const STAR_COUNTS = [42, 120, null, 18, 7, 3, 1]
+// The last two entries are monorepo siblings of one repository: they share the
+// repository-level star count and keep their own install metrics.
+const STAR_COUNTS = [42, 120, null, 18, 7, 3, 1, 9, 9]
 const STAR_GROWTH = [
   { growth24h: 3, growth7d: 12, growth30d: 30 },
   { growth24h: 2, growth7d: 8, growth30d: 45 },
@@ -126,12 +165,14 @@ const STAR_GROWTH = [
   { growth24h: 0, growth7d: 1, growth30d: 4 },
   { growth24h: -1, growth7d: 0, growth30d: 1 },
   { growth24h: 1, growth7d: 2, growth30d: 2 },
+  { growth24h: 2, growth7d: 5, growth30d: 10 },
+  { growth24h: 2, growth7d: 5, growth30d: 10 },
 ]
 
-const INSTALL_COUNTS = [42, 80, 0, 45, 7, 3, 1]
-const INSTALLS_24H = [3, 2, 0, 8, 0, 0, 1]
-const INSTALLS_7D = [12, 8, 0, 20, 1, 0, 2]
-const INSTALLS_30D = [30, 45, 0, 25, 4, 1, 2]
+const INSTALL_COUNTS = [42, 80, 0, 45, 7, 3, 1, 5, 4]
+const INSTALLS_24H = [3, 2, 0, 8, 0, 0, 1, 0, 0]
+const INSTALLS_7D = [12, 8, 0, 20, 1, 0, 2, 1, 1]
+const INSTALLS_30D = [30, 45, 0, 25, 4, 1, 2, 2, 2]
 
 export const TEST_PLUGINS: CatalogPlugin[] = TEST_REGISTRY.plugins.map((plugin, index) => ({
   ...plugin,

@@ -490,7 +490,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
               <div className={`package-list ranking-list${refreshing ? ' is-refreshing' : ''}`}>
                 {ranking.map((plugin, index) => (
                   <PackageRow
-                    key={`${rankingMode}-${plugin.owner}/${plugin.repository}`}
+                    key={`${rankingMode}-${plugin.id}`}
                     plugin={plugin}
                     category={categoryMap.get(plugin.category)}
                     index={index}
@@ -556,7 +556,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 <div className={`package-list${refreshing ? ' is-refreshing' : ''}`} aria-live="polite">
                   {visiblePackages.map((plugin, index) => (
                     <PackageRow
-                      key={`${plugin.owner}/${plugin.repository}`}
+                      key={plugin.id}
                       plugin={plugin}
                       category={categoryMap.get(plugin.category)}
                       index={index}

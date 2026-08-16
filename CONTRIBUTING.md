@@ -2,17 +2,17 @@
 
 ## Add a plugin
 
-Catalog entries are maintained as one JSON file per repository in `catalog/plugins/`. Every community pull request must add exactly one new source entry and contain no unrelated changes. Updates, removals, workflow changes, and application changes are maintainer operations and use the repository's explicit emergency bypass path.
+Catalog entries are maintained as one JSON file per plugin in `catalog/plugins/`. A plugin is identified by its `id`: either `owner/repository` for a repository-level plugin, or `owner/repository/sub/dir` for a monorepo subpackage, so one repository may contribute several entries as long as every `id` is unique. Every community pull request must add exactly one new source entry and contain no unrelated changes. Updates, removals, workflow changes, and application changes are maintainer operations and use the repository's explicit emergency bypass path.
 
-1. Confirm a `package.json` in the repository declares a non-empty `dsh.bundle.patch` and that the referenced patch file is committed. Monorepo subpackages are supported.
+1. Confirm the plugin's `package.json` declares a non-empty `dsh.bundle.patch` and that the referenced patch file is committed. For a repository-level `id` the manifest may live at the root or in any nested directory; for a subdirectory `id` the manifest must be located exactly at `<sub/dir>/package.json`, because the id's path becomes the `github:owner/repository#path:sub/dir` install spec.
 2. Test the plugin yourself. Catalog review does not install, build, or execute third-party code; authors remain responsible for runtime compatibility.
 3. Add the `dsh-plugin` GitHub topic so tokenless metric discovery can find it.
-4. Copy an existing plugin JSON file and name it `<owner>--<repository>.json` in lowercase, with non-alphanumeric runs converted to `-`.
+4. Copy an existing plugin JSON file and name it after the id: each `/`-separated id segment is lowercased with non-alphanumeric runs converted to `-`, and the segments are joined with `--`, e.g. `owner/repository` → `owner--repository.json` and `owner/repository/packages/foo` → `owner--repository--packages--foo.json`. Files stay flat in `catalog/plugins/`.
 5. Keep both descriptions factual, neutral, and specific. Avoid superlatives, calls to action, and unsupported claims.
 6. Set `added` to the submission date.
 7. Commit only that one new `catalog/plugins/*.json` file. Do not change README files, workflows, application code, or any other path in the same pull request. `README.md` and `catalog/README.md` are bot-generated projections and are refreshed automatically.
 
-Example:
+Example (repository-level plugin):
 
 ```json
 {
@@ -29,9 +29,26 @@ Example:
 }
 ```
 
-The catalog derives `owner` and the install command from `id`, which prevents duplicated fields from drifting.
+Example (monorepo subpackage): the `id` carries the in-repo path, `repository` stays the repository-root URL, and `name` conventionally uses the subpackage name (the last id segment by default):
 
-Every pull request receives one deliberately narrow static gate. The workflow rejects any change other than one new source entry, validates its exact fields, filename, category, descriptions, and date, then reads the target repository through the GitHub API. It finds a root or nested `package.json` with `dsh.bundle.patch` and confirms that the patch path exists in the same revision. It does not install dependencies, run lifecycle scripts, parse the patch, build the project, or assess plugin behavior.
+```json
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "owner/repository/packages/foo",
+  "name": "foo",
+  "repository": "https://github.com/owner/repository",
+  "category": "tools",
+  "description": {
+    "en": "A concise English description.",
+    "zh": "简洁、客观的中文说明。"
+  },
+  "added": "2026-08-16"
+}
+```
+
+The catalog derives `owner` and the install command from `id`, which prevents duplicated fields from drifting: a two-segment id installs as `github:owner/repository`, and a subdirectory id installs as `github:owner/repository#path:sub/dir`. Id path segments may not be `.` or `..`.
+
+Every pull request receives one deliberately narrow static gate. The workflow rejects any change other than one new source entry, validates its exact fields, filename, category, descriptions, and date, then reads the target repository through the GitHub API. For a two-segment id it finds a root or nested `package.json` with `dsh.bundle.patch`; for a subdirectory id it requires that manifest exactly at the id's path. In both cases it confirms that the patch path exists in the same revision. It does not install dependencies, run lifecycle scripts, parse the patch, build the project, or assess plugin behavior.
 
 The trusted workflow comments on the pull request with the exact failure reason. A failed review leaves the pull request open so the author can push a correction. A non-draft pull request that passes `Plugin submission review / static-review` is squash-merged automatically; GitHub then records it as merged (and therefore no longer open). Draft pull requests are validated but remain open until marked ready for review.
 

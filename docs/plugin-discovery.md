@@ -13,11 +13,18 @@ GitHub topic search ──> repository validation ──────> D1 catalog
 checked-in PR catalog ──> CI POST /api/v1/catalog/sync ─┘
 ```
 
-D1 keeps repository facts and source attribution separate. A GitHub numeric repository ID is
-the stable identity across renames; normalized `owner/repository` is a second unique key that
-deduplicates PR entries before their numeric ID is known. If both sources contain a repository,
-GitHub owns repository facts and PR metadata owns the display name, category, bilingual
-descriptions, and added date.
+D1 layers plugin-level identity over repository-level facts. Repository rows carry GitHub
+facts: a GitHub numeric repository ID is the stable identity across renames, and the
+normalized `owner/repository` key deduplicates rows before their numeric ID is known.
+Plugin entries are keyed by the normalized full plugin id — `owner/repository`, or
+`owner/repository/sub/dir` for a monorepo subpackage — and reference their repository row,
+so one repository may host several plugin entries. If both sources cover the same plugin id
+(a topic-scanned repository whose accepted manifest directory matches a curated entry's
+path), GitHub owns repository facts and PR metadata owns the display name, category,
+bilingual descriptions, and added date; curated subdirectory entries with other paths
+coexist as separate plugins of the same repository. Repository-level metrics (stars, forks,
+growth, star history) are shared by all plugins of a repository, while install metrics are
+keyed by full plugin id.
 
 Topic-only repositories are published after static validation and use the `unclassified`
 category until curated metadata is added. PR-only repositories remain published, so losing a
@@ -110,6 +117,11 @@ npm test
 npm run db:migrate:remote
 npm run deploy
 ```
+
+Migrating first is required, not merely recommended, for
+`0005_catalog_plugin_paths.sql`: it rebuilds `catalog_metadata` as one row per plugin, and a
+Worker deployed against the pre-0005 shape writes curated metadata through a statement whose
+`ON CONFLICT` target no longer exists.
 
 `GITHUB_TOKEN` must be a Cloudflare Worker secret, never a Wrangler plaintext variable or a
 committed `.dev.vars` value. Check Cron invocations and D1 row metrics in the Cloudflare

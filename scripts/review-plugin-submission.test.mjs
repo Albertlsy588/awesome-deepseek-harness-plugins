@@ -114,6 +114,53 @@ test('validates the submitted catalog entry', () => {
   )
 })
 
+test('validates a subdirectory catalog entry against the extended contract', () => {
+  const entry = {
+    $schema: '../schema/plugin.schema.json',
+    id: 'owner/monorepo/packages/foo',
+    name: 'foo',
+    repository: 'https://github.com/owner/monorepo',
+    category: 'tools',
+    description: { en: 'A monorepo subpackage plugin.', zh: '一个 monorepo 子包插件。' },
+    added: '2026-08-16',
+  }
+  assert.equal(
+    validateCatalogEntry(entry, 'catalog/plugins/owner--monorepo--packages--foo.json', new Set(['tools'])),
+    entry,
+  )
+  assert.throws(
+    () => validateCatalogEntry(entry, 'catalog/plugins/owner--monorepo.json', new Set(['tools'])),
+    /should be named owner--monorepo--packages--foo\.json/,
+  )
+  assert.throws(
+    () => validateCatalogEntry(
+      { ...entry, repository: 'https://github.com/owner/monorepo/packages/foo' },
+      'catalog/plugins/owner--monorepo--packages--foo.json',
+      new Set(['tools']),
+    ),
+    /repository must be https:\/\/github\.com\/owner\/monorepo/,
+  )
+})
+
+test('rejects traversal and empty segments in subdirectory ids', () => {
+  const entry = {
+    $schema: '../schema/plugin.schema.json',
+    id: 'owner/monorepo/../secret',
+    name: 'foo',
+    repository: 'https://github.com/owner/monorepo',
+    category: 'tools',
+    description: { en: 'A plugin.', zh: '插件。' },
+    added: '2026-08-16',
+  }
+  for (const id of ['owner/monorepo/../secret', 'owner/monorepo/./foo', 'owner/monorepo//foo', 'owner/monorepo/packages/']) {
+    assert.throws(
+      () => validateCatalogEntry({ ...entry, id }, 'catalog/plugins/whatever.json', new Set(['tools'])),
+      /has an invalid id/,
+      id,
+    )
+  }
+})
+
 test('reads only regular catalog entry files', async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'plugin-review-entry-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
@@ -214,6 +261,73 @@ test('accepts a bundle declared by a monorepo subpackage', async () => {
     packagePath: 'packages/plugin/package.json',
     patchPath: 'packages/plugin/config/cordis.patch.yml',
   })
+})
+
+test('pins a subdirectory id to the manifest at exactly that path', async () => {
+  const tree = [
+    { path: 'package.json', type: 'blob', sha: 'root' },
+    { path: 'packages/foo/package.json', type: 'blob', sha: 'foo' },
+    { path: 'packages/foo/cordis.patch.yml', type: 'blob', sha: 'foo-patch' },
+    { path: 'packages/bar/package.json', type: 'blob', sha: 'bar' },
+    { path: 'packages/bar/cordis.patch.yml', type: 'blob', sha: 'bar-patch' },
+  ]
+  const blobs = new Map([
+    ['root', blob({ private: true })],
+    ['foo', blob({ dsh: { bundle: { patch: './cordis.patch.yml' } } })],
+    ['bar', blob({ dsh: { bundle: { patch: './cordis.patch.yml' } } })],
+  ])
+  const result = await findHarnessBundle(tree, async sha => blobs.get(sha), 'packages/foo')
+  assert.deepEqual(result, {
+    packagePath: 'packages/foo/package.json',
+    patchPath: 'packages/foo/cordis.patch.yml',
+  })
+})
+
+test('rejects a subdirectory id whose path has no package.json even when other bundles exist', async () => {
+  const tree = [
+    { path: 'packages/bar/package.json', type: 'blob', sha: 'bar' },
+    { path: 'packages/bar/cordis.patch.yml', type: 'blob', sha: 'bar-patch' },
+  ]
+  const blobs = new Map([['bar', blob({ dsh: { bundle: { patch: './cordis.patch.yml' } } })]])
+  await assert.rejects(
+    findHarnessBundle(tree, async sha => blobs.get(sha), 'packages/foo'),
+    /Repository has no packages\/foo\/package\.json[\s\S]*packages\/bar\/package\.json/,
+  )
+})
+
+test('rejects a subdirectory manifest without dsh.bundle.patch', async () => {
+  const tree = [
+    { path: 'packages/foo/package.json', type: 'blob', sha: 'foo' },
+  ]
+  const blobs = new Map([['foo', blob({ name: 'foo' })]])
+  await assert.rejects(
+    findHarnessBundle(tree, async sha => blobs.get(sha), 'packages/foo'),
+    /packages\/foo\/package\.json does not declare dsh\.bundle\.patch/,
+  )
+})
+
+test('reviews a subdirectory entry against its pinned manifest path', async () => {
+  const tree = [
+    { path: 'package.json', type: 'blob', sha: 'root' },
+    { path: 'packages/foo/package.json', type: 'blob', sha: 'foo' },
+    { path: 'packages/foo/cordis.patch.yml', type: 'blob', sha: 'patch' },
+  ]
+  const client = repositoryClient(tree, new Map([
+    ['root', blob({ private: true })],
+    ['foo', blob({ dsh: { bundle: { patch: './cordis.patch.yml' } } })],
+  ]))
+  const result = await reviewRepository({
+    id: 'owner/plugin/packages/foo',
+    repository: 'https://github.com/owner/plugin',
+  }, client)
+  assert.equal(result.packagePath, 'packages/foo/package.json')
+  await assert.rejects(
+    reviewRepository({
+      id: 'owner/plugin/packages/foo',
+      repository: 'https://github.com/owner/plugin/packages/foo',
+    }, client),
+    /repository must be https:\/\/github\.com\/owner\/plugin/,
+  )
 })
 
 test('rejects a repository without dsh.bundle.patch', async () => {

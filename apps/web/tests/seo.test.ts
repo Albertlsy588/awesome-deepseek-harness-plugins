@@ -45,10 +45,14 @@ describe('SEO metadata', () => {
     expect(sitemap).toContain('<loc>https://deepseek1024.com/docs/api</loc>')
     expect(sitemap).not.toContain('<loc>https://deepseek1024.com/rankings</loc>')
     for (const plugin of TEST_PLUGINS) {
-      expect(sitemap).toContain(`/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(plugin.repository)}</loc>`)
+      // Subdirectory ids keep their path segments; each is encoded separately.
+      const path = plugin.id.split('/').map(encodeURIComponent).join('/')
+      expect(sitemap).toContain(`/plugins/${path}</loc>`)
     }
     expect(sitemap).not.toContain('<loc>https://deepseek1024.com/plugin</loc>')
-    expect(sitemap).not.toContain('/packages/')
+    // The legacy detail route, not the literal segment: a monorepo plugin id
+    // legitimately contains a `packages/` directory.
+    expect(sitemap).not.toContain('https://deepseek1024.com/packages/')
     expect(buildRobotsTxt()).toContain('Disallow: /api/')
   })
 })

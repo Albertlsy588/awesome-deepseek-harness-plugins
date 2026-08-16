@@ -116,14 +116,71 @@ describe('D1 catalog deduplication', () => {
     expect(calls[2]?.sql).toContain('catalog_repository_sources')
   })
 
+  // Runs against real SQLite (not the mock above), because the identity-merge
+  // branch writes catalog_metadata and its SQL must match the migrated schema.
+  it('merges a renamed repository onto the curated row and rebuilds its plugin ids', async () => {
+    const database = catalogDatabase()
+    const now = '2026-08-16T00:00:00.000Z'
+    // The topic scan discovered Owner/old-name; a curated submission has since
+    // created a separate row for the post-rename Owner/new-name, carrying two
+    // subpackage plugins.
+    database.exec(`
+      INSERT INTO catalog_repositories (
+        github_id, full_name, normalized_full_name, owner, repository_name, html_url,
+        validation_status, topic_present, first_seen_at, last_seen_at, created_at, updated_at
+      ) VALUES
+        (42, 'Owner/old-name', 'owner/old-name', 'Owner', 'old-name',
+         'https://github.com/Owner/old-name', 'accepted', 1, '${now}', '${now}', '${now}', '${now}'),
+        (NULL, 'Owner/new-name', 'owner/new-name', 'Owner', 'new-name',
+         'https://github.com/Owner/new-name', 'pending', 0, '${now}', '${now}', '${now}', '${now}');
+      INSERT INTO catalog_repository_sources (
+        repository_id, source, source_reference, first_seen_at, last_seen_at
+      ) VALUES (1, 'github_topic', 'dsh-plugin', '${now}', '${now}');
+      INSERT INTO catalog_metadata (
+        repository_id, plugin_path, plugin_id, normalized_plugin_id,
+        display_name, category, description_en, description_zh, added, source, updated_at
+      ) VALUES
+        (1, 'packages/foo', 'Owner/old-name/packages/foo', 'owner/old-name/packages/foo',
+         'foo', 'tools', 'English', '中文', '2026-08-15', 'github_pr', '${now}'),
+        (1, 'packages/bar', 'Owner/old-name/packages/bar', 'owner/old-name/packages/bar',
+         'bar', 'tools', 'English', '中文', '2026-08-15', 'github_pr', '${now}');
+    `)
+
+    await upsertDiscoveredRepositories(
+      sqliteD1(database),
+      [{ ...repository(), full_name: 'Owner/new-name', name: 'new-name' }],
+      'run-1',
+      now,
+    )
+
+    // The stale row is gone and its plugins moved over with ids rebuilt around
+    // the new repository name.
+    expect(database.prepare(
+      'SELECT normalized_full_name FROM catalog_repositories ORDER BY normalized_full_name',
+    ).all()).toEqual([{ normalized_full_name: 'owner/new-name' }])
+    expect(database.prepare(
+      'SELECT plugin_id, normalized_plugin_id FROM catalog_metadata ORDER BY plugin_path',
+    ).all()).toEqual([
+      {
+        plugin_id: 'Owner/new-name/packages/bar',
+        normalized_plugin_id: 'owner/new-name/packages/bar',
+      },
+      {
+        plugin_id: 'Owner/new-name/packages/foo',
+        normalized_plugin_id: 'owner/new-name/packages/foo',
+      },
+    ])
+    database.close()
+  })
 })
 
 function catalogDatabase(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
-  database.exec(readFileSync(
-    new URL('../migrations/0002_plugin_catalog.sql', import.meta.url),
-    'utf8',
-  ))
+  // Applied in order, so the tests run against the migrated production shape
+  // rather than the original one.
+  for (const migration of ['0002_plugin_catalog.sql', '0005_catalog_plugin_paths.sql']) {
+    database.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'))
+  }
   return database
 }
 
@@ -178,6 +235,104 @@ describe('curated catalog reconciliation', () => {
     database.close()
   })
 
+  it('stores several subpackage plugins of one repository against a single repository row', async () => {
+    const database = catalogDatabase()
+    const now = '2026-08-15T01:00:00.000Z'
+
+    const result = await syncCuratedEntries(sqliteD1(database), [
+      curatedEntry({
+        id: 'Owner/monorepo/packages/foo',
+        name: 'foo',
+        repository: 'https://github.com/Owner/monorepo',
+      }),
+      curatedEntry({
+        id: 'Owner/monorepo/packages/bar',
+        name: 'bar',
+        repository: 'https://github.com/Owner/monorepo',
+      }),
+    ], now)
+
+    expect(result).toEqual({ total: 2, removedSources: 0 })
+    expect(database.prepare('SELECT COUNT(*) AS count FROM catalog_repositories').get())
+      .toEqual({ count: 1 })
+    expect(database.prepare('SELECT COUNT(*) AS count FROM catalog_repository_sources').get())
+      .toEqual({ count: 1 })
+    expect(database.prepare(`
+      SELECT plugin_path, plugin_id, normalized_plugin_id, display_name
+      FROM catalog_metadata ORDER BY plugin_path
+    `).all()).toEqual([
+      {
+        plugin_path: 'packages/bar',
+        plugin_id: 'Owner/monorepo/packages/bar',
+        normalized_plugin_id: 'owner/monorepo/packages/bar',
+        display_name: 'bar',
+      },
+      {
+        plugin_path: 'packages/foo',
+        plugin_id: 'Owner/monorepo/packages/foo',
+        normalized_plugin_id: 'owner/monorepo/packages/foo',
+        display_name: 'foo',
+      },
+    ])
+    database.close()
+  })
+
+  it('reconciles a dropped subpackage without evicting its surviving sibling', async () => {
+    const database = catalogDatabase()
+    const db = sqliteD1(database)
+    const foo = curatedEntry({
+      id: 'Owner/monorepo/packages/foo',
+      name: 'foo',
+      repository: 'https://github.com/Owner/monorepo',
+    })
+    const bar = curatedEntry({
+      id: 'Owner/monorepo/packages/bar',
+      name: 'bar',
+      repository: 'https://github.com/Owner/monorepo',
+    })
+
+    await syncCuratedEntries(db, [foo, bar], '2026-08-15T01:00:00.000Z')
+    const result = await syncCuratedEntries(db, [foo], '2026-08-15T02:00:00.000Z')
+
+    // The repository keeps its github_pr source because one plugin survives.
+    expect(result).toEqual({ total: 1, removedSources: 0 })
+    expect(database.prepare('SELECT plugin_id FROM catalog_metadata').all())
+      .toEqual([{ plugin_id: 'Owner/monorepo/packages/foo' }])
+    expect(database.prepare('SELECT COUNT(*) AS count FROM catalog_repository_sources').get())
+      .toEqual({ count: 1 })
+
+    // Dropping the last plugin of the repository retires its curation marker.
+    const emptied = await syncCuratedEntries(db, [curatedEntry()], '2026-08-15T03:00:00.000Z')
+    expect(emptied.removedSources).toBe(1)
+    expect(database.prepare(`
+      SELECT COUNT(*) AS count FROM catalog_metadata
+       WHERE normalized_plugin_id LIKE 'owner/monorepo%'
+    `).get()).toEqual({ count: 0 })
+    database.close()
+  })
+
+  it('re-cases a plugin path without tripping the case-insensitive id index', async () => {
+    const database = catalogDatabase()
+    const db = sqliteD1(database)
+
+    await syncCuratedEntries(db, [curatedEntry({
+      id: 'Owner/monorepo/packages/DshUi',
+      name: 'DshUi',
+      repository: 'https://github.com/Owner/monorepo',
+    })], '2026-08-15T01:00:00.000Z')
+    // Correcting the path's case keeps the same normalized id, so the stale row
+    // has to go before the new one lands.
+    await syncCuratedEntries(db, [curatedEntry({
+      id: 'Owner/monorepo/packages/dsh-ui',
+      name: 'dsh-ui',
+      repository: 'https://github.com/Owner/monorepo',
+    })], '2026-08-15T02:00:00.000Z')
+
+    expect(database.prepare('SELECT plugin_path, plugin_id FROM catalog_metadata').all())
+      .toEqual([{ plugin_path: 'packages/dsh-ui', plugin_id: 'Owner/monorepo/packages/dsh-ui' }])
+    database.close()
+  })
+
   it('is idempotent and applies metadata updates without a revision gate', async () => {
     const database = catalogDatabase()
     const db = sqliteD1(database)
@@ -216,9 +371,11 @@ describe('curated catalog reconciliation', () => {
         (1, 'github_topic', 'dsh-plugin', '${now}', '${now}'),
         (2, 'github_topic', 'dsh-plugin', '${now}', '${now}');
       INSERT INTO catalog_metadata (
-        repository_id, display_name, category, description_en, description_zh,
+        repository_id, plugin_path, plugin_id, normalized_plugin_id,
+        display_name, category, description_en, description_zh,
         added, source, updated_at
-      ) VALUES (1, 'retired-plugin', 'tools', 'English', '中文', '2026-08-15', 'github_pr', '${now}');
+      ) VALUES (1, '', 'Owner/retired-plugin', 'owner/retired-plugin',
+        'retired-plugin', 'tools', 'English', '中文', '2026-08-15', 'github_pr', '${now}');
     `)
 
     const result = await syncCuratedEntries(

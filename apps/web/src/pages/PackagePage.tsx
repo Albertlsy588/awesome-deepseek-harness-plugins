@@ -26,6 +26,7 @@ import { CategoryTag } from '../components/CategoryTag'
 import { InstallCommand } from '../components/InstallCommand'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
+import { pluginDetailPath } from '../../worker/lib/plugin-id'
 import { getPackage, repositoryName, type PackageDetail } from '../lib/api'
 import { publicAsset } from '../lib/assets'
 import { formatDate, formatDateTime, formatNumber } from '../lib/format'
@@ -33,7 +34,10 @@ import { useI18n } from '../lib/i18n'
 import { fitSeoText, SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 export function PackagePage() {
-  const { owner = '', name = '' } = useParams()
+  // Splat route: the id is owner plus every remaining segment, which is how a
+  // monorepo subpackage (owner/repo/packages/foo) addresses its detail page.
+  const { owner = '', '*': rest = '' } = useParams()
+  const requestedId = [owner, ...rest.split('/')].filter(Boolean).join('/')
   const { language, t } = useI18n()
   const [detail, setDetail] = useState<PackageDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -43,18 +47,16 @@ export function PackagePage() {
     const controller = new AbortController()
     setDetail(null)
     setError(null)
-    getPackage(owner, name, controller.signal)
+    getPackage(requestedId, controller.signal)
       .then(setDetail)
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === 'AbortError') return
         setError(requestError instanceof Error ? requestError.message : t('notFoundBody'))
       })
     return () => controller.abort()
-  }, [name, owner, reload, t])
+  }, [requestedId, reload, t])
 
-  const canonicalOwner = detail?.owner ?? owner
-  const canonicalRepository = detail ? repositoryName(detail) : name
-  const canonicalPath = `/plugins/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`
+  const canonicalPath = pluginDetailPath(detail?.id ?? requestedId)
   const canonicalUrl = `${SITE_ORIGIN}${canonicalPath}`
   const seoTitle = detail
     ? fitSeoText(
@@ -173,15 +175,20 @@ export function PackagePage() {
   const branch = github?.defaultBranch ?? 'main'
   const detailOwner = detail.owner
   const detailRepository = repositoryName(detail)
+  // Relative links resolve against the directory the README actually came
+  // from: a subpackage without its own README falls back to the root one, and
+  // rebasing that onto the subdirectory would break every link in it.
+  const readmeBasePath = detail.readmeBasePath ?? ''
+  const readmePrefix = readmeBasePath.length === 0 ? '' : `${readmeBasePath}/`
 
   function readmeLink(href?: string): string | undefined {
     if (!href || /^(https?:|mailto:|#)/.test(href)) return href
-    return `https://github.com/${detailOwner}/${detailRepository}/blob/${branch}/${href.replace(/^\.\//, '')}`
+    return `https://github.com/${detailOwner}/${detailRepository}/blob/${branch}/${readmePrefix}${href.replace(/^\.\//, '')}`
   }
 
   function readmeImage(src?: string): string | undefined {
     if (!src || /^https?:/.test(src)) return src
-    return `https://raw.githubusercontent.com/${detailOwner}/${detailRepository}/${branch}/${src.replace(/^\.\//, '')}`
+    return `https://raw.githubusercontent.com/${detailOwner}/${detailRepository}/${branch}/${readmePrefix}${src.replace(/^\.\//, '')}`
   }
 
   return (

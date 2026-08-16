@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "GOU-GEE/deepseek-vision/plugins/dsh-plugin-deepseek-vision",
+  "name": "dsh-plugin-deepseek-vision",
+  "repository": "https://github.com/GOU-GEE/deepseek-vision",
+  "category": "tools",
+  "description": {
+    "en": "Vision MCP and DSH bundle for text-only DeepSeek: analyze_image, analyze_clipboard, compare_images and vision_status tools, a visual settings page, free GLM-4.6V-Flash by default, result caching and rate-limit tolerance; keys stay out of logs.",
+    "zh": "为纯文本 DeepSeek 提供视觉能力的 MCP 与 DSH bundle：analyze_image、analyze_clipboard、compare_images 与 vision_status 工具，可视化设置页，默认使用免费 GLM-4.6V-Flash，带结果缓存与限流容错；密钥不进日志。"
+  },
+  "added": "2026-08-16"
+}

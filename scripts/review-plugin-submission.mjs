@@ -5,7 +5,7 @@ import { lstat, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { assert, isObject, validateCatalogEntry } from './lib/catalog-entry.mjs'
+import { assert, isObject, parsePluginId, repositoryUrl, validateCatalogEntry } from './lib/catalog-entry.mjs'
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const root = path.resolve(process.env.PLUGIN_REVIEW_ROOT ?? scriptRoot)
@@ -16,11 +16,10 @@ const reviewCommentMarker = '<!-- dsh-plugin-submission-review -->'
 export { validateCatalogEntry }
 
 function repositoryParts(id) {
-  const parts = id.split('/')
-  if (parts.length !== 2 || parts.some(part => !/^[A-Za-z0-9_.-]+$/.test(part))) {
-    throw new Error(`Invalid plugin id: ${id}`)
-  }
-  return parts.map(encodeURIComponent)
+  // subPath stays raw: it is compared against git tree paths and later feeds
+  // the pnpm `#path:` install spec; only owner/repository enter API URLs.
+  const { owner, repository, subPath } = parsePluginId(id)
+  return { owner: encodeURIComponent(owner), repository: encodeURIComponent(repository), subPath }
 }
 
 function decodeBlob(blob, packagePath) {
@@ -41,14 +40,31 @@ function resolvePatchPath(packagePath, patch) {
   return resolved
 }
 
-export async function findHarnessBundle(tree, readBlob) {
+export async function findHarnessBundle(tree, readBlob, subPath = '') {
   const files = new Map(tree.filter(item => item.type === 'blob').map(item => [item.path, item]))
-  const packages = [...files.values()]
+  const allPackages = [...files.values()]
     .filter(item => item.path === 'package.json' || item.path.endsWith('/package.json'))
     .filter(item => !item.path.split('/').includes('node_modules'))
     .sort((left, right) => left.path.split('/').length - right.path.split('/').length || left.path.localeCompare(right.path))
 
-  if (packages.length === 0) throw new Error('Repository contains no package.json')
+  // A subdirectory id pins the manifest to exactly that directory: the id's
+  // path becomes the pnpm `#path:` install spec, so a bundle anywhere else in
+  // the repository would not be what the derived install command installs.
+  const requiredPackagePath = subPath.length === 0 ? undefined : `${subPath}/package.json`
+  const packages = requiredPackagePath === undefined
+    ? allPackages
+    : allPackages.filter(item => item.path === requiredPackagePath)
+
+  if (packages.length === 0) {
+    if (requiredPackagePath !== undefined) {
+      const declared = allPackages.map(item => item.path)
+      throw new Error([
+        `Repository has no ${requiredPackagePath}; the id's subdirectory path must contain the plugin's package.json.`,
+        ...(declared.length > 0 ? [`package.json files found: ${declared.slice(0, 20).join(', ')}`] : []),
+      ].join('\n'))
+    }
+    throw new Error('Repository contains no package.json')
+  }
 
   const invalidBundles = []
   for (const packageFile of packages) {
@@ -82,7 +98,9 @@ export async function findHarnessBundle(tree, readBlob) {
   }
 
   if (invalidBundles.length > 0) throw new Error(invalidBundles.join('\n'))
-  throw new Error('No package.json declares dsh.bundle.patch')
+  throw new Error(requiredPackagePath === undefined
+    ? 'No package.json declares dsh.bundle.patch'
+    : `${requiredPackagePath} does not declare dsh.bundle.patch`)
 }
 
 export function createGitHubClient(token) {
@@ -182,11 +200,11 @@ export async function reviewRepository(entry, client) {
   if (!isObject(entry) || typeof entry.id !== 'string' || typeof entry.repository !== 'string') {
     throw new Error('Catalog entry must contain string id and repository fields')
   }
-  if (entry.repository !== `https://github.com/${entry.id}`) {
-    throw new Error(`repository must be https://github.com/${entry.id}`)
+  if (entry.repository !== repositoryUrl(entry.id)) {
+    throw new Error(`repository must be ${repositoryUrl(entry.id)}`)
   }
 
-  const [owner, repository] = repositoryParts(entry.id)
+  const { owner, repository, subPath } = repositoryParts(entry.id)
   const base = `/repos/${owner}/${repository}`
   const metadata = await client.request(base)
   if (typeof metadata.default_branch !== 'string' || metadata.default_branch.length === 0) {
@@ -199,7 +217,7 @@ export async function reviewRepository(entry, client) {
   if (!Array.isArray(tree.tree)) throw new Error('Repository tree is unavailable')
   if (tree.truncated === true) throw new Error('Repository tree is too large to inspect completely')
 
-  return findHarnessBundle(tree.tree, sha => client.request(`${base}/git/blobs/${sha}`))
+  return findHarnessBundle(tree.tree, sha => client.request(`${base}/git/blobs/${sha}`), subPath)
 }
 
 export function parseNameStatus(output) {
