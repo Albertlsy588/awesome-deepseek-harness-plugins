@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process'
+import { appendFileSync } from 'node:fs'
 import { lstat, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -245,7 +246,10 @@ export function reviewComment(status, message) {
   if (status === 'passed') {
     return `${reviewCommentMarker}\n## Plugin submission review passed\n\n${diagnostic}`
   }
-  return `${reviewCommentMarker}\n## Plugin submission review failed\n\n\`\`\`text\n${diagnostic}\n\`\`\`\n\nPush a correction to this pull request. The review will run again automatically.`
+  if (status === 'manual-review') {
+    return `${reviewCommentMarker}\n## Plugin submission review passed — maintainer review required\n\n${diagnostic}\n\nThis pull request modifies or removes existing catalog entries, so it will not be merged automatically. A maintainer will review the change set and merge it manually.`
+  }
+  return `${reviewCommentMarker}\n## Plugin submission review failed\n\n\`\`\`text\n${diagnostic}\n\`\`\`\n\nPush a correction to this pull request. The review will run again automatically. Failed reviews never close the pull request.`
 }
 
 export async function upsertReviewComment(repository, pullNumber, client, body) {
@@ -352,27 +356,39 @@ function describeChange(change) {
 }
 
 export function validateSubmissionChanges(changes) {
-  const addedPlugins = changes.filter(change => (
-    change.status === 'A'
-    && catalogFilePattern.test(change.file)
-  ))
-  if (addedPlugins.length !== 1) {
-    throw new Error(`Plugin submission PRs must add exactly one ${catalogPrefix}*.json file; found ${addedPlugins.length}`)
+  if (changes.length === 0) {
+    throw new Error(`Plugin submission PRs must change at least one ${catalogPrefix}*.json file`)
   }
 
-  const pluginFile = addedPlugins[0].file
-  const unexpected = changes.filter(change => (
-    change.file !== pluginFile
-    || change.status !== 'A'
-    || change.oldPath !== undefined
-  ))
-  if (unexpected.length > 0 || changes.length !== 1) {
+  const problems = []
+  const reviewables = []
+  const deletions = []
+  let additions = 0
+  for (const change of changes) {
+    // git reports rename/copy statuses with a similarity score (R100, C75).
+    const status = change.status[0]
+    const paths = change.oldPath === undefined ? [change.file] : [change.oldPath, change.file]
+    if (!['A', 'M', 'D', 'R', 'C'].includes(status)) {
+      problems.push(`unsupported change: ${describeChange(change)}`)
+      continue
+    }
+    if (!paths.every(candidate => catalogFilePattern.test(candidate))) {
+      problems.push(`unexpected change: ${describeChange(change)}`)
+      continue
+    }
+    if (status === 'D') deletions.push(change.file)
+    else reviewables.push(change.file)
+    if (status === 'A') additions += 1
+  }
+  if (problems.length > 0) {
     throw new Error([
-      `Plugin submission PRs may contain only one new ${catalogPrefix}*.json file and no other changes.`,
-      ...unexpected.map(change => `unexpected change: ${describeChange(change)}`),
+      `Plugin submission PRs may only add, modify, or delete ${catalogPrefix}*.json files.`,
+      ...problems,
     ].join('\n'))
   }
-  return pluginFile
+
+  const verdict = changes.length === 1 && additions === 1 ? 'auto-merge' : 'manual-review'
+  return { verdict, reviewables, deletions, changes }
 }
 
 export async function readCatalogEntry(rootDirectory, file) {
@@ -397,6 +413,13 @@ function workflowError(file, message) {
   process.stderr.write(`::error file=${file}::${escaped}\n`)
 }
 
+function publishVerdict(verdict) {
+  console.log(`VERDICT ${verdict}`)
+  const output = process.env.GITHUB_OUTPUT
+  if (output === undefined || output.length === 0) return
+  appendFileSync(output, `verdict=${verdict}\n`)
+}
+
 async function main() {
   const base = process.env.PLUGIN_REVIEW_BASE_SHA
   const head = process.env.PLUGIN_REVIEW_HEAD_SHA
@@ -408,27 +431,55 @@ async function main() {
     const changes = repository === undefined && pullNumber === undefined
       ? changedFiles(base, head)
       : await pullRequestChanges(repository, pullNumber, client)
-    file = validateSubmissionChanges(changes)
-    const entry = await readCatalogEntry(root, file)
-    const categories = JSON.parse(await readFile(path.join(root, 'catalog/categories.json'), 'utf8'))
+    const submission = validateSubmissionChanges(changes)
+    // Read the category allow-list from the trusted checkout this script was
+    // loaded from, never from the submitted tree: it decides which categories a
+    // submission may claim, so it must not be attacker-controlled.
+    const categories = JSON.parse(await readFile(path.join(scriptRoot, 'catalog/categories.json'), 'utf8'))
     const categoryIds = new Set(categories?.categories?.map(category => category?.id))
-    validateCatalogEntry(entry, file, categoryIds)
-    const result = await reviewRepository(entry, client)
-    const { code, entryPoint, requiresBuildAllowance } = result.gitInstall
-    console.log(
-      `PASS ${entry.id}: ${result.packagePath} -> ${result.patchPath}`
-      + ` [git-install: ${code}${requiresBuildAllowance ? ', requires build allowance' : ''}]`,
-    )
-    if (repository !== undefined && pullNumber !== undefined) {
+    // Upstream's change-set loop stays; the install classification rides along
+    // per reviewed entry and is reported, never enforced.
+    const advisories = []
+    for (const target of submission.reviewables) {
+      file = target
+      const entry = await readCatalogEntry(root, target)
+      validateCatalogEntry(entry, target, categoryIds)
+      const result = await reviewRepository(entry, client)
+      const { code, entryPoint, requiresBuildAllowance } = result.gitInstall
+      console.log(
+        `PASS ${entry.id}: ${result.packagePath} -> ${result.patchPath}`
+        + ` [git-install: ${code}${requiresBuildAllowance ? ', requires build allowance' : ''}]`,
+      )
       const advisory = gitInstallAdvisory(code, entryPoint, requiresBuildAllowance)
+      if (advisory !== undefined) advisories.push(`**${entry.id}** — ${advisory}`)
+    }
+    for (const target of submission.deletions) {
+      console.log(`PASS delete ${target}`)
+    }
+    file = catalogPrefix
+    publishVerdict(submission.verdict)
+    if (repository !== undefined && pullNumber !== undefined) {
+      const summary = submission.verdict === 'auto-merge'
+        ? 'All static checks passed. The validated pull request will be squash-merged automatically.'
+        : [
+          'All static checks passed for this change set:',
+          '',
+          ...submission.changes.map(change => `- ${describeChange(change)}`),
+        ].join('\n')
       const detail = [
-        'All static checks passed. The validated pull request will be squash-merged automatically.',
-        ...(advisory === undefined ? [] : ['', '### Install method advisory', '', advisory]),
+        summary,
+        ...(advisories.length === 0 ? [] : ['', '### Install method advisory', '', ...advisories]),
       ].join('\n')
-      await upsertReviewComment(repository, pullNumber, client, reviewComment('passed', detail))
+      await upsertReviewComment(
+        repository,
+        pullNumber,
+        client,
+        reviewComment(submission.verdict === 'auto-merge' ? 'passed' : 'manual-review', detail),
+      )
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    publishVerdict('rejected')
     workflowError(file, message)
     console.error(`FAIL ${file}\n${message}`)
     if (repository !== undefined && pullNumber !== undefined) {

@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from '../worker/app'
+
 import type { CuratedCatalogEntry } from '../worker/lib/catalog-db'
 import {
   emptyInstallMetrics,
   InstallationRateLimitError,
   type InstallationEvent,
 } from '../worker/lib/install-metrics'
+import { collectionQueryKind } from '../worker/seo'
 import type { PackageDetail } from '../worker/types'
 import { TEST_PLUGINS, testCatalogResult } from './fixtures'
 
@@ -131,6 +133,68 @@ describe('market API', () => {
     const sitemapBody = await sitemap.text()
     expect(sitemapBody).toContain('<loc>https://deepseek1024.com/plugins</loc>')
     expect((sitemapBody.match(/<url>/g) ?? []).length).toBe(TEST_PLUGINS.length + 3)
+  })
+
+  it('serves the catalog as plain text for crawlers that will not run JavaScript', async () => {
+    const response = await testApp().request('https://store.example/llms-full.txt')
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toContain('text/plain')
+    const body = await response.text()
+    expect(body).toContain(TEST_PLUGINS[0]!.name)
+    expect(body).toContain('dsh plugin --profile web add github:')
+  })
+
+  it('withholds the sitemap during a catalog outage instead of shrinking it', async () => {
+    const app = createApp({
+      catalogLoader: vi.fn(async () => ({ ...testCatalogResult('empty'), source: 'empty' as const })),
+    })
+    const sitemap = await app.request('https://store.example/sitemap.xml')
+    const llms = await app.request('https://store.example/llms-full.txt')
+
+    expect(sitemap.status).toBe(503)
+    expect(sitemap.headers.get('Cache-Control')).toBe('no-store')
+    expect(llms.status).toBe(503)
+  })
+
+  it('reports a catalog outage as unavailable, never as a missing plugin', async () => {
+    const outage = testCatalogResult('empty')
+    const app = createApp({
+      catalogLoader: vi.fn(async () => ({
+        source: 'empty' as const,
+        snapshot: { ...outage.snapshot, plugins: [], metricCoverage: 0 },
+      })),
+    })
+    const response = await app.request('/api/v1/plugins/openma-ai/deepseek-harness-tui')
+
+    // A 404 here tells the client the plugin was deleted, and the client
+    // answers by noindexing the page — during an outage that would deindex the
+    // whole catalog, which is exactly what the Worker fails open to prevent.
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toMatchObject({ code: 'CATALOG_UNAVAILABLE' })
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+
+  it('still reports a genuinely unknown plugin as not found', async () => {
+    const response = await testApp().request('/api/v1/plugins/nobody/nothing')
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('redirects the duplicate rankings route to the canonical home page', async () => {
+    const response = await testApp().request('https://store.example/rankings')
+
+    expect(response.status).toBe(301)
+    expect(response.headers.get('Location')).toBe('https://store.example/')
+  })
+
+  it('keeps the catalog JSON crawlable but unindexable', async () => {
+    const response = await testApp().request('/api/v1/plugins')
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('X-Robots-Tag')).toBe('noindex')
+    expect(response.headers.get('Cache-Control')).toContain('max-age=300')
   })
 
   it('reports service health without exposing internals', async () => {
@@ -663,5 +727,23 @@ describe('market API', () => {
     )
     expect(detail.status).toBe(200)
     await expect(detail.json()).resolves.toMatchObject(metrics)
+  })
+})
+
+describe('collection query classification', () => {
+  it('separates filters, which change the page, from tags, which do not', () => {
+    const kind = (href: string) => collectionQueryKind(new URL(href))
+
+    expect(kind('https://deepseek1024.com/')).toBe('clean')
+    // An empty filter renders the unfiltered page, so it canonicalises to it
+    // rather than being noindexed as a permutation.
+    expect(kind('https://deepseek1024.com/plugins?q=')).not.toBe('filtered')
+    expect(kind('https://deepseek1024.com/plugins?q=theme')).toBe('filtered')
+    expect(kind('https://deepseek1024.com/plugins?category=ui')).toBe('filtered')
+    // A campaign tag serves the same page: noindexing it would throw away every
+    // shared link instead of consolidating it onto the clean URL.
+    expect(kind('https://deepseek1024.com/?utm_source=newsletter')).toBe('tagged')
+    expect(kind('https://deepseek1024.com/?fbclid=abc')).toBe('tagged')
+    expect(kind('https://deepseek1024.com/plugins/acme/widget?utm_source=x')).toBe('clean')
   })
 })

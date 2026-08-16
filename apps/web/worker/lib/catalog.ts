@@ -107,7 +107,7 @@ function installsForSort(plugin: CatalogPlugin, sort: CatalogSort): number | nul
   return null
 }
 
-function hasGrowthForSort(plugin: CatalogPlugin, sort: CatalogSort): boolean {
+export function hasGrowthForSort(plugin: CatalogPlugin, sort: CatalogSort): boolean {
   return sort !== 'growth24h' && sort !== 'growth7d' && sort !== 'growth30d'
     ? true
     : growthForSort(plugin, sort) !== null
@@ -221,11 +221,12 @@ export function deriveCatalogResponse(
   }
 }
 
-export function findPlugin(
-  plugins: RegistryPlugin[],
+/** Generic so callers holding full catalog rows keep their metrics fields. */
+export function findPlugin<T extends RegistryPlugin>(
+  plugins: T[],
   owner: string,
   repository: string,
-): RegistryPlugin | undefined {
+): T | undefined {
   return plugins.find(
     (plugin) =>
       plugin.owner.toLocaleLowerCase() === owner.toLocaleLowerCase() &&

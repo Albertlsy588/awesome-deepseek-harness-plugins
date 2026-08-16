@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isPublicApiHost, publicApiNotFound, rewritePublicApiUrl } from '../worker/public-api'
+import { isPublicApiHost, publicApiNotFound, rewritePublicApiUrl, wwwRedirect } from '../worker/public-api'
 
 describe('public API host mapping', () => {
   it('recognises only the dedicated API host', () => {
@@ -24,10 +24,22 @@ describe('public API host mapping', () => {
     }
   })
 
+  it('permanently redirects www to the apex host with path and query intact', () => {
+    const redirect = wwwRedirect(new URL('https://www.deepseek1024.com/plugins?q=x'))
+    expect(redirect?.status).toBe(301)
+    expect(redirect?.headers.get('Location')).toBe('https://deepseek1024.com/plugins?q=x')
+    expect(wwwRedirect(new URL('https://deepseek1024.com/'))).toBeNull()
+    expect(wwwRedirect(new URL('https://api.deepseek1024.com/v1/health'))).toBeNull()
+  })
+
   it('redirects the bare host to the docs and 404s unknown paths', async () => {
     const root = publicApiNotFound('/')
     expect(root.status).toBe(302)
     expect(root.headers.get('Location')).toBe('https://deepseek1024.com/docs/api')
+
+    const robots = publicApiNotFound('/robots.txt')
+    expect(robots.status).toBe(200)
+    await expect(robots.text()).resolves.toBe('User-agent: *\nDisallow: /\n')
 
     const missing = publicApiNotFound('/v1/registry')
     expect(missing.status).toBe(404)
