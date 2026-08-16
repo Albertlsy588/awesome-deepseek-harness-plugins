@@ -72,6 +72,7 @@ describe('sanitizeReturnTo', () => {
     expect(sanitizeReturnTo('https://evil.example')).toBe('/')
     expect(sanitizeReturnTo('//evil.example')).toBe('/')
     expect(sanitizeReturnTo('/\\evil.example')).toBe('/')
+    expect(sanitizeReturnTo('/a\r\nSet-Cookie: x=1')).toBe('/')
   })
 })
 

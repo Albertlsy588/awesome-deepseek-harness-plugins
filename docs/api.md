@@ -21,12 +21,15 @@ Rate-limited keyword search over the catalog snapshot, mirrored on the website a
 owner, repository, category, and both description languages.
 
 Query parameters: `q` (required, ≤120 chars), `page` (default 1), `limit` (default 20, max
-100), `sortBy` (`stars` default, `recent` as an alias of `newest`, or any catalog sort),
+100), `sortBy` (`stars` default, `recent` as an alias of `newest`, or any catalog sort —
+the `growth*` sorts additionally exclude plugins without enough recorded star history),
 `category` (must be a known category id, otherwise `400 INVALID_CATEGORY`).
 
 Authentication is optional: anonymous callers get 50 requests/day and 10/minute (keyed by
 HMAC-hashed client IP; the raw IP is never stored), while requests carrying
 `Authorization: Bearer dsh_live_…` from a GitHub-login account get 500/day and 30/minute.
+Authenticated quotas are keyed to the **account**, not the individual key, so creating or
+rotating keys does not multiply or reset the window.
 Every response carries `X-RateLimit-Daily-Limit` / `X-RateLimit-Daily-Remaining`; `429`
 responses add `Retry-After`. Unlike the other read endpoints the search response is
 `Cache-Control: no-store`.
@@ -43,7 +46,11 @@ and `pushedAt`.
 ## Account & API-key endpoints
 
 GitHub OAuth is the only sign-in method; the Worker needs the `GITHUB_OAUTH_CLIENT_ID` and
-`GITHUB_OAUTH_CLIENT_SECRET` secrets (endpoints answer `503` until both are set). Sessions
+`GITHUB_OAUTH_CLIENT_SECRET` secrets (endpoints answer `503` while they are unset at
+runtime). **Deploy prerequisite:** both are listed in `wrangler.jsonc` `secrets.required`,
+and wrangler 4 refuses to deploy a Worker whose secret store is missing a required secret —
+run `wrangler secret put GITHUB_OAUTH_CLIENT_ID` / `wrangler secret put
+GITHUB_OAUTH_CLIENT_SECRET` once before the first deploy of this feature. Sessions
 are 30-day `dsh_session` cookies (HttpOnly, Secure, SameSite=Lax) whose SHA-256 hash lives
 in D1; API keys are shown once at creation and stored only as hashes.
 

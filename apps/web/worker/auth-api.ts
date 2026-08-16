@@ -32,6 +32,33 @@ const STATE_COOKIE_MAX_AGE_SECONDS = 600
 const MAX_KEY_REQUEST_BYTES = 4 * 1024
 const LOGIN_ERROR_REDIRECT = '/account?login=error'
 
+/** Mirrors readBoundedBody in app.ts: null means the body exceeded the cap. */
+async function boundedText(request: Request, maximumBytes: number): Promise<string | null> {
+  if (!request.body) return ''
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+
+  while (true) {
+    const result = await reader.read()
+    if (result.done) break
+    total += result.value.byteLength
+    if (total > maximumBytes) {
+      await reader.cancel()
+      return null
+    }
+    chunks.push(result.value)
+  }
+
+  const body = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(body)
+}
+
 type AuthApp = Hono<{ Bindings: Env }>
 type AuthContext = Context<{ Bindings: Env }>
 
@@ -103,9 +130,15 @@ export function registerAuthRoutes(app: AuthApp, dependencies: AuthDependencies)
 
     const separator = stateCookie.indexOf(':')
     const expectedState = separator === -1 ? '' : stateCookie.slice(0, separator)
-    const returnTo = sanitizeReturnTo(
-      separator === -1 ? undefined : decodeURIComponent(stateCookie.slice(separator + 1)),
-    )
+    let storedReturnTo: string | undefined
+    if (separator !== -1) {
+      try {
+        storedReturnTo = decodeURIComponent(stateCookie.slice(separator + 1))
+      } catch {
+        storedReturnTo = undefined
+      }
+    }
+    const returnTo = sanitizeReturnTo(storedReturnTo)
     const presentedState = context.req.query('state') ?? ''
     const code = context.req.query('code') ?? ''
     if (!expectedState || !code || !timingSafeEqualStrings(expectedState, presentedState)) {
@@ -184,7 +217,10 @@ export function registerAuthRoutes(app: AuthApp, dependencies: AuthDependencies)
     }
 
     let name = 'API Key'
-    const rawBody = await context.req.text()
+    const rawBody = await boundedText(context.req.raw, MAX_KEY_REQUEST_BYTES)
+    if (rawBody === null) {
+      return context.json({ error: 'Request body is too large.', code: 'INVALID_REQUEST' }, 413)
+    }
     if (rawBody.length > 0) {
       let parsed: unknown
       try {

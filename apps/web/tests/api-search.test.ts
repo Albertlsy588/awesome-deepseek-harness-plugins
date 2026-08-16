@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from '../worker/app'
-import { createApiKey, upsertGitHubUser } from '../worker/lib/auth'
+import { createApiKey, revokeApiKey, upsertGitHubUser } from '../worker/lib/auth'
 import { accountsDatabase, sqliteD1 } from './d1-sqlite'
 import { testCatalogResult } from './fixtures'
 
@@ -77,7 +77,9 @@ describe('plugin search API', () => {
     }
     expect(payload).toMatchObject({ query: 'gomoku', page: 1, limit: 20, sortBy: 'stars', total: 1, totalPages: 1 })
     expect(payload.results[0]?.name).toBe('dsh-gomoku')
-    expect(payload.results[0]?.install).toContain('npx @dsh-1024store/cli add ')
+    // The install field must stay the official dsh CLI command, matching the
+    // registry projection (wrapper commands are presentation-layer only).
+    expect(payload.results[0]?.install).toContain('dsh plugin --profile web add github:')
     database.close()
   })
 
@@ -122,6 +124,33 @@ describe('plugin search API', () => {
     expect(response.headers.get('X-RateLimit-Daily-Remaining')).toBe('499')
     expect(database.prepare('SELECT last_used_at FROM api_keys').get())
       .toEqual({ last_used_at: new Date(NOW).toISOString() })
+    database.close()
+  })
+
+  it('keys the authenticated quota to the account, so key rotation continues the same window', async () => {
+    const database = accountsDatabase()
+    const db = sqliteD1(database)
+    const nowIso = new Date(NOW).toISOString()
+    const user = await upsertGitHubUser(db, { id: 7, login: 'octocat', name: null, avatarUrl: null }, nowIso)
+    const firstKey = await createApiKey(db, user.id, 'first', nowIso)
+    const app = searchApp()
+    const env = searchEnv(database)
+
+    const initial = await app.request(
+      `${ORIGIN}/api/v1/plugins/search?q=dsh`,
+      { headers: { Authorization: `Bearer ${firstKey.key}` } },
+      env,
+    )
+    expect(initial.headers.get('X-RateLimit-Daily-Remaining')).toBe('499')
+
+    await revokeApiKey(db, user.id, firstKey.id, nowIso)
+    const secondKey = await createApiKey(db, user.id, 'second', nowIso)
+    const rotated = await app.request(
+      `${ORIGIN}/api/v1/plugins/search?q=dsh`,
+      { headers: { Authorization: `Bearer ${secondKey.key}` } },
+      env,
+    )
+    expect(rotated.headers.get('X-RateLimit-Daily-Remaining')).toBe('498')
     database.close()
   })
 

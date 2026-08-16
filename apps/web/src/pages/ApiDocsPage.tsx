@@ -30,7 +30,7 @@ const RESPONSE_EXAMPLE = `{
       "growth24h": 3,
       "added": "2026-08-12",
       "pushedAt": "2026-08-15T09:30:00Z",
-      "install": "npx @dsh-1024store/cli add ben7am1n/dsh-telegram --profile web"
+      "install": "dsh plugin --profile web add github:ben7am1n/dsh-telegram"
     }
   ]
 }`
@@ -42,6 +42,7 @@ const ERROR_ROWS = [
   { code: 'RATE_LIMITED', status: '429', meaning: 'apiDocsErrRateLimited' },
   { code: 'DAILY_QUOTA_EXCEEDED', status: '429', meaning: 'apiDocsErrDailyQuota' },
   { code: 'INTERNAL_ERROR', status: '500', meaning: 'apiDocsErrInternal' },
+  { code: 'SERVICE_UNAVAILABLE', status: '503', meaning: 'apiDocsErrServiceUnavailable' },
 ] as const
 
 const PARAM_ROWS = [

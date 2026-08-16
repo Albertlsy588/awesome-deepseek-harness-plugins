@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import {
+  API_ORIGIN,
   createApiKey,
   getApiKeys,
   getAuthUser,
@@ -43,13 +44,25 @@ export function AccountPage() {
   })
 
   const reload = useCallback(async (signal?: AbortSignal) => {
+    let user: AuthUser | null = null
     try {
-      const user = await getAuthUser(signal)
-      setSession({ status: 'ready', user })
-      setApiKeys(user ? await getApiKeys(signal) : [])
+      user = await getAuthUser(signal)
     } catch (error) {
       if (signal?.aborted) return
       setSession({ status: 'ready', user: null })
+      setActionError(error instanceof Error ? error.message : String(error))
+      return
+    }
+    setSession({ status: 'ready', user })
+    if (!user) {
+      setApiKeys([])
+      return
+    }
+    // A key-list failure must not masquerade as a logged-out session.
+    try {
+      setApiKeys(await getApiKeys(signal))
+    } catch (error) {
+      if (signal?.aborted) return
       setActionError(error instanceof Error ? error.message : String(error))
     }
   }, [])
@@ -128,7 +141,14 @@ export function AccountPage() {
       {loginFailed ? <p className="account-error" role="alert">{t('loginFailed')}</p> : null}
       {actionError ? <p className="account-error" role="alert">{actionError}</p> : null}
 
-      {session.status === 'loading' ? (
+      {API_ORIGIN ? (
+        <section className="account-signin">
+          <p className="account-signin-note">{t('accountCrossOrigin')}</p>
+          <a className="button button-primary" href={`${API_ORIGIN}/account`}>
+            {t('accountTitle')}
+          </a>
+        </section>
+      ) : session.status === 'loading' ? (
         <p className="account-loading">…</p>
       ) : session.user === null ? (
         <section className="account-signin">
@@ -167,7 +187,13 @@ export function AccountPage() {
             </h2>
             <p className="account-keys-intro">{t('apiKeysIntro')}</p>
 
-            <div className="account-key-create">
+            <form
+              className="account-key-create"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void handleCreateKey()
+              }}
+            >
               <input
                 type="text"
                 value={keyName}
@@ -176,15 +202,10 @@ export function AccountPage() {
                 onChange={(event) => setKeyName(event.target.value)}
                 aria-label={t('apiKeyNamePlaceholder')}
               />
-              <button
-                type="button"
-                className="button button-primary"
-                disabled={busy}
-                onClick={() => void handleCreateKey()}
-              >
+              <button type="submit" className="button button-primary" disabled={busy}>
                 {busy ? t('creating') : t('createApiKey')}
               </button>
-            </div>
+            </form>
 
             {newKey ? (
               <div className="account-key-reveal" role="status">
@@ -199,7 +220,7 @@ export function AccountPage() {
                     {copied
                       ? <Check size={16} aria-hidden="true" />
                       : <Copy size={16} aria-hidden="true" />}
-                    {copied ? t('copied') : t('copy')}
+                    {copied ? t('copied') : t('copyKey')}
                   </button>
                 </div>
               </div>
@@ -225,6 +246,7 @@ export function AccountPage() {
                     <button
                       type="button"
                       className="button button-secondary"
+                      aria-label={`${t('revoke')} ${key.name}`}
                       onClick={() => void handleRevoke(key.id)}
                     >
                       {t('revoke')}

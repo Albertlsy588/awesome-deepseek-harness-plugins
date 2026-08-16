@@ -72,10 +72,15 @@ export function timingSafeEqualStrings(expected: string, presented: string): boo
   return difference === 0
 }
 
-/** Only same-site absolute paths survive; anything else falls back to the root. */
+/**
+ * Only same-site absolute paths survive; anything else falls back to the root.
+ * Control characters are rejected so the value can never smuggle CR/LF into a
+ * Location header.
+ */
 export function sanitizeReturnTo(value: string | undefined): string {
   if (!value || value.length > 512) return '/'
   if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return '/'
+  if ([...value].some((char) => char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f)) return '/'
   return value
 }
 

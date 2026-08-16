@@ -315,7 +315,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         return context.json({ error: 'Invalid API key.', code: 'INVALID_API_KEY' }, 401)
       }
       limits = AUTHENTICATED_QUOTA
-      counterKey = `key:${keyAuth.keyId}`
+      // Keyed by account, not key id: rotating or multiplying keys must not
+      // mint fresh quota windows.
+      counterKey = `user:${keyAuth.userId}`
     } else {
       // The raw client IP never reaches D1: it is keyed through the same HMAC
       // secret the install telemetry uses (plain SHA-256 as a fallback when
@@ -355,7 +357,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       growth24h: plugin.growth24h,
       added: plugin.added,
       pushedAt: plugin.pushedAt,
-      install: `npx @dsh-1024store/cli add ${plugin.owner}/${plugin.repository} --profile web`,
+      install: plugin.install,
     }))
     context.header('X-Catalog-Source', snapshotResult.source)
     return context.json({
@@ -568,7 +570,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         error: error.message,
       }),
     )
-    return context.json({ error: 'The package catalog is temporarily unavailable.' }, 500)
+    return context.json({ error: 'The package catalog is temporarily unavailable.', code: 'INTERNAL_ERROR' }, 500)
   })
 
   return app
