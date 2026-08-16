@@ -93,19 +93,33 @@ Arguments never enter the telemetry event or the local receipt.
 
 ### What gets counted
 
-The wrapper reads the install target to attribute the event; it never rewrites
-it. A target it cannot identify as a catalog plugin is installed exactly the
-same way but is not counted:
+The wrapper reads the argument vector to attribute the event; it never rewrites
+it. An install is counted only when the vector is unambiguous and the target
+resolves to a catalog repository. Everything else installs exactly the same way
+and goes uncounted — a missing count is preferred over a wrong one.
 
-| Target | Counted as |
-| --- | --- |
-| `github:owner/repository`, `owner/repository` (optionally `#ref`, `.git`) | `owner/repository` |
-| `dsh1024` | this catalog repository |
-| Local paths, `file:`, `link:`, URLs | never reported |
-| Other published package names | not counted yet |
+The vector must name a profile (`--profile <name>` or `--profile=<name>`; the
+official CLI has no `-p` alias), use an installing verb (`add`, `i`, `install`),
+carry exactly one target before `--`, and install into the profile's own
+dependencies (`-D`, `--save-dev`, `-O`, `--save-optional`, `--save-peer`, `-g`
+and `--global` are not counted).
 
-Local and `file:`/`link:` targets are a hard boundary: a filesystem path can
-never reach an install event.
+| Target | Counted as | Where the id comes from |
+| --- | --- | --- |
+| `github:owner/repository`, `owner/repository` (optionally `#ref`, `.git`) | `owner/repository` | the argument itself |
+| `dsh1024`, `dsh1024@<version>` | this catalog repository | fixed |
+| Published package names, with or without a version/tag/range | the repository in the installed manifest | `repository` field of `node_modules/<name>/package.json`, read after a successful install |
+| Local paths, `file:`, `link:`, `portal:`, URLs, drive letters, `~` | never reported | — |
+| `gitlab:`, `bitbucket:`, `gist:`, `jsr:`, `workspace:`, `catalog:`, npm aliases, full git URLs | not counted | — |
+
+The published-package lookup reads one local file — the installed package's own
+`repository` field — and accepts npm's string and object spellings for
+github.com hosts only. A monorepo `directory` is ignored; the repository root is
+the identity the catalog uses. A missing or non-GitHub field, or a failed
+install with nothing to read, means the install is not counted.
+
+Local, `file:`, `link:` and `portal:` targets are a hard boundary: a filesystem
+path can never reach an install event, a local receipt, or the retry queue.
 
 ## What is recorded
 

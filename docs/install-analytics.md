@@ -5,7 +5,7 @@ the event's `sourceChannel` field. Both channels ship in the single `dsh1024`
 npm package (`packages/dsh1024`); the channel values are stable historical
 identifiers and never change with package renames:
 
-- `dsh-1024store-cli` — the open-source wrapper CLI (`npx dsh1024`);
+- `dsh-1024store-cli` — the open-source wrapper CLI (`dsh1024 plugin ...`);
 - `dsh-1024store-plugin` — the in-DSH marketplace plugin, which installs
   plugins from the DSH settings page.
 
@@ -14,10 +14,41 @@ from `plugin` onwards is forwarded to the official DeepSeek Harness CLI exactly
 as written, with nothing added, removed, reordered, or defaulted. It only reports
 an event after checking the profile state on disk.
 
-The install target is read to attribute the event, never rewritten. Targets that
-cannot be identified as catalog plugins are installed the same way but are not
-counted, and local paths, `file:` and `link:` targets are never reported at all —
-a filesystem path can never reach an install event.
+The install target is read to attribute the event, never rewritten.
+
+## What is counted, and what is not
+
+An install is only counted when the argument vector is unambiguous **and** the
+target resolves to a catalog repository. Everything else is installed exactly the
+same way and simply goes uncounted; the failure mode is a missing count, never a
+wrong one.
+
+The vector must name a profile (`--profile <name>` or `--profile=<name>`; the
+official CLI has no `-p` alias), use an installing verb (`add`, `i`, `install`),
+carry exactly one target before the `--` separator, and stay inside the profile's
+own dependencies (`-D`, `--save-dev`, `-O`, `--save-optional`, `--save-peer`,
+`-g` and `--global` are not counted, because the dependency lands somewhere the
+profile check cannot see).
+
+| Target | Counted as | Where the id comes from |
+| --- | --- | --- |
+| `github:owner/repository`, `owner/repository` (optionally `#ref`, `.git`) | `owner/repository` | the argument itself |
+| `dsh1024`, `dsh1024@<version>` | this catalog repository | fixed |
+| Published package names, scoped or not, with or without a version/tag/range | the repository in the installed manifest | `repository` field of `node_modules/<name>/package.json` after a successful install |
+| Local paths, `file:`, `link:`, `portal:`, URLs, drive letters, `~` | never reported | — |
+| `gitlab:`, `bitbucket:`, `gist:`, `jsr:`, `workspace:`, `catalog:`, npm aliases (`x@npm:y`), full git URLs | not counted | — |
+
+The published-package lookup reads one local file and nothing else: the
+installed package's own `repository` field, accepted in npm's string and object
+spellings (`github:owner/repo`, `https://github.com/owner/repo(.git)`,
+`git+https://…`, `git@github.com:owner/repo.git`, `{type, url, directory}`) and
+only for github.com hosts. A monorepo `directory` is ignored — the repository
+root is the identity the catalog is keyed by. If the field is missing, points
+elsewhere, or the install failed so there is nothing to read, the install is not
+counted.
+
+Local, `file:`, `link:` and `portal:` targets are a hard boundary: a filesystem
+path can never reach an install event, a local receipt, or the retry queue.
 
 ```text
 dsh1024 plugin --profile web add github:owner/repository

@@ -256,10 +256,10 @@ ${heroImage(registry, 'zh')}
 不想切浏览器，就把市场本身作为插件装进 DeepSeek Harness：
 
 \`\`\`bash
-dsh plugin --profile web add dsh-1024store
+dsh plugin --profile web add dsh1024
 \`\`\`
 
-重启后「设置」里会出现独立的 **1024 Store** 入口，「设置 → 插件」下也会多出一个 **1024 Store（数量）** 标签页，可以直接搜索目录、按分类筛选、识别已安装状态、安装与卸载，并显示操作进度。安装器只接受目录中已校验过的仓库地址，并自行推导 \`github:owner/repository\`，不会执行目录返回的展示命令。源码见 [\`packages/dsh-1024store\`](packages/dsh-1024store)。
+重启后「设置」里会出现独立的 **1024 Store** 入口，「设置 → 插件」下也会多出一个 **1024 Store（数量）** 标签页，可以直接搜索目录、按分类筛选、识别已安装状态、安装与卸载，并显示操作进度。安装器只接受目录中已校验过的仓库地址，并自行推导 \`github:owner/repository\`，不会执行目录返回的展示命令。源码见 [\`packages/dsh1024\`](packages/dsh1024)。
 
 ### 定时自动收集 + 格式校验
 
@@ -422,7 +422,7 @@ ${heroImage(registry, 'en')}
 ## What this repository ships
 
 - **Hosted plugin marketplace, one fork away.** [deepseek1024.com](https://deepseek1024.com/) offers search, category filters, install rankings, plugin detail pages, and GitHub activity data on Cloudflare Workers + D1 + KV ([\`apps/web\`](../apps/web)). To self-host: fork the repository, point \`routes\` in \`apps/web/wrangler.jsonc\` at your own domain, create the D1 database and KV namespace, set the Worker secrets listed under \`secrets.required\`, and add \`CLOUDFLARE_API_TOKEN\` and \`CLOUDFLARE_ACCOUNT_ID\` as repository secrets. From then on every push to \`main\` runs the D1 migrations and deploys the Worker for you.
-- **The marketplace as a \`dsh\` plugin.** \`dsh plugin --profile web add dsh-1024store\` adds a **1024 Store** entry to Settings and a **1024 Store (count)** tab under Settings → Plugins, with search, filters, installed-state detection, install, and uninstall ([\`packages/dsh-1024store\`](../packages/dsh-1024store)).
+- **The marketplace as a \`dsh\` plugin.** \`dsh plugin --profile web add dsh1024\` adds a **1024 Store** entry to Settings and a **1024 Store (count)** tab under Settings → Plugins, with search, filters, installed-state detection, install, and uninstall ([\`packages/dsh1024\`](../packages/dsh1024)).
 - **Scheduled collection with format validation.** Cron scans GitHub for \`dsh-plugin\` topic repositories every 30 minutes and reconciles the full set weekly. Every candidate is statically validated — the default-branch Git tree, \`package.json\`, \`dsh.bundle.patch\`, and the patch blob must exist — by reading files only, never installing dependencies or executing repository code ([\`docs/plugin-discovery.md\`](../docs/plugin-discovery.md)).
 - **Free query API.** \`curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'\` works anonymously at 50 requests/day (10/minute); a GitHub-login API key raises that to 500/day (30/minute). \`/api/v1/registry\` returns the full catalog snapshot that generates this file ([\`docs/api.md\`](../docs/api.md)).
 

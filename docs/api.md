@@ -133,7 +133,7 @@ command under a different name
 
 ## POST /api/v1/install-events
 
-Anonymous install-event ingestion for the wrapper CLI (`npx dsh1024`,
+Anonymous install-event ingestion for the wrapper CLI (`dsh1024 plugin ...`,
 `sourceChannel: "dsh-1024store-cli"`) and the in-DSH marketplace plugin
 (`sourceChannel: "dsh-1024store-plugin"`). Both ship in the `dsh1024` npm package; the
 `sourceChannel` values are stable historical identifiers.

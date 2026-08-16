@@ -79,17 +79,29 @@ npx --yes @deepseek-ai/dsh plugin --profile web add github:owner/repository#v1.2
 
 ### 什么会被计入
 
-包装器只读取安装目标用于归因，绝不改写它。识别不出是目录插件的目标一样正常
-安装，只是不计入统计：
+包装器只读取参数向量用于归因，绝不改写它。只有在向量无歧义、且目标能解析出
+目录仓库时才计入；其余情况照常安装但不计数——宁可漏记，也不错记。
 
-| 目标 | 归因为 |
-| --- | --- |
-| `github:owner/repository`、`owner/repository`（可带 `#ref`、`.git`） | `owner/repository` |
-| `dsh1024` | 本目录仓库 |
-| 本地路径、`file:`、`link:`、URL | 一律不上报 |
-| 其他已发布的包名 | 暂不计入 |
+向量必须写明 profile（`--profile <name>` 或 `--profile=<name>`；官方没有 `-p`
+简写）、使用安装类动词（`add`、`i`、`install`）、在 `--` 之前只出现一个目标，
+并且装进该 profile 自己的依赖（`-D`、`--save-dev`、`-O`、`--save-optional`、
+`--save-peer`、`-g`、`--global` 一律不计入）。
 
-本地路径与 `file:`/`link:` 是硬边界：文件系统路径永远不会进入安装事件。
+| 目标 | 归因为 | id 来源 |
+| --- | --- | --- |
+| `github:owner/repository`、`owner/repository`（可带 `#ref`、`.git`） | `owner/repository` | 参数本身 |
+| `dsh1024`、`dsh1024@<版本>` | 本目录仓库 | 固定 |
+| 已发布的包名（可带版本 / tag / 范围） | 安装后清单里的仓库 | 安装成功后读 `node_modules/<包名>/package.json` 的 `repository` 字段 |
+| 本地路径、`file:`、`link:`、`portal:`、URL、盘符、`~` | 一律不上报 | — |
+| `gitlab:`、`bitbucket:`、`gist:`、`jsr:`、`workspace:`、`catalog:`、npm alias、完整 git URL | 不计入 | — |
+
+包名反查只读一个本地文件——已安装包自己的 `repository` 字段，支持 npm 的字符串
+与对象两种写法，且只接受 github.com 主机。monorepo 的 `directory` 会被忽略，
+仓库根就是目录使用的身份。字段缺失、指向非 GitHub，或安装失败无从读取时，
+该次安装不计入。
+
+本地路径与 `file:`/`link:`/`portal:` 是硬边界：文件系统路径永远不会进入安装
+事件、本地 receipt 或重试队列。
 
 ## 匿名安装遥测
 

@@ -56,6 +56,18 @@ function installProfile(dshHome, profile = 'web', version = '1.2.3') {
   writeFileSync(join(moduleDirectory, 'package.json'), JSON.stringify({ name: '@demo/plugin', version }))
 }
 
+/** Simulate the official CLI installing a published package into a profile. */
+function installNpmPlugin(dshHome, profile, packageName, manifest) {
+  const directory = join(dshHome, 'profiles', profile)
+  const moduleDirectory = join(directory, 'node_modules', ...packageName.split('/'))
+  mkdirSync(moduleDirectory, { recursive: true })
+  writeFileSync(join(directory, 'package.json'), JSON.stringify({
+    dependencies: { [packageName]: `^${manifest.version}` },
+    dsh: { profile: { bundles: [packageName] } },
+  }))
+  writeFileSync(join(moduleDirectory, 'package.json'), JSON.stringify({ name: packageName, ...manifest }))
+}
+
 async function makeHome() {
   return mkdtemp(join(tmpdir(), 'dsh1024-cli-'))
 }
@@ -898,13 +910,165 @@ test('a local path target is installed but never reported', async () => {
   assert.equal(existsSync(join(dshHome, '.dsh-1024store', 'pending.json')), false)
 })
 
-test('an unrecognised package target is installed but not counted', async () => {
+test('resolves a published package to its catalog id from the installed manifest', async () => {
   const dshHome = await makeHome()
-  const requests = []
-  const exitCode = await main(['plugin', '--profile', 'web', 'add', '@opendsh/dsh-plugin-setting-mcp'], {
+  const events = []
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', '@opendsh/dsh-plugin-setting-mcp@1.2.3'], {
     dshHome,
     env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
     platform: 'linux',
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn() {
+      installNpmPlugin(dshHome, 'web', '@opendsh/dsh-plugin-setting-mcp', {
+        repository: { type: 'git', url: 'git+https://github.com/OpenDSH/dsh-plugin-setting-mcp.git' },
+        version: '1.2.3',
+      })
+      return fakeChild()
+    },
+    async fetchImpl(_url, options) {
+      events.push(JSON.parse(options.body))
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(events.length, 1)
+  assert.equal(events[0].pluginId, 'opendsh/dsh-plugin-setting-mcp')
+  assert.equal(events[0].status, 'success')
+  assert.equal(events[0].afterVersion, '1.2.3')
+  assert.equal(events[0].requestedRef, null)
+})
+
+test('accepts a plain string repository field', async () => {
+  const dshHome = await makeHome()
+  const events = []
+  await main(['plugin', '--profile', 'web', 'add', 'some-dsh-plugin'], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn() {
+      installNpmPlugin(dshHome, 'web', 'some-dsh-plugin', {
+        repository: 'github:Owner/Plugin',
+        version: '0.4.0',
+      })
+      return fakeChild()
+    },
+    async fetchImpl(_url, options) {
+      events.push(JSON.parse(options.body))
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(events.length, 1)
+  assert.equal(events[0].pluginId, 'owner/plugin')
+})
+
+test('does not count a published package whose manifest is not a GitHub repository', async () => {
+  const dshHome = await makeHome()
+  const requests = []
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'some-dsh-plugin'], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn() {
+      installNpmPlugin(dshHome, 'web', 'some-dsh-plugin', {
+        repository: 'https://gitlab.com/owner/plugin.git',
+        version: '0.4.0',
+      })
+      return fakeChild()
+    },
+    async fetchImpl(url, options) {
+      requests.push({ url, options })
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(requests.length, 0)
+})
+
+test('does not count a published package with no manifest to read', async () => {
+  const dshHome = await makeHome()
+  const requests = []
+  await main(['plugin', '--profile', 'web', 'add', 'never-installed-plugin'], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn() { return fakeChild() },
+    async fetchImpl(url, options) {
+      requests.push({ url, options })
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(requests.length, 0)
+})
+
+test('a failed published-package install is not counted, since the lookup is impossible', async () => {
+  const dshHome = await makeHome()
+  const requests = []
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'some-dsh-plugin'], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn() { return fakeChild({ status: 3 }) },
+    async fetchImpl(url, options) {
+      requests.push({ url, options })
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(exitCode, 3)
+  assert.equal(requests.length, 0)
+})
+
+test('an omitted profile is forwarded as written and never counted', async () => {
+  const dshHome = await makeHome()
+  const requests = []
+  let invocation
+  await main(['plugin', 'add', 'github:owner/repo'], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installProfile(dshHome)
+      return fakeChild()
+    },
+    async fetchImpl(url, options) {
+      requests.push({ url, options })
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.deepEqual(invocation.args, ['--yes', '@deepseek-ai/dsh', 'plugin', 'add', 'github:owner/repo'])
+  assert.equal(requests.length, 0)
+})
+
+test('an install aimed outside the profile dependencies is never counted', async () => {
+  const dshHome = await makeHome()
+  const requests = []
+  await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo', '--global'], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
     io: ioCapture().io,
     now: clock(),
     uuid: uuidSequence(),
@@ -919,7 +1083,6 @@ test('an unrecognised package target is installed but not counted', async () => 
     },
   })
 
-  assert.equal(exitCode, 0)
   assert.equal(requests.length, 0)
 })
 
@@ -935,4 +1098,84 @@ test('preserves the official exit code for an unattributed target', async () => 
   })
 
   assert.equal(exitCode, 7)
+})
+
+test('no location target can ever produce an event or local state', async () => {
+  const locations = [
+    './plugin', '../plugin', './a/b/c', '../../a/b',
+    '/absolute/path/plugin', '/tmp/secret-plugin', '/var/folders/zz/work',
+    '~', '~/plugins/mine', '~/.ssh/config',
+    'C:\\Users\\someone\\plugin', 'D:/work/plugin',
+    'file:./plugin', 'file:../plugin', 'file:///absolute/plugin',
+    'link:./plugin', 'portal:./plugin',
+    'https://example.com/plugin.tgz', 'http://example.com/plugin.tgz',
+    'https://github.com/owner/plugin.git', 'git+https://github.com/owner/plugin.git',
+    'git@github.com:owner/plugin.git', 'ssh://git@github.com/owner/plugin.git',
+    'git://github.com/owner/plugin.git',
+    'gitlab:owner/plugin', 'bitbucket:owner/plugin', 'gist:0123456789abcdef',
+    'jsr:@scope/name', 'workspace:*', 'catalog:default', 'alias@npm:real-package',
+    './node_modules/x', '.\\plugin', '~user/plugin', '/', '\\',
+    'file:', 'link:', 'portal:', '../../../etc/passwd',
+  ]
+  assert.ok(locations.length >= 40, `expected a broad corpus, saw ${locations.length}`)
+
+  for (const target of locations) {
+    const dshHome = await makeHome()
+    const requests = []
+    await main(['plugin', '--profile', 'web', 'add', target], {
+      dshHome,
+      env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+      io: ioCapture().io,
+      now: clock(),
+      uuid: uuidSequence(),
+      canExecute: () => false,
+      spawn() {
+        installProfile(dshHome)
+        return fakeChild()
+      },
+      async fetchImpl(url, options) {
+        requests.push({ url, options })
+        return { ok: true, status: 202 }
+      },
+    })
+
+    assert.equal(requests.length, 0, `reported an event for ${target}`)
+    const storeDirectory = join(dshHome, '.dsh-1024store')
+    assert.equal(existsSync(join(storeDirectory, 'receipts.json')), false, `wrote a receipt for ${target}`)
+    assert.equal(existsSync(join(storeDirectory, 'pending.json')), false, `queued an event for ${target}`)
+  }
+})
+
+test('a reported event carries an owner/repository id and nothing path-shaped', async () => {
+  const dshHome = await makeHome()
+  const events = []
+  await main(['plugin', '--profile', 'web', 'add', '@opendsh/dsh-plugin-setting-mcp'], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn() {
+      installNpmPlugin(dshHome, 'web', '@opendsh/dsh-plugin-setting-mcp', {
+        repository: { type: 'git', url: 'git+https://github.com/OpenDSH/dsh-plugin-setting-mcp.git' },
+        version: '2.0.0',
+      })
+      return fakeChild()
+    },
+    async fetchImpl(_url, options) {
+      events.push(JSON.parse(options.body))
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(events.length, 1)
+  const [event] = events
+  assert.equal(event.pluginId, 'opendsh/dsh-plugin-setting-mcp')
+  // The lookup reads a local manifest; none of it may leak into the event.
+  const serialized = JSON.stringify(event)
+  for (const forbidden of ['"/', ' /', '~', 'file:', 'link:', 'portal:', 'node_modules', tmpdir()]) {
+    assert.ok(!serialized.includes(forbidden), `event leaked ${forbidden}: ${serialized}`)
+  }
+  assert.match(event.pluginId, /^[a-z0-9_.-]+\/[a-z0-9_.-]+$/)
 })

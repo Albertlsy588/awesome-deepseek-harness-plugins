@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { inspectInstallation } from '../cli/profile.js'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { inspectInstallation, readInstalledPluginId } from '../cli/profile.js'
 import { SELF_PLUGIN_ID } from '../cli/constants.js'
 
 const emptyState = {
@@ -96,4 +100,51 @@ test('bounds uploaded before and after versions to the API limit', () => {
   assert.equal(result.beforeVersion.length, 128)
   assert.equal(result.afterVersion.length, 128)
   assert.equal(result.afterVersion, longVersion.slice(0, 128))
+})
+
+test('dependency matching is bounded, so a shorter id cannot claim a longer one', () => {
+  const state = (dependencies) => ({
+    exists: true,
+    profileDirectory: '/profiles/web',
+    dependencies,
+    bundles: [],
+    installedVersions: {},
+  })
+
+  // `nest/plug` used to match `github:nest/plugin-x` through a bare substring test.
+  const wrong = inspectInstallation(state({}), state({ 'plugin-x': 'github:nest/plugin-x' }), 'nest/plug')
+  assert.equal(wrong.afterPresent, false)
+
+  for (const spec of [
+    'github:nest/plug',
+    'github:nest/plug#v1.2.0',
+    'github:nest/plug.git',
+    'https://github.com/nest/plug.git',
+    'git+ssh://git@github.com/nest/plug.git',
+  ]) {
+    const right = inspectInstallation(state({}), state({ plug: spec }), 'nest/plug')
+    assert.equal(right.afterPresent, true, spec)
+  }
+
+  // A regex-special id must be matched literally, never as a pattern.
+  const literal = inspectInstallation(state({}), state({ p: 'github:owner/a.b' }), 'owner/a.b')
+  assert.equal(literal.afterPresent, true)
+  const notAWildcard = inspectInstallation(state({}), state({ p: 'github:owner/axb' }), 'owner/a.b')
+  assert.equal(notAWildcard.afterPresent, false)
+})
+
+test('the installed-manifest reader refuses traversal segments', async () => {
+  const dshHome = await mkdtemp(join(tmpdir(), 'dsh1024-profile-'))
+  const profileDirectory = join(dshHome, 'profiles', 'web')
+  mkdirSync(join(profileDirectory, 'node_modules', 'real-plugin'), { recursive: true })
+  writeFileSync(
+    join(profileDirectory, 'node_modules', 'real-plugin', 'package.json'),
+    JSON.stringify({ name: 'real-plugin', version: '1.0.0', repository: 'github:Owner/Plugin' }),
+  )
+  writeFileSync(join(dshHome, 'package.json'), JSON.stringify({ name: 'outside', repository: 'github:evil/outside' }))
+
+  assert.equal(await readInstalledPluginId(dshHome, 'web', 'real-plugin'), 'owner/plugin')
+  for (const name of ['../../..', '../../package.json', './real-plugin', '..', '.']) {
+    assert.equal(await readInstalledPluginId(dshHome, 'web', name), null, name)
+  }
 })

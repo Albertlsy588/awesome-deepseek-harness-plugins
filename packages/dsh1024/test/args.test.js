@@ -1,7 +1,21 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { attributeTarget, parseArgs, scanPluginArgs, UsageError } from '../cli/args.js'
+import {
+  attributeTarget,
+  parseArgs,
+  pluginIdFromRepositoryField,
+  scanPluginArgs,
+  splitPackageSpec,
+  UsageError,
+} from '../cli/args.js'
 import { SELF_PACKAGE_NAME, SELF_PLUGIN_ID } from '../cli/constants.js'
+
+/** Every scan must leave the forwarded vector byte-for-byte identical. */
+function scanned(argv) {
+  const parsed = parseArgs([...argv])
+  assert.deepEqual(parsed.officialArgs, argv, `forwarded vector changed for ${JSON.stringify(argv)}`)
+  return parsed
+}
 
 test('forwards the official argument vector verbatim', () => {
   const argv = [
@@ -10,21 +24,18 @@ test('forwards the official argument vector verbatim', () => {
     'desktop',
     'add',
     'github:Owner/Plugin#v1.2.0',
-    '--ignore-scripts',
-    '--config.confirmModulesPurge=false',
-    'value;still-one-argument',
     '--',
     '--profile',
     '../belongs-to-official-cli',
     '--',
   ]
-  const parsed = parseArgs([...argv])
+  const parsed = scanned(argv)
 
   assert.equal(parsed.command, 'plugin')
-  assert.deepEqual(parsed.officialArgs, argv)
   assert.equal(parsed.profile, 'desktop')
   assert.equal(parsed.target, 'github:Owner/Plugin#v1.2.0')
   assert.deepEqual(parsed.attribution, {
+    kind: 'plugin',
     pluginId: 'owner/plugin',
     requestedRef: 'v1.2.0',
     knownPackageNames: [],
@@ -32,63 +43,177 @@ test('forwards the official argument vector verbatim', () => {
 })
 
 test('never injects a default profile into the forwarded arguments', () => {
-  const parsed = parseArgs(['plugin', 'add', 'github:owner/plugin'])
-  assert.deepEqual(parsed.officialArgs, ['plugin', 'add', 'github:owner/plugin'])
+  const parsed = scanned(['plugin', 'add', 'github:owner/plugin'])
   assert.equal(parsed.profile, null)
+  // Without an explicit profile the official CLI fails; reporting a default
+  // would file a phantom failure against a profile nobody named.
+  assert.equal(parsed.attribution, null)
 })
 
-test('reads the profile from every official spelling and ignores the rest', () => {
-  assert.equal(scanPluginArgs(['plugin', '--profile', 'web', 'add', 'owner/plugin']).profile, 'web')
-  assert.equal(scanPluginArgs(['plugin', '--profile=desktop', 'add', 'owner/plugin']).profile, 'desktop')
-  assert.equal(scanPluginArgs(['plugin', '-p', 'demo', 'add', 'owner/plugin']).profile, 'demo')
+test('counts every verb that writes dependencies', () => {
+  for (const verb of ['add', 'i', 'install']) {
+    const parsed = scanned(['plugin', '--profile', 'web', verb, 'github:owner/plugin'])
+    assert.equal(parsed.attribution?.pluginId, 'owner/plugin', verb)
+  }
+})
+
+test('never reports a verb that does not install', () => {
+  for (const verb of ['remove', 'rm', 'why', 'update', 'up', 'list', 'ls', 'link', 'unlink']) {
+    const parsed = scanned(['plugin', '--profile', 'web', verb, 'github:owner/plugin'])
+    assert.equal(parsed.attribution, null, verb)
+  }
+})
+
+test('reads the profile from the official spellings only', () => {
+  assert.equal(scanned(['plugin', '--profile', 'web', 'add', 'github:owner/plugin']).profile, 'web')
+  assert.equal(scanned(['plugin', '--profile=desktop', 'add', 'github:owner/plugin']).profile, 'desktop')
+  // The official CLI has no -p alias, so -p is just another forwarded flag and
+  // its value is a second positional target.
+  const shorthand = scanned(['plugin', '-p', 'demo', 'add', 'github:owner/plugin'])
+  assert.equal(shorthand.profile, null)
+  assert.equal(shorthand.attribution, null)
   // Arguments after the official separator belong to a deeper tool.
-  assert.equal(scanPluginArgs(['plugin', 'add', 'owner/plugin', '--', '--profile', 'other']).profile, null)
-  assert.equal(scanPluginArgs(['plugin', 'remove', 'owner/plugin']).target, null)
+  assert.equal(scanned(['plugin', 'add', 'github:owner/plugin', '--', '--profile', 'other']).profile, null)
 })
 
-test('attributes catalog targets and the store package itself', () => {
+test('never reports an install aimed outside the profile dependencies', () => {
+  for (const flag of ['-D', '--save-dev', '-O', '--save-optional', '--save-peer', '-g', '--global']) {
+    const parsed = scanned(['plugin', '--profile', 'web', 'add', 'github:owner/plugin', flag])
+    assert.equal(parsed.attribution, null, flag)
+  }
+})
+
+test('never reports when the vector names more than one target', () => {
+  const parsed = scanned(['plugin', '--profile', 'web', 'add', 'github:owner/plugin', 'github:owner/other'])
+  assert.equal(parsed.attribution, null)
+  // A flag value that is not attached with `=` is indistinguishable from a
+  // second target, so it also stops the count rather than guessing.
+  assert.equal(
+    scanned(['plugin', '--profile', 'web', 'add', 'github:owner/plugin', '--reporter', 'append-only']).attribution,
+    null,
+  )
+})
+
+test('attributes repository targets and the store package itself', () => {
   assert.deepEqual(attributeTarget('github:Owner/Plugin'), {
+    kind: 'plugin',
     pluginId: 'owner/plugin',
     requestedRef: null,
     knownPackageNames: [],
   })
   assert.deepEqual(attributeTarget('Owner/Plugin.git#v1.2.0'), {
+    kind: 'plugin',
     pluginId: 'owner/plugin',
     requestedRef: 'v1.2.0',
     knownPackageNames: [],
   })
-  assert.deepEqual(attributeTarget(SELF_PACKAGE_NAME), {
-    pluginId: SELF_PLUGIN_ID,
-    requestedRef: null,
-    knownPackageNames: [SELF_PACKAGE_NAME],
-  })
+  for (const spec of [SELF_PACKAGE_NAME, `${SELF_PACKAGE_NAME}@1.0.0`, `${SELF_PACKAGE_NAME}@latest`]) {
+    assert.deepEqual(attributeTarget(spec), {
+      kind: 'plugin',
+      pluginId: SELF_PLUGIN_ID,
+      requestedRef: null,
+      knownPackageNames: [SELF_PACKAGE_NAME],
+    }, spec)
+  }
 })
 
-test('never attributes a location target, so no path can reach an event', () => {
+test('defers published package names to the post-install manifest lookup', () => {
+  assert.deepEqual(attributeTarget('@opendsh/dsh-plugin-setting-mcp'), {
+    kind: 'npm',
+    packageName: '@opendsh/dsh-plugin-setting-mcp',
+  })
+  assert.deepEqual(attributeTarget('@opendsh/dsh-plugin-setting-mcp@1.2.3'), {
+    kind: 'npm',
+    packageName: '@opendsh/dsh-plugin-setting-mcp',
+  })
+  assert.deepEqual(attributeTarget('some-plugin@^2.0.0'), { kind: 'npm', packageName: 'some-plugin' })
+  assert.deepEqual(attributeTarget('some-plugin@next'), { kind: 'npm', packageName: 'some-plugin' })
+})
+
+test('splits package specs without mangling scopes', () => {
+  assert.deepEqual(splitPackageSpec('@scope/name'), { name: '@scope/name', version: null })
+  assert.deepEqual(splitPackageSpec('@scope/name@1.2.3'), { name: '@scope/name', version: '1.2.3' })
+  assert.deepEqual(splitPackageSpec('name'), { name: 'name', version: null })
+})
+
+test('never attributes a target that is not a package or GitHub repository', () => {
   for (const target of [
-    './local/plugin',
-    '../local/plugin',
-    '/absolute/path/plugin',
-    '~/plugins/mine',
-    'C:\\Users\\someone\\plugin',
-    'file:../local/plugin',
-    'link:./local/plugin',
-    'portal:./local/plugin',
-    'https://github.com/owner/plugin',
+    'gitlab:owner/plugin',
+    'bitbucket:owner/plugin',
+    'gist:0123456789abcdef',
+    'jsr:@scope/name',
+    'workspace:*',
+    'catalog:default',
+    'alias@npm:real-package',
+    'git://github.com/owner/plugin.git',
     'git+ssh://git@github.com/owner/plugin.git',
-    'github:./local/plugin',
+    'ssh://git@github.com/owner/plugin.git',
+    'git@github.com:owner/plugin.git',
+    'owner/plugin/extra',
+    'owner/plugin#bad ref',
+    'UPPER-CASE-PACKAGE',
   ]) {
     assert.equal(attributeTarget(target), null, target)
   }
 })
 
-test('leaves unrecognised targets unattributed instead of guessing', () => {
-  // Published package names other than this CLI's own package are forwarded and
-  // installed normally, but are not counted until their catalog mapping exists.
-  assert.equal(attributeTarget('@opendsh/dsh-plugin-setting-mcp'), null)
-  assert.equal(attributeTarget('some-plugin'), null)
-  assert.equal(attributeTarget('owner/plugin/extra'), null)
-  assert.equal(attributeTarget('owner/plugin#bad ref'), null)
+test('never attributes a location, so no path can reach an event', () => {
+  const locations = [
+    './plugin', '../plugin', './a/b/c', '../../a/b', '.', '..',
+    '/absolute/path/plugin', '/opt/example/work/plugin', '/tmp/x',
+    '~', '~/plugins/mine', '~/.config/secret',
+    'C:\\Users\\someone\\plugin', 'D:/work/plugin', '\\\\server\\share\\plugin',
+    'file:./plugin', 'file:../plugin', 'file:/absolute/plugin', 'file:///absolute/plugin',
+    'link:./plugin', 'link:../plugin', 'portal:./plugin', 'portal:../plugin',
+    'http://example.com/plugin.tgz', 'https://example.com/plugin.tgz',
+    'https://github.com/owner/plugin', 'https://github.com/owner/plugin.git',
+    'https://registry.npmjs.org/x/-/x-1.0.0.tgz',
+    'git+https://github.com/owner/plugin.git', 'git+file:../plugin',
+    'git://example.com/plugin.git', 'ssh://user@example.com/plugin.git',
+    './node_modules/x', '.\\plugin', '~user/plugin',
+    '/', '//', '\\', 'file:', 'link:', 'portal:',
+  ]
+  for (const target of locations) {
+    assert.equal(attributeTarget(target), null, target)
+  }
+  assert.ok(locations.length >= 40, `expected a broad corpus, saw ${locations.length}`)
+})
+
+test('reads a plugin id out of every repository field spelling', () => {
+  for (const repository of [
+    'github:Owner/Plugin',
+    'https://github.com/Owner/Plugin',
+    'https://github.com/Owner/Plugin.git',
+    'https://github.com/Owner/Plugin/',
+    'git+https://github.com/Owner/Plugin.git',
+    'git://github.com/Owner/Plugin.git',
+    'ssh://git@github.com/Owner/Plugin.git',
+    'git@github.com:Owner/Plugin.git',
+    { type: 'git', url: 'git+https://github.com/Owner/Plugin.git' },
+    { type: 'git', url: 'https://github.com/Owner/Plugin.git', directory: 'packages/plugin' },
+    'https://www.github.com/Owner/Plugin',
+  ]) {
+    assert.equal(pluginIdFromRepositoryField(repository), 'owner/plugin', JSON.stringify(repository))
+  }
+})
+
+test('refuses repository fields that are not GitHub repositories', () => {
+  for (const repository of [
+    'https://gitlab.com/owner/plugin.git',
+    'git@gitlab.com:owner/plugin.git',
+    'https://github.enterprise.internal/owner/plugin.git',
+    'https://github.com/owner',
+    'https://github.com/owner/plugin/extra',
+    'not a url',
+    '',
+    { type: 'git' },
+    { url: 123 },
+    null,
+    undefined,
+    42,
+  ]) {
+    assert.equal(pluginIdFromRepositoryField(repository), null, JSON.stringify(repository))
+  }
 })
 
 test('rejects commands the wrapper does not own', () => {
@@ -101,4 +226,11 @@ test('parses telemetry controls', () => {
   assert.deepEqual(parseArgs(['telemetry']), { command: 'telemetry', action: 'status' })
   assert.deepEqual(parseArgs(['telemetry', 'disable']), { command: 'telemetry', action: 'disable' })
   assert.throws(() => parseArgs(['telemetry', 'upload-everything']), UsageError)
+})
+
+test('scanPluginArgs never rewrites what it inspects', () => {
+  const argv = ['plugin', '--profile', 'web', 'add', 'github:owner/plugin']
+  const copy = [...argv]
+  scanPluginArgs(copy)
+  assert.deepEqual(copy, argv)
 })

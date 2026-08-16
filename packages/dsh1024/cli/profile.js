@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { pluginIdFromRepositoryField } from './args.js'
 import { readJson } from '../lib/shared/files.js'
 
 function normalizeBundles(value) {
@@ -13,11 +14,43 @@ function normalizeBundles(value) {
   return []
 }
 
-async function readInstalledVersion(profileDirectory, packageName) {
+/**
+ * Read one installed package manifest out of a profile's node_modules.
+ *
+ * `packageName` must come from the profile's own manifest (a dependency key) or
+ * from an npm target the caller already validated as a package name. It must
+ * never be an argv-derived path: the guard below rejects traversal segments,
+ * but the rule is what keeps this function from becoming a file reader.
+ */
+async function readPackageManifest(profileDirectory, packageName) {
   const safeParts = packageName.split('/')
-  if (!safeParts.every((part) => /^[A-Za-z0-9_.@-]+$/.test(part))) return null
-  const manifest = await readJson(join(profileDirectory, 'node_modules', ...safeParts, 'package.json'), null)
+  const safe = safeParts.every((part) => (
+    part !== '.' && part !== '..' && /^[A-Za-z0-9_.@-]+$/.test(part)
+  ))
+  if (!safe) return null
+  return readJson(join(profileDirectory, 'node_modules', ...safeParts, 'package.json'), null)
+}
+
+async function readInstalledVersion(profileDirectory, packageName) {
+  const manifest = await readPackageManifest(profileDirectory, packageName)
   return typeof manifest?.version === 'string' ? manifest.version : null
+}
+
+/**
+ * Resolve a published package name to a catalog plugin id after it is installed.
+ *
+ * The official CLI forwards the target to the package manager verbatim, so the
+ * dependency key in the profile manifest is the package's real name — its own
+ * `repository` field is the only local source for the GitHub identity the
+ * catalog is keyed by. Reads one local file and nothing else.
+ *
+ * @returns the lowercased `owner/repository`, or null when it cannot be
+ *   resolved, in which case the install is simply not counted.
+ */
+export async function readInstalledPluginId(dshHome, profile, packageName) {
+  const manifest = await readPackageManifest(join(dshHome, 'profiles', profile), packageName)
+  if (manifest === null) return null
+  return pluginIdFromRepositoryField(manifest.repository)
 }
 
 export async function readProfileState(dshHome, profile) {
@@ -36,10 +69,12 @@ export async function readProfileState(dshHome, profile) {
   return { exists: Boolean(manifest), profileDirectory, dependencies, bundles, installedVersions }
 }
 
+// Bounded on both sides: a bare substring test made `nest/plug` match
+// `github:nest/plugin-x`, which would file an install under the wrong plugin.
 function dependencyMatchesPlugin(spec, pluginId) {
   const normalized = spec.toLowerCase().replaceAll('\\', '/')
-  const id = pluginId.toLowerCase()
-  return normalized.includes(id) || normalized.includes(`github.com/${id}`)
+  const escaped = pluginId.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?:^|[:/])${escaped}(?:\\.git)?(?:#|$)`).test(normalized)
 }
 
 function receiptNamesPresent(state, names) {

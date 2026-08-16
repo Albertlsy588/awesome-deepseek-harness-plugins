@@ -4,9 +4,9 @@ import { accessSync, constants as fsConstants } from 'node:fs'
 import { win32 as win32Path, posix as posixPath } from 'node:path'
 import { arch as hostArch, execPath as hostExecPath, platform as hostPlatform } from 'node:process'
 import { CLI_VERSION, DEFAULT_DSH_PACKAGE, readCliEnv } from './constants.js'
-import { telemetryProfile } from './args.js'
+
 import { runOfficialCommand } from '../lib/shared/install-runner.js'
-import { readProfileState, inspectInstallation, createReceipt } from './profile.js'
+import { readProfileState, inspectInstallation, createReceipt, readInstalledPluginId } from './profile.js'
 import { getReceipt, readReceipts, saveReceipt } from './receipts.js'
 import {
   detectArch,
@@ -142,20 +142,18 @@ export async function forwardPluginCommand(command, context) {
   } = context
   const packageOverride = readCliEnv(env, 'DSH_PACKAGE')
   const officialPackage = packageOverride || DEFAULT_DSH_PACKAGE
-  // Only catalog plugins are attributable. Anything else (local paths, URLs,
-  // unknown npm packages) runs exactly the same way but is never reported.
+  // Only attributable installs are inspected at all. Anything else (local
+  // paths, URLs, ambiguous argument vectors) runs exactly the same way but is
+  // never read, never verified, and never reported.
   const attribution = command.attribution
-  const profile = telemetryProfile(command.profile)
-  const receipts = attribution === null ? null : await readReceipts(dshHome)
-  const previousReceipt = attribution === null
-    ? null
-    : getReceipt(receipts, profile, attribution.pluginId)
-  const before = attribution === null ? null : await readProfileState(dshHome, profile)
+  const profile = command.profile
+  const attributable = attribution !== null && profile !== null
+  const before = attributable ? await readProfileState(dshHome, profile) : null
 
   let telemetryConfig = null
   try {
     telemetryConfig = await loadTelemetryConfig(dshHome)
-    if (attribution === null) throw new Error('unattributable target')
+    if (!attributable) throw new Error('unattributable target')
     if (!telemetryConfig && !environmentDisablesTelemetry(env)) {
       telemetryConfig = (await ensureTelemetryConfig(dshHome, { now, uuid })).config
     }
@@ -183,12 +181,23 @@ export async function forwardPluginCommand(command, context) {
     spawnImpl: spawn,
   })
   const completedAt = now()
-  if (attribution === null) {
-    return Number.isInteger(result.exitCode) ? result.exitCode : 1
-  }
+  const exitCode = Number.isInteger(result.exitCode) && result.exitCode > 0 ? result.exitCode : 1
+  if (!attributable) return result.exitCode === 0 ? 0 : exitCode
 
+  // A published package name only reveals its catalog identity once it is on
+  // disk, so the lookup happens here and only for a successful install. When it
+  // resolves to nothing the install simply goes uncounted.
+  const identity = attribution.kind === 'npm'
+    ? (result.exitCode === 0
+      ? await resolveNpmIdentity(dshHome, profile, attribution.packageName)
+      : null)
+    : attribution
+  if (identity === null) return result.exitCode === 0 ? 0 : exitCode
+
+  const receipts = await readReceipts(dshHome)
+  const previousReceipt = getReceipt(receipts, profile, identity.pluginId)
   const after = await readProfileState(dshHome, profile)
-  const inspection = inspectInstallation(before, after, attribution.pluginId, previousReceipt, attribution.knownPackageNames)
+  const inspection = inspectInstallation(before, after, identity.pluginId, previousReceipt, identity.knownPackageNames)
   const errorCode = failureCode(result, inspection)
   const operation = inspection.beforePresent ? 'reinstall' : 'install'
   const succeeded = errorCode === null
@@ -196,7 +205,7 @@ export async function forwardPluginCommand(command, context) {
   if (succeeded) {
     const receipt = createReceipt({
       previousReceipt,
-      pluginId: attribution.pluginId,
+      pluginId: identity.pluginId,
       profile,
       source: command.target,
       packageNames: inspection.packageNames,
@@ -216,7 +225,7 @@ export async function forwardPluginCommand(command, context) {
     const event = {
       eventId: uuid(),
       clientId: telemetryConfig.clientId,
-      pluginId: attribution.pluginId,
+      pluginId: identity.pluginId,
       profile,
       operation,
       status: succeeded ? 'success' : 'failed',
@@ -225,7 +234,7 @@ export async function forwardPluginCommand(command, context) {
       durationMs: boundedDuration(startedAt, completedAt),
       beforeVersion: inspection.beforeVersion,
       afterVersion: inspection.afterVersion,
-      requestedRef: attribution.requestedRef,
+      requestedRef: identity.requestedRef,
       cliVersion: CLI_VERSION,
       dshVersion: invocation.prefixArgs.length === 0
         ? officialDshVersion('', env)
@@ -246,5 +255,11 @@ export async function forwardPluginCommand(command, context) {
   }
 
   if (succeeded) return 0
-  return Number.isInteger(result.exitCode) && result.exitCode > 0 ? result.exitCode : 1
+  return exitCode
+}
+
+async function resolveNpmIdentity(dshHome, profile, packageName) {
+  const pluginId = await readInstalledPluginId(dshHome, profile, packageName)
+  if (pluginId === null) return null
+  return { kind: 'plugin', pluginId, requestedRef: null, knownPackageNames: [packageName] }
 }
