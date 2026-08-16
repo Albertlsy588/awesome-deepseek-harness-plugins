@@ -164,8 +164,15 @@ try {
   if ((await desktop.locator('.catalog-hero .self-install-banner').count()) !== 1) {
     throw new Error('directory hero is missing the self install banner')
   }
-  if (!(await desktop.locator('.catalog-hero .self-install-banner').textContent())?.includes('npx dsh1024 store')) {
-    throw new Error('directory self install banner is missing the npx dsh1024 store command')
+  const desktopBannerText = await desktop.locator('.catalog-hero .self-install-banner').textContent()
+  for (const command of [
+    'npx dsh1024 store',
+    'dsh plugin --profile web add dsh1024',
+    'npx @deepseek-ai/dsh plugin --profile web add dsh1024',
+  ]) {
+    if (!desktopBannerText?.includes(command)) {
+      throw new Error(`directory self install banner is missing the command: ${command}`)
+    }
   }
   if ((await desktop.locator('.directory-section .package-row .split-install-main').count()) === 0) {
     throw new Error('directory rows are missing the split install button')
@@ -257,8 +264,15 @@ try {
   if ((await rankings.locator('.catalog-hero .self-install-banner').count()) !== 1) {
     throw new Error('rankings hero is missing the self install banner')
   }
-  if (!(await rankings.locator('.catalog-hero .self-install-banner').textContent())?.includes('npx dsh1024 store')) {
-    throw new Error('rankings self install banner is missing the npx dsh1024 store command')
+  const rankingsBannerText = await rankings.locator('.catalog-hero .self-install-banner').textContent()
+  for (const command of [
+    'npx dsh1024 store',
+    'dsh plugin --profile web add dsh1024',
+    'npx @deepseek-ai/dsh plugin --profile web add dsh1024',
+  ]) {
+    if (!rankingsBannerText?.includes(command)) {
+      throw new Error(`rankings self install banner is missing the command: ${command}`)
+    }
   }
   await assertSeo(rankings, 'desktop rankings', '/')
   await rankings.locator('.ranking-section .segmented-control button').last().click()
@@ -271,15 +285,19 @@ try {
   }
   await rankings.locator('.ranking-section .package-row .split-install-toggle').first().click()
   await rankings.locator('.split-install-menu').waitFor()
-  if ((await rankings.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
-    throw new Error('split install menu does not expose exactly two command options')
+  if ((await rankings.locator('.split-install-menu [role="menuitem"]').count()) !== 3) {
+    throw new Error('split install menu does not expose exactly three command options')
   }
   // The first row may be the store's own catalog entry, whose menu shows the
   // dedicated `npx dsh1024 store` / `… add dsh1024` pair instead of the generic
   // owner/repository commands.
   const splitMenuText = await rankings.locator('.split-install-menu').textContent()
-  if (!splitMenuText?.includes('npx dsh1024 ') || !splitMenuText.includes('npx @deepseek-ai/dsh plugin --profile web add')) {
-    throw new Error('split install menu is missing the tracked or official install command')
+  // Three fixed options: tracked wrapper, bare official CLI, official via npx.
+  // The row may be the store's own entry, whose commands target dsh1024.
+  for (const command of ['npx dsh1024 ', 'dsh plugin --profile web add', 'npx @deepseek-ai/dsh plugin --profile web add']) {
+    if (!splitMenuText?.includes(command)) {
+      throw new Error(`split install menu is missing an install command: ${command}`)
+    }
   }
   // Commands must be fully readable: wide menu, wrapping instead of clipping.
   const clippedMenuCommands = await rankings
@@ -391,7 +409,7 @@ try {
   await mobile.locator('.directory-section .package-row .split-install-main[aria-label="已复制"]').waitFor()
   await mobile.locator('.directory-section .package-row .split-install-toggle').first().click()
   await mobile.locator('.split-install-menu').waitFor()
-  if ((await mobile.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
+  if ((await mobile.locator('.split-install-menu [role="menuitem"]').count()) !== 3) {
     throw new Error('mobile split install menu does not expose exactly two command options')
   }
   await assertMinTouchTargets(mobile, 'mobile split install menu', ['.split-install-menu [role="menuitem"]'])
@@ -448,6 +466,9 @@ try {
   await detail.locator('.detail-header').waitFor()
   await detail.locator('.install-activity-section').waitFor()
   const detailInstallCommands = await detail.locator('.install-section .install-command code:visible').allTextContents()
+  if (!detailInstallCommands.some((text) => text.trim().startsWith('dsh plugin --profile web add github:'))) {
+    throw new Error('detail page is missing the bare official CLI install command')
+  }
   if (!detailInstallCommands.some((text) => text.includes('npx dsh1024 add '))) {
     throw new Error('detail page is missing the tracked dsh1024 install command')
   }
@@ -538,8 +559,8 @@ try {
   ])
   await compactMobile.locator('.ranking-section .package-row .split-install-toggle').first().click()
   await compactMobile.locator('.split-install-menu').waitFor()
-  if ((await compactMobile.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
-    throw new Error('compact split install menu does not expose exactly two command options')
+  if ((await compactMobile.locator('.split-install-menu [role="menuitem"]').count()) !== 3) {
+    throw new Error('compact split install menu does not expose exactly three command options')
   }
   await assertMinTouchTargets(compactMobile, 'compact split install menu', ['.split-install-menu [role="menuitem"]'])
   await assertNoHorizontalOverflow(compactMobile, 'compact mobile rankings with the install menu open')

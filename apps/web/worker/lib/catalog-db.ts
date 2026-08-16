@@ -616,7 +616,7 @@ export async function loadCatalogSnapshotFromD1(
         en: row.description_en ?? description,
         zh: row.description_zh ?? description,
       },
-      install: `npx @deepseek-ai/dsh plugin --profile web add github:${row.full_name}`,
+      install: `dsh plugin --profile web add github:${row.full_name}`,
       added: row.added ?? (row.github_updated_at ?? now).slice(0, 10),
       stars: row.stars,
       forks: row.forks,

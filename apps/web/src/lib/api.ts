@@ -157,7 +157,8 @@ export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): st
 }
 
 export const SELF_TRACKED_COMMAND = 'npx dsh1024 store'
-export const SELF_OFFICIAL_COMMAND = 'npx @deepseek-ai/dsh plugin --profile web add dsh1024'
+export const SELF_OFFICIAL_COMMAND = 'dsh plugin --profile web add dsh1024'
+export const SELF_OFFICIAL_NPX_COMMAND = 'npx @deepseek-ai/dsh plugin --profile web add dsh1024'
 
 // The catalog lists this monorepo itself as the store client plugin; generic
 // `owner/repository` command templates would produce a broken "install the
@@ -177,6 +178,15 @@ export function officialInstallCommand(
   plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
 ): string {
   if (isSelfPlugin(plugin)) return SELF_OFFICIAL_COMMAND
+  return `dsh plugin --profile web add github:${plugin.owner}/${repositoryName(plugin)}`
+}
+
+// Many people run the official CLI through npx and have no `dsh` on PATH, so
+// the no-install form is offered alongside the bare command.
+export function officialNpxInstallCommand(
+  plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
+): string {
+  if (isSelfPlugin(plugin)) return SELF_OFFICIAL_NPX_COMMAND
   return `npx @deepseek-ai/dsh plugin --profile web add github:${plugin.owner}/${repositoryName(plugin)}`
 }
 

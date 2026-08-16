@@ -1,6 +1,12 @@
 import { Download } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { getSelfInstallStats, SELF_OFFICIAL_COMMAND, SELF_TRACKED_COMMAND, type InstallMetrics } from '../lib/api'
+import {
+  getSelfInstallStats,
+  SELF_OFFICIAL_COMMAND,
+  SELF_OFFICIAL_NPX_COMMAND,
+  SELF_TRACKED_COMMAND,
+  type InstallMetrics,
+} from '../lib/api'
 import { formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { InstallCommand } from './InstallCommand'
@@ -46,6 +52,10 @@ export function SelfInstallBanner() {
         <div className="self-install-official">
           <span className="install-option-label">{t('officialCliCommand')}</span>
           <InstallCommand command={SELF_OFFICIAL_COMMAND} />
+        </div>
+        <div className="self-install-official">
+          <span className="install-option-label">{t('officialNpxCommand')}</span>
+          <InstallCommand command={SELF_OFFICIAL_NPX_COMMAND} />
         </div>
       </div>
     </aside>

@@ -24,7 +24,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
       en: 'A Rust/ratatui terminal client that speaks the DSH SDK JSON-RPC protocol directly and runs standalone or as a profile bundle.',
       zh: 'Rust/ratatui 终端客户端，直接使用 DSH SDK JSON-RPC 协议，支持独立运行或作为 profile bundle 加载。',
     },
-    install: 'npx @deepseek-ai/dsh plugin --profile web add github:openma-ai/deepseek-harness-tui',
+    install: 'dsh plugin --profile web add github:openma-ai/deepseek-harness-tui',
     added: '2026-08-14',
   },
   {
@@ -36,7 +36,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
       en: 'Cross-session messaging for DSH: any session on the machine can list and message any other, Claude Code-style, via a local heartbeat registry and inbox.',
       zh: '跨会话消息：本机任意会话都可像 Claude Code 一样列出并互发消息，基于本地心跳注册表与收件箱。',
     },
-    install: 'npx @deepseek-ai/dsh plugin --profile web add github:Jesse-njx/dsh-crosstalk',
+    install: 'dsh plugin --profile web add github:Jesse-njx/dsh-crosstalk',
     added: '2026-08-14',
   },
   {
@@ -48,7 +48,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
       en: 'One shell tool for PowerShell / Git Bash / WSL on Windows plus an interactive PTY terminal; the default terminal is chosen by the user in DSH settings.',
       zh: '一个 shell 工具：Windows 上统一执行 PowerShell / Git Bash / WSL，外加交互式 PTY 终端，默认终端由用户在设置中选择。',
     },
-    install: 'npx @deepseek-ai/dsh plugin --profile web add github:MAXeaglet/dsh-bash-terminal',
+    install: 'dsh plugin --profile web add github:MAXeaglet/dsh-bash-terminal',
     added: '2026-08-14',
   },
   {
@@ -60,7 +60,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
       en: 'AgentTeams multi-agent teams.',
       zh: 'AgentTeams 多智能体团队。',
     },
-    install: 'npx @deepseek-ai/dsh plugin --profile web add github:NanmiCoder/dsh-agent-teams',
+    install: 'dsh plugin --profile web add github:NanmiCoder/dsh-agent-teams',
     added: '2026-08-13',
   },
   {
@@ -72,7 +72,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
       en: 'Desktop notifications for turn completions, with per-outcome controls and keyword rules.',
       zh: '回合完成桌面通知，按结果分控 + 关键词过滤。',
     },
-    install: 'npx @deepseek-ai/dsh plugin --profile web add github:omdsh-dev/dsh-notification',
+    install: 'dsh plugin --profile web add github:omdsh-dev/dsh-notification',
     added: '2026-08-13',
   },
   {
@@ -84,7 +84,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
       en: 'An MC-Fabric-style hook processor.',
       zh: '类似 MC Fabric 的 hook 处理器。',
     },
-    install: 'npx @deepseek-ai/dsh plugin --profile web add github:omdsh-dev/fabric',
+    install: 'dsh plugin --profile web add github:omdsh-dev/fabric',
     added: '2026-08-13',
   },
   {
@@ -96,7 +96,7 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
       en: 'Play Gomoku against the AI, or let two AIs battle it out.',
       zh: '与 AI 下五子棋，也可让 AI 对局比棋力。',
     },
-    install: 'npx @deepseek-ai/dsh plugin --profile web add github:omdsh-dev/dsh-gomoku',
+    install: 'dsh plugin --profile web add github:omdsh-dev/dsh-gomoku',
     added: '2026-08-13',
   },
 ]

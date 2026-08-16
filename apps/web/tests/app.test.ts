@@ -294,7 +294,7 @@ describe('market API', () => {
       url: 'https://github.com/openma-ai/deepseek-harness-tui',
       category: 'ui',
       description: TEST_PLUGINS[0]!.description,
-      install: 'npx @deepseek-ai/dsh plugin --profile web add github:openma-ai/deepseek-harness-tui',
+      install: 'dsh plugin --profile web add github:openma-ai/deepseek-harness-tui',
       added: '2026-08-14',
       stars: 42,
     })

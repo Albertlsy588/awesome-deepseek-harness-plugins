@@ -1,9 +1,14 @@
 import { Check, ChevronDown, Copy } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { officialInstallCommand, trackedInstallCommand, type RegistryPlugin } from '../lib/api'
+import {
+  officialInstallCommand,
+  officialNpxInstallCommand,
+  trackedInstallCommand,
+  type RegistryPlugin,
+} from '../lib/api'
 import { useI18n } from '../lib/i18n'
 
-type Kind = 'tracked' | 'official'
+type Kind = 'tracked' | 'official' | 'officialNpx'
 
 export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'> }) {
   const { t } = useI18n()
@@ -39,7 +44,11 @@ export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'o
   }, [open])
 
   async function copy(kind: Kind) {
-    const command = kind === 'tracked' ? trackedInstallCommand(plugin) : officialInstallCommand(plugin)
+    const command = kind === 'tracked'
+      ? trackedInstallCommand(plugin)
+      : kind === 'official'
+        ? officialInstallCommand(plugin)
+        : officialNpxInstallCommand(plugin)
     await navigator.clipboard.writeText(command)
     setCopied(kind)
     setOpen(false)
@@ -94,6 +103,11 @@ export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'o
             <span className="split-menu-label">{t('officialCliCommand')}</span>
             <code>{officialInstallCommand(plugin)}</code>
             {copied === 'official' ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+          </button>
+          <button type="button" role="menuitem" ref={(el) => { itemRefs.current[2] = el }} onClick={() => copy('officialNpx')}>
+            <span className="split-menu-label">{t('officialNpxCommand')}</span>
+            <code>{officialNpxInstallCommand(plugin)}</code>
+            {copied === 'officialNpx' ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
           </button>
         </div>
       )}

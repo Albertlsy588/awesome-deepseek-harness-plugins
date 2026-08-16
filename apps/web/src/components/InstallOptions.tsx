@@ -1,4 +1,9 @@
-import { officialInstallCommand, trackedInstallCommand, type RegistryPlugin } from '../lib/api'
+import {
+  officialInstallCommand,
+  officialNpxInstallCommand,
+  trackedInstallCommand,
+  type RegistryPlugin,
+} from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { InstallCommand } from './InstallCommand'
 
@@ -14,6 +19,10 @@ export function InstallOptions({ plugin }: { plugin: Pick<RegistryPlugin, 'owner
       <div className="install-option install-option-official">
         <span className="install-option-label">{t('officialCliCommand')}</span>
         <InstallCommand command={officialInstallCommand(plugin)} />
+      </div>
+      <div className="install-option install-option-official">
+        <span className="install-option-label">{t('officialNpxCommand')}</span>
+        <InstallCommand command={officialNpxInstallCommand(plugin)} />
       </div>
     </div>
   )
