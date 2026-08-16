@@ -37,6 +37,27 @@ async function assertNoHorizontalOverflow(page, label) {
   if (overflow) throw new Error(`${label} has horizontal overflow`)
 }
 
+async function assertVisibleSubdirectorySiblingsHaveDistinctTitles(page, label) {
+  const duplicateTitles = await page.locator('.package-row').evaluateAll((rows) => {
+    const siblings = new Map()
+    for (const row of rows) {
+      const link = row.querySelector('.row-link')
+      const href = link?.getAttribute('href') ?? ''
+      const segments = href.split('/').filter(Boolean)
+      if (segments.length <= 3) continue
+      const repositoryPath = segments.slice(0, 3).join('/')
+      const titles = siblings.get(repositoryPath) ?? []
+      titles.push(link?.textContent?.trim() ?? '')
+      siblings.set(repositoryPath, titles)
+    }
+    return [...siblings.entries()]
+      .filter(([, titles]) => titles.length > 1 && new Set(titles).size !== titles.length)
+  })
+  if (duplicateTitles.length > 0) {
+    throw new Error(`${label} repeats titles for subdirectory siblings: ${JSON.stringify(duplicateTitles)}`)
+  }
+}
+
 async function assertMobileEnvironment(page, label) {
   const result = await page.evaluate(() => ({
     maxTouchPoints: navigator.maxTouchPoints,
@@ -197,6 +218,7 @@ try {
   await assertLiveStats(desktop)
   await assertSeo(desktop, 'desktop catalog', '/plugins')
   await assertNoHorizontalOverflow(desktop, 'desktop catalog')
+  await assertVisibleSubdirectorySiblingsHaveDistinctTitles(desktop, 'desktop catalog')
   if (await desktop.locator('.hero-heading h1 a[href="https://deepseek1024.com/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
     throw new Error('catalog hero does not show the linked DeepSeek Harness Plugin 1024Store title')
   }
@@ -242,6 +264,13 @@ try {
   if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 4) {
     throw new Error('rankings should only expose the four GitHub activity modes')
   }
+  if (
+    (await rankings.locator('.ranking-section > .section-title').count()) !== 0
+    || await rankings.locator('#rankings-heading').getAttribute('class') !== 'visually-hidden'
+    || (await rankings.locator('.ranking-mode-group > span').count()) !== 0
+  ) {
+    throw new Error('rankings still show the redundant list heading or GitHub activity label')
+  }
   if (await rankings.locator('.ranking-section .segmented-control button').first().getAttribute('aria-pressed') !== 'true') {
     throw new Error('rankings should default to the 24h growth mode')
   }
@@ -256,6 +285,30 @@ try {
   }
   if ((await rankings.locator('.catalog-hero .github-link[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"]').count()) !== 1) {
     throw new Error('GitHub repository link is missing from the catalog banner')
+  }
+  if ((await rankings.locator('.catalog-hero .hero-author[href="https://www.imsai.cc/"][target="_blank"]').count()) !== 1) {
+    throw new Error('author homepage link is missing from the catalog banner')
+  }
+  if ((await rankings.locator('.catalog-hero .hero-api').textContent())?.trim() !== '免费API') {
+    throw new Error('free API action uses the wrong Chinese label')
+  }
+  if ((await rankings.locator('.catalog-hero .github-link span').textContent())?.trim() !== '插件市场开源') {
+    throw new Error('market source action uses the wrong Chinese label')
+  }
+  const languageStyle = await rankings.locator('.catalog-hero .hero-language').evaluate((node) => {
+    const selected = node.querySelector('button.selected')
+    return {
+      borderWidth: getComputedStyle(node).borderWidth,
+      selectedBackground: selected ? getComputedStyle(selected).backgroundColor : null,
+      switchBackground: getComputedStyle(node).backgroundColor,
+    }
+  })
+  if (
+    languageStyle.borderWidth !== '0px'
+    || languageStyle.selectedBackground !== 'rgba(0, 0, 0, 0)'
+    || languageStyle.switchBackground !== 'rgba(0, 0, 0, 0)'
+  ) {
+    throw new Error(`language switch is too visually prominent: ${JSON.stringify(languageStyle)}`)
   }
   if ((await rankings.locator('.catalog-hero .hero-submit[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"][target="_blank"]').count()) !== 1) {
     throw new Error('submit button does not link to the GitHub repository')
@@ -340,7 +393,9 @@ try {
   await mobile.waitForURL((url) => !url.searchParams.has('category'))
   await assertMobileEnvironment(mobile, 'mobile catalog')
   await assertNoHorizontalOverflow(mobile, 'mobile catalog')
+  await assertVisibleSubdirectorySiblingsHaveDistinctTitles(mobile, 'mobile catalog')
   await assertMinTouchTargets(mobile, 'mobile catalog', [
+    '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
     '.catalog-hero .hero-language button',
@@ -422,6 +477,36 @@ try {
   }
   await mobileRankings.close()
 
+  const apiDocs = await openPage({ width: 1440, height: 900 }, '/docs/api')
+  await apiDocs.locator('.api-docs-contact').waitFor()
+  if ((await apiDocs.locator('.api-docs-contact-link[href="https://www.imsai.cc/"][target="_blank"]').count()) !== 1) {
+    throw new Error('API docs author contact does not link to imsai.cc in a new tab')
+  }
+  if ((await apiDocs.locator('.api-docs-header + .api-docs-contact').count()) !== 1) {
+    throw new Error('API docs author contact is not the first section below the page introduction')
+  }
+  await assertSeo(apiDocs, 'desktop API docs', '/docs/api')
+  await assertNoHorizontalOverflow(apiDocs, 'desktop API docs')
+  await apiDocs.close()
+
+  const mobileApiDocs = await openPage({ width: 390, height: 844 }, '/docs/api', { touch: true })
+  await mobileApiDocs.locator('.api-docs-contact').waitFor()
+  await assertMobileEnvironment(mobileApiDocs, 'mobile API docs')
+  await assertNoHorizontalOverflow(mobileApiDocs, 'mobile API docs')
+  await assertMinTouchTargets(mobileApiDocs, 'mobile API docs', [
+    '.detail-brand',
+    '.detail-utility .language-switch button',
+    '.api-docs-key-button',
+    '.api-docs-contact-link',
+  ])
+  await assertMinFontSize(mobileApiDocs, 'mobile API contact copy', '.api-docs-contact p', 13)
+  await mobileApiDocs.close()
+
+  const compactApiDocs = await openPage({ width: 320, height: 568 }, '/docs/api', { touch: true })
+  await compactApiDocs.locator('.api-docs-contact').waitFor()
+  await assertNoHorizontalOverflow(compactApiDocs, 'compact mobile API docs')
+  await compactApiDocs.close()
+
   const detail = await openPage({ width: 1440, height: 1000 }, '/plugins/openma-ai/deepseek-harness-tui')
   await detail.locator('.detail-header').waitFor()
   await detail.locator('.install-activity-section').waitFor()
@@ -496,6 +581,7 @@ try {
     throw new Error('compact mobile header did not hide the secondary language control')
   }
   await assertMinTouchTargets(compactMobile, 'compact mobile header', [
+    '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
     '.catalog-view-tabs a',

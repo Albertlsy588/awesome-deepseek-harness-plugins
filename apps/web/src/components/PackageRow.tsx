@@ -2,7 +2,7 @@ import { ArrowUpRight, CalendarDays, Download, Star, TrendingUp, Users } from 'l
 import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
-import { packagePath } from '../lib/api'
+import { packagePath, pluginListIdentity } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { ROW_LINK_TARGET } from '../lib/link-target'
@@ -51,6 +51,7 @@ export const PackageRow = memo(function PackageRow({
     : ranking === 'newest'
       ? plugin.latestReleaseAt ?? plugin.added
       : plugin.pushedAt ?? plugin.added
+  const listIdentity = pluginListIdentity(plugin)
 
   return (
     <article className={`package-row${ranking ? ' ranking-row' : ''}`}>
@@ -71,10 +72,10 @@ export const PackageRow = memo(function PackageRow({
               target={ROW_LINK_TARGET}
               rel={ROW_LINK_TARGET ? 'noreferrer' : undefined}
             >
-              {plugin.name}
+              {listIdentity.displayName}
             </Link>
           </h3>
-          <span className="row-owner">{plugin.owner}</span>
+          <span className="row-owner">{listIdentity.sourceLabel}</span>
         </div>
         <p>{plugin.description[language]}</p>
       </div>

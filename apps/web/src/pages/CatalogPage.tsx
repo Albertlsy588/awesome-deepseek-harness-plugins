@@ -6,6 +6,7 @@ import {
   PackagePlus,
   Search,
   Trophy,
+  UserRound,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -322,13 +323,23 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 <span>{t('navApi')}</span>
               </Link>
               <a
+                className="hero-action-link hero-author"
+                href="https://www.imsai.cc/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <UserRound size={16} aria-hidden="true" />
+                <span>{t('authorHome')}</span>
+                <ArrowUpRight size={12} aria-hidden="true" />
+              </a>
+              <a
                 className="hero-action-link github-link"
                 href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"
                 target="_blank"
                 rel="noreferrer"
               >
                 <img src={publicAsset('github-mark.svg')} alt="" aria-hidden="true" />
-                <span>GitHub</span>
+                <span>{t('marketSource')}</span>
                 <ArrowUpRight size={12} aria-hidden="true" />
               </a>
               <a
@@ -459,11 +470,10 @@ export function CatalogPage({ view }: CatalogPageProps) {
 
         {view === 'rankings' && (
           <section className="catalog-section ranking-section" aria-labelledby="rankings-heading">
-            <h2 id="rankings-heading" className="section-title">{copy.listHeading}</h2>
+            <h2 id="rankings-heading" className="visually-hidden">{copy.listHeading}</h2>
             <div className="view-controls">
               <div className="ranking-mode-groups">
                 <div className="ranking-mode-group">
-                  <span>{t('githubRankings')}</span>
                   <div className="segmented-control" role="group" aria-label={t('githubRankings')}>
                     {GITHUB_RANKING_MODES.map((mode) => (
                       <button
