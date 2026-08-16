@@ -257,6 +257,30 @@ try {
   if ((await rankings.locator('.catalog-hero .github-link[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"]').count()) !== 1) {
     throw new Error('GitHub repository link is missing from the catalog banner')
   }
+  if ((await rankings.locator('.catalog-hero .hero-author[href="https://www.imsai.cc/"][target="_blank"]').count()) !== 1) {
+    throw new Error('author homepage link is missing from the catalog banner')
+  }
+  if ((await rankings.locator('.catalog-hero .hero-api').textContent())?.trim() !== '免费API') {
+    throw new Error('free API action uses the wrong Chinese label')
+  }
+  if ((await rankings.locator('.catalog-hero .github-link span').textContent())?.trim() !== '插件市场开源') {
+    throw new Error('market source action uses the wrong Chinese label')
+  }
+  const languageStyle = await rankings.locator('.catalog-hero .hero-language').evaluate((node) => {
+    const selected = node.querySelector('button.selected')
+    return {
+      borderWidth: getComputedStyle(node).borderWidth,
+      selectedBackground: selected ? getComputedStyle(selected).backgroundColor : null,
+      switchBackground: getComputedStyle(node).backgroundColor,
+    }
+  })
+  if (
+    languageStyle.borderWidth !== '0px'
+    || languageStyle.selectedBackground !== 'rgba(0, 0, 0, 0)'
+    || languageStyle.switchBackground !== 'rgba(0, 0, 0, 0)'
+  ) {
+    throw new Error(`language switch is too visually prominent: ${JSON.stringify(languageStyle)}`)
+  }
   if ((await rankings.locator('.catalog-hero .hero-submit[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"][target="_blank"]').count()) !== 1) {
     throw new Error('submit button does not link to the GitHub repository')
   }
@@ -341,6 +365,7 @@ try {
   await assertMobileEnvironment(mobile, 'mobile catalog')
   await assertNoHorizontalOverflow(mobile, 'mobile catalog')
   await assertMinTouchTargets(mobile, 'mobile catalog', [
+    '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
     '.catalog-hero .hero-language button',
@@ -496,6 +521,7 @@ try {
     throw new Error('compact mobile header did not hide the secondary language control')
   }
   await assertMinTouchTargets(compactMobile, 'compact mobile header', [
+    '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
     '.catalog-view-tabs a',

@@ -6,6 +6,7 @@ import {
   PackagePlus,
   Search,
   Trophy,
+  UserRound,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -322,13 +323,23 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 <span>{t('navApi')}</span>
               </Link>
               <a
+                className="hero-action-link hero-author"
+                href="https://www.imsai.cc/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <UserRound size={16} aria-hidden="true" />
+                <span>{t('authorHome')}</span>
+                <ArrowUpRight size={12} aria-hidden="true" />
+              </a>
+              <a
                 className="hero-action-link github-link"
                 href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"
                 target="_blank"
                 rel="noreferrer"
               >
                 <img src={publicAsset('github-mark.svg')} alt="" aria-hidden="true" />
-                <span>GitHub</span>
+                <span>{t('marketSource')}</span>
                 <ArrowUpRight size={12} aria-hidden="true" />
               </a>
               <a

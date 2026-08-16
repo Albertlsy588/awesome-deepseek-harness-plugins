@@ -119,10 +119,10 @@ body {
 }
 
 .language-switch {
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-translucent);
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .language-switch button {
@@ -134,8 +134,8 @@ body {
 }
 
 .language-switch button.selected {
-  background: var(--ink);
-  color: var(--on-ink);
+  background: transparent;
+  color: var(--ink);
   box-shadow: none;
 }
 
@@ -3105,9 +3105,10 @@ main {
 }
 
 .language-switch {
-  border-color: var(--line);
-  border-radius: 8px;
-  background: var(--surface-translucent);
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .language-switch button {
@@ -3115,8 +3116,8 @@ main {
 }
 
 .language-switch button.selected {
-  background: var(--ink);
-  color: var(--on-ink);
+  background: transparent;
+  color: var(--ink);
   box-shadow: none;
 }
 
