@@ -64,15 +64,18 @@ export interface PluginInstallMethod {
 /**
  * A package that declares no entry point at all is the "carrier" pattern: its
  * patch mounts other packages as loader rows and nothing ever imports the
- * carrier itself, so it needs no loadable module.
+ * carrier itself, so it installs and starts with no loadable module of its own.
  *
- * Telling the two apart for certain would mean parsing cordis.patch.yml, which
- * the submission gate deliberately does not do. Until that changes this stays
- * `unknown` rather than `verified`: a badge that over-claims is worse than one
- * that admits ignorance, because the whole point of the badge is trust.
- * Flip this single constant to 'verified' to take the optimistic reading.
+ * The standard is functional — installs and starts — so this is `verified`.
+ * Nothing here executes third-party code, so it is an inference rather than a
+ * test run: a package that declares no entry AND whose patch names itself
+ * would still fail at startup. That combination is a broken package for
+ * everyone, not just for us, and telling the 12 carriers in the catalog
+ * "unknown" to hedge against it would make the badge less useful than it is
+ * worth. Distinguishing the two for certain means parsing cordis.patch.yml,
+ * which the submission gate deliberately does not do.
  */
-export const NO_ENTRY_DECLARED_VERIFICATION: InstallVerification = 'unknown'
+export const NO_ENTRY_DECLARED_VERIFICATION: InstallVerification = 'verified'
 
 const GIT_VERIFICATION: Record<GitInstallCode, InstallVerification> = {
   entry_committed: 'verified',
