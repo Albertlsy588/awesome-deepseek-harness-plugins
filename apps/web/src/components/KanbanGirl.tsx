@@ -427,6 +427,30 @@ export function KanbanGirl() {
     }
   }, [])
 
+  // 视口变小时把宠物拉回可见区域。存下来的位置来自上一次的视口——手机横屏
+  // 拖到右侧后转竖屏，或桌面拖到角落后缩窗口，它就会停在屏幕外再也点不到，
+  // 而且位置进了 localStorage，刷新也回不来。
+  useEffect(() => {
+    const keepInView = () => {
+      const size = petRef.current?.getBoundingClientRect().width ?? 0
+      if (size === 0) return
+      setPos((current) => {
+        if (!current) return current
+        const next = {
+          x: clamp(current.x, 0, Math.max(0, window.innerWidth - size)),
+          y: clamp(current.y, 0, Math.max(0, window.innerHeight - size)),
+        }
+        if (next.x === current.x && next.y === current.y) return current
+        persistStorage(STORAGE_POS, JSON.stringify(next))
+        return next
+      })
+    }
+
+    keepInView()
+    window.addEventListener('resize', keepInView)
+    return () => window.removeEventListener('resize', keepInView)
+  }, [])
+
   // 菜单打开时：点击别处或按 Esc 关闭。
   useEffect(() => {
     if (!menuOpen) return
