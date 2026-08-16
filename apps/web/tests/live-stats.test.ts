@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { HEARTBEAT_TIMEOUT_MS, partitionConnections } from '../worker/lib/live-connections'
+import {
+  HEARTBEAT_TIMEOUT_MS,
+  partitionConnections,
+  summarizeConnections,
+} from '../worker/lib/live-connections'
 
 const NOW = 1_760_000_000_000
 
@@ -67,5 +71,34 @@ describe('live connection accounting', () => {
 
     expect(result.online).toBe(0)
     expect(result.stale).toEqual(['anonymous'])
+  })
+})
+
+describe('connection snapshot', () => {
+  it('separates visitors from sockets and reports no identifiers', () => {
+    const snapshot = summarizeConnections(
+      [
+        { visitId: 'v1', lastBeatAt: NOW - 5_000, connectedAt: NOW - 600_000 },
+        { visitId: 'v1', lastBeatAt: NOW - 3_000, connectedAt: NOW - 300_000 },
+        { visitId: 'v2', lastBeatAt: NOW - 40_000, connectedAt: NOW - 60_000 },
+        { visitId: 'v3', lastBeatAt: null, connectedAt: NOW - 1_000 },
+      ],
+      NOW,
+      2,
+    )
+
+    expect(snapshot.sockets).toBe(4)
+    expect(snapshot.visitors).toBe(3)
+    expect(snapshot.visitorsWithExtraSockets).toBe(1)
+    expect(snapshot.neverBeat).toBe(1)
+    expect(snapshot.evicted).toBe(2)
+    expect(snapshot.heartbeatAgeSeconds?.max).toBe(40)
+    expect(snapshot.connectionAgeSeconds?.max).toBe(600)
+    expect(JSON.stringify(snapshot)).not.toContain('v1')
+  })
+
+  it('reports empty spreads when nothing is connected', () => {
+    const snapshot = summarizeConnections([], NOW, 0)
+    expect(snapshot).toMatchObject({ sockets: 0, visitors: 0, heartbeatAgeSeconds: null })
   })
 })
