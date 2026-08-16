@@ -62,34 +62,73 @@ export function declaredEntryPoint(manifest) {
 }
 
 /**
- * Whether a git install of this manifest yields a loadable package.
+ * Classifies whether a git install of this manifest yields a loadable package.
  *
  * pnpm runs `prepare` after a git install and otherwise ships only what is
  * committed. A plugin whose entry point is a build artifact that is neither
  * committed nor produced by `prepare` installs successfully and then fails at
  * profile boot with a module-not-found error — the failure surfaces far from
- * its cause, so the gate catches it here.
+ * its cause, so the gate names it here.
  *
- * @returns an error message, or undefined when the manifest is installable.
+ * This is a LABEL, not an admission test: the submission is still accepted and
+ * the plugin still gets catalogued. The website derives the same verdict from
+ * its own crawl (apps/web/worker/lib/install-methods.ts); the two must agree,
+ * or the pull-request advisory contradicts the published badge.
+ *
+ * The better outcome wins: a committed entry beats a prepare script, because a
+ * committed entry needs no build allowance from the user.
+ *
+ * @returns `{ code, entryPoint, requiresBuildAllowance }`; never throws.
  */
-function gitInstallDefect(packagePath, manifest, files) {
+export function classifyGitInstall(packagePath, manifest, files) {
   const prepare = isObject(manifest.scripts) ? manifest.scripts.prepare : undefined
-  if (typeof prepare === 'string' && prepare.trim().length > 0) return undefined
-
+  const requiresBuildAllowance = typeof prepare === 'string' && prepare.trim().length > 0
   const entry = declaredEntryPoint(manifest)
-  if (entry === undefined) return undefined
+
+  if (entry === undefined) {
+    return { code: 'no_entry_declared', entryPoint: undefined, requiresBuildAllowance }
+  }
   let entryPath
   try {
     entryPath = resolvePatchPath(packagePath, entry)
   } catch {
-    return `${packagePath} declares an entry point outside the repository: ${entry}`
+    return { code: 'entry_outside_repository', entryPoint: entry, requiresBuildAllowance }
   }
-  if (files.has(entryPath)) return undefined
-  return [
-    `${packagePath}: the entry point ${entry} is not committed and the package has no prepare script,`,
-    'so installing it from GitHub produces a package with no loadable module.',
-    'Commit the built entry point, or add a self-contained prepare script that builds it on install.',
-  ].join(' ')
+  if (files.has(entryPath)) {
+    return { code: 'entry_committed', entryPoint: entry, requiresBuildAllowance }
+  }
+  if (requiresBuildAllowance) {
+    return { code: 'prepare_builds_entry', entryPoint: entry, requiresBuildAllowance }
+  }
+  return { code: 'entry_missing_no_prepare', entryPoint: entry, requiresBuildAllowance }
+}
+
+/** The author-facing advisory for a classification, or undefined when clean. */
+export function gitInstallAdvisory(code, entryPoint, requiresBuildAllowance) {
+  const lines = []
+  if (code === 'entry_missing_no_prepare') {
+    lines.push(
+      `The GitHub install method will be published as UNVERIFIED: the entry point ${entryPoint} is not committed `
+      + 'and the package has no prepare script, so `dsh plugin add github:…` installs cleanly and then fails at '
+      + 'startup with ERR_MODULE_NOT_FOUND. Your plugin is catalogued either way. To clear the label, commit the '
+      + 'built entry point, add a self-contained prepare script, or publish to npm with repository.url and '
+      + 'repository.directory pointing back here.',
+    )
+  }
+  if (code === 'entry_outside_repository') {
+    lines.push(`The entry point ${entryPoint} resolves outside the repository; the GitHub install method will be published as UNVERIFIED.`)
+  }
+  if (code === 'no_entry_declared') {
+    lines.push('This package declares no entry point. That is expected for a bundle whose patch only mounts other packages, but it cannot be confirmed statically, so the GitHub install method will be published as UNKNOWN.')
+  }
+  if (requiresBuildAllowance) {
+    lines.push(
+      'This package builds on install, so the first `dsh plugin add` fails until the user allowlists it — pnpm '
+      + 'prints the exact key to copy into the profile\'s pnpm-workspace.yaml. Publishing prebuilt code to npm '
+      + 'avoids asking users for that permission.',
+    )
+  }
+  return lines.length === 0 ? undefined : lines.join('\n\n')
 }
 
 export async function findHarnessBundle(tree, readBlob, subPath = '') {
@@ -143,12 +182,19 @@ export async function findHarnessBundle(tree, readBlob, subPath = '') {
         invalidBundles.push(`${packageFile.path}: dsh.bundle.patch does not exist: ${patchPath}`)
         continue
       }
-      const installDefect = gitInstallDefect(packageFile.path, manifest, files)
-      if (installDefect !== undefined) {
-        invalidBundles.push(installDefect)
-        continue
+      // Classification never rejects: the entry point being unobtainable is a
+      // published label, not grounds for refusing the submission. Bundle
+      // selection therefore stays independent of the verdict — the first
+      // manifest declaring dsh.bundle wins, matching what the website's crawler
+      // picks for the same repository.
+      const gitInstall = classifyGitInstall(packageFile.path, manifest, files)
+      return {
+        packagePath: packageFile.path,
+        patchPath,
+        packageName: typeof manifest.name === 'string' ? manifest.name : undefined,
+        packageVersion: typeof manifest.version === 'string' ? manifest.version : undefined,
+        gitInstall,
       }
-      return { packagePath: packageFile.path, patchPath }
     } catch (error) {
       invalidBundles.push(error instanceof Error ? error.message : String(error))
     }
@@ -368,9 +414,17 @@ async function main() {
     const categoryIds = new Set(categories?.categories?.map(category => category?.id))
     validateCatalogEntry(entry, file, categoryIds)
     const result = await reviewRepository(entry, client)
-    console.log(`PASS ${entry.id}: ${result.packagePath} -> ${result.patchPath}`)
+    const { code, entryPoint, requiresBuildAllowance } = result.gitInstall
+    console.log(
+      `PASS ${entry.id}: ${result.packagePath} -> ${result.patchPath}`
+      + ` [git-install: ${code}${requiresBuildAllowance ? ', requires build allowance' : ''}]`,
+    )
     if (repository !== undefined && pullNumber !== undefined) {
-      const detail = 'All static checks passed. The validated pull request will be squash-merged automatically.'
+      const advisory = gitInstallAdvisory(code, entryPoint, requiresBuildAllowance)
+      const detail = [
+        'All static checks passed. The validated pull request will be squash-merged automatically.',
+        ...(advisory === undefined ? [] : ['', '### Install method advisory', '', advisory]),
+      ].join('\n')
       await upsertReviewComment(repository, pullNumber, client, reviewComment('passed', detail))
     }
   } catch (error) {

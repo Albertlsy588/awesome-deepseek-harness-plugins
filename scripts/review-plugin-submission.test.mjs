@@ -5,7 +5,9 @@ import path from 'node:path'
 import test from 'node:test'
 
 import {
+  classifyGitInstall,
   findHarnessBundle,
+  gitInstallAdvisory,
   parseNameStatus,
   pullRequestChanges,
   readCatalogEntry,
@@ -243,7 +245,8 @@ test('accepts a root package with an existing bundle patch', async () => {
     name: 'plugin',
     dsh: { bundle: { patch: './cordis.patch.yml' } },
   }))
-  assert.deepEqual(result, { packagePath: 'package.json', patchPath: 'cordis.patch.yml' })
+  assert.equal(result.packagePath, 'package.json')
+  assert.equal(result.patchPath, 'cordis.patch.yml')
 })
 
 test('accepts a bundle declared by a monorepo subpackage', async () => {
@@ -257,10 +260,8 @@ test('accepts a bundle declared by a monorepo subpackage', async () => {
     ['plugin', blob({ dsh: { bundle: { patch: './config/cordis.patch.yml' } } })],
   ])
   const result = await findHarnessBundle(tree, async sha => blobs.get(sha))
-  assert.deepEqual(result, {
-    packagePath: 'packages/plugin/package.json',
-    patchPath: 'packages/plugin/config/cordis.patch.yml',
-  })
+  assert.equal(result.packagePath, 'packages/plugin/package.json')
+  assert.equal(result.patchPath, 'packages/plugin/config/cordis.patch.yml')
 })
 
 test('pins a subdirectory id to the manifest at exactly that path', async () => {
@@ -277,10 +278,8 @@ test('pins a subdirectory id to the manifest at exactly that path', async () => 
     ['bar', blob({ dsh: { bundle: { patch: './cordis.patch.yml' } } })],
   ])
   const result = await findHarnessBundle(tree, async sha => blobs.get(sha), 'packages/foo')
-  assert.deepEqual(result, {
-    packagePath: 'packages/foo/package.json',
-    patchPath: 'packages/foo/cordis.patch.yml',
-  })
+  assert.equal(result.packagePath, 'packages/foo/package.json')
+  assert.equal(result.patchPath, 'packages/foo/cordis.patch.yml')
 })
 
 test('rejects a subdirectory id whose path has no package.json even when other bundles exist', async () => {
@@ -330,60 +329,70 @@ test('reviews a subdirectory entry against its pinned manifest path', async () =
   )
 })
 
-test('rejects a bundle whose entry point is neither committed nor built on install', async () => {
+test('classifies an unobtainable entry point instead of rejecting the submission', async () => {
   // The shape that broke a real install: main points at a build artifact, the
   // artifact is not committed, and there is no prepare script to produce it.
+  // The plugin is still catalogued — the verdict becomes a published label.
   const tree = [
     { path: 'package.json', type: 'blob', sha: 'package' },
     { path: 'cordis.patch.yml', type: 'blob', sha: 'patch' },
   ]
-  await assert.rejects(
-    findHarnessBundle(tree, async () => blob({
-      name: 'plugin',
-      main: 'lib/index.js',
-      files: ['lib'],
-      scripts: { build: 'tsdown' },
-      dsh: { bundle: { patch: './cordis.patch.yml' } },
-    })),
-    /entry point lib\/index\.js is not committed[\s\S]*no prepare script/,
-  )
-})
-
-test('accepts an entry point that is committed or produced by prepare', async () => {
-  const patch = { path: 'cordis.patch.yml', type: 'blob', sha: 'patch' }
-  const manifest = { path: 'package.json', type: 'blob', sha: 'package' }
-
-  // Committed build output.
-  const committed = await findHarnessBundle(
-    [manifest, patch, { path: 'lib/index.js', type: 'blob', sha: 'entry' }],
-    async () => blob({ main: 'lib/index.js', dsh: { bundle: { patch: './cordis.patch.yml' } } }),
-  )
-  assert.equal(committed.packagePath, 'package.json')
-
-  // Built at install time instead.
-  const prepared = await findHarnessBundle([manifest, patch], async () => blob({
+  const result = await findHarnessBundle(tree, async () => blob({
+    name: '@scope/plugin',
+    version: '1.2.3',
     main: 'lib/index.js',
-    scripts: { prepare: 'tsdown' },
+    files: ['lib'],
+    scripts: { build: 'tsdown' },
     dsh: { bundle: { patch: './cordis.patch.yml' } },
   }))
-  assert.equal(prepared.packagePath, 'package.json')
+  assert.equal(result.packagePath, 'package.json')
+  assert.deepEqual(result.gitInstall, {
+    code: 'entry_missing_no_prepare',
+    entryPoint: 'lib/index.js',
+    requiresBuildAllowance: false,
+  })
+  // The npm coordinates travel with the result so the advisory can name them.
+  assert.equal(result.packageName, '@scope/plugin')
+  assert.equal(result.packageVersion, '1.2.3')
 
-  // exports takes precedence over main, and a bundle that declares no entry at
-  // all is left alone — it may load purely through its patch.
-  await assert.rejects(
-    findHarnessBundle([manifest, patch], async () => blob({
-      exports: { '.': { default: './lib/index.js' } },
-      dsh: { bundle: { patch: './cordis.patch.yml' } },
-    })),
-    /entry point \.\/lib\/index\.js is not committed/,
-  )
-  const undeclared = await findHarnessBundle([manifest, patch], async () => blob({
-    dsh: { bundle: { patch: './cordis.patch.yml' } },
-  }))
-  assert.equal(undeclared.packagePath, 'package.json')
+  const advisory = gitInstallAdvisory(result.gitInstall.code, result.gitInstall.entryPoint, false)
+  assert.match(advisory, /UNVERIFIED/)
+  assert.match(advisory, /catalogued either way/)
 })
 
-test('checks the entry point of a subdirectory bundle against its own directory', async () => {
+test('prefers a committed entry over a prepare script', () => {
+  const files = new Map([['lib/index.js', {}]])
+  // Both present: the committed entry wins, because it needs no build
+  // allowance — but the allowance flag still reports the prepare script.
+  assert.deepEqual(
+    classifyGitInstall('package.json', {
+      main: 'lib/index.js',
+      scripts: { prepare: 'tsdown' },
+    }, files),
+    { code: 'entry_committed', entryPoint: 'lib/index.js', requiresBuildAllowance: true },
+  )
+  // Only the prepare script: obtainable, but the user must allowlist the build.
+  assert.deepEqual(
+    classifyGitInstall('package.json', {
+      main: 'lib/index.js',
+      scripts: { prepare: 'tsdown' },
+    }, new Map()),
+    { code: 'prepare_builds_entry', entryPoint: 'lib/index.js', requiresBuildAllowance: true },
+  )
+  // exports wins over main, and an escaping entry is called out separately.
+  assert.equal(
+    classifyGitInstall('package.json', { exports: { '.': { default: './lib/index.js' } } }, new Map()).code,
+    'entry_missing_no_prepare',
+  )
+  assert.equal(
+    classifyGitInstall('packages/foo/package.json', { main: '../../../escape.js' }, new Map()).code,
+    'entry_outside_repository',
+  )
+  // No entry at all: the carrier pattern, which cannot be confirmed statically.
+  assert.equal(classifyGitInstall('package.json', {}, new Map()).code, 'no_entry_declared')
+})
+
+test('classifies a subdirectory bundle against its own directory', async () => {
   const tree = [
     { path: 'packages/foo/package.json', type: 'blob', sha: 'foo' },
     { path: 'packages/foo/cordis.patch.yml', type: 'blob', sha: 'patch' },
@@ -391,17 +400,15 @@ test('checks the entry point of a subdirectory bundle against its own directory'
     { path: 'packages/bar/lib/index.js', type: 'blob', sha: 'bar-entry' },
   ]
   const manifest = blob({ main: 'lib/index.js', dsh: { bundle: { patch: './cordis.patch.yml' } } })
-  await assert.rejects(
-    findHarnessBundle(tree, async () => manifest, 'packages/foo'),
-    /packages\/foo\/package\.json: the entry point lib\/index\.js is not committed/,
-  )
+  const missing = await findHarnessBundle(tree, async () => manifest, 'packages/foo')
+  assert.equal(missing.gitInstall.code, 'entry_missing_no_prepare')
 
   const withEntry = await findHarnessBundle(
     [...tree, { path: 'packages/foo/lib/index.js', type: 'blob', sha: 'foo-entry' }],
     async () => manifest,
     'packages/foo',
   )
-  assert.equal(withEntry.packagePath, 'packages/foo/package.json')
+  assert.equal(withEntry.gitInstall.code, 'entry_committed')
 })
 
 test('rejects a repository without dsh.bundle.patch', async () => {
