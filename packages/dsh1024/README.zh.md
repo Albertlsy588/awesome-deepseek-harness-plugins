@@ -17,11 +17,11 @@
 npx dsh1024 store
 ```
 
-该命令通过官方 CLI 执行 `dsh plugin --profile web add dsh1024`，并匿名计入
-安装统计。直接使用官方 CLI 效果相同：
+该命令通过官方 CLI 执行 `npx @deepseek-ai/dsh plugin --profile web add dsh1024`，
+并匿名计入安装统计。直接使用官方 CLI 效果相同：
 
 ```sh
-dsh plugin --profile web add dsh1024
+npx @deepseek-ai/dsh plugin --profile web add dsh1024
 ```
 
 安装完成后重启 DeepSeek Harness。

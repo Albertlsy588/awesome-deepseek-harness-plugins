@@ -48,7 +48,7 @@ Compact full-catalog registry for the `dsh1024` in-DSH marketplace plugin, the R
     "url": "https://github.com/owner/repository",
     "category": "tools",
     "description": { "en": "…", "zh": "…" },
-    "install": "dsh plugin --profile web add github:owner/repository",
+    "install": "npx @deepseek-ai/dsh plugin --profile web add github:owner/repository",
     "added": "2026-08-15",
     "stars": 12
   }]

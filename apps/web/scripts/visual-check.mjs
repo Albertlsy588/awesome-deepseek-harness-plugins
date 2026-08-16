@@ -278,7 +278,7 @@ try {
   // dedicated `npx dsh1024 store` / `… add dsh1024` pair instead of the generic
   // owner/repository commands.
   const splitMenuText = await rankings.locator('.split-install-menu').textContent()
-  if (!splitMenuText?.includes('npx dsh1024 ') || !splitMenuText.includes('dsh plugin --profile web add')) {
+  if (!splitMenuText?.includes('npx dsh1024 ') || !splitMenuText.includes('npx @deepseek-ai/dsh plugin --profile web add')) {
     throw new Error('split install menu is missing the tracked or official install command')
   }
   await rankings.keyboard.press('Escape')
@@ -441,7 +441,7 @@ try {
   if (!detailInstallCommands.some((text) => text.includes('npx dsh1024 add '))) {
     throw new Error('detail page is missing the tracked dsh1024 install command')
   }
-  if (!detailInstallCommands.some((text) => text.includes('dsh plugin --profile web add github:'))) {
+  if (!detailInstallCommands.some((text) => text.includes('npx @deepseek-ai/dsh plugin --profile web add github:'))) {
     throw new Error('detail page is missing the official CLI install command')
   }
   if (detailInstallCommands.some((text) => text.includes('@dsh-1024store/cli'))) {

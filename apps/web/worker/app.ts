@@ -347,7 +347,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         url: plugin.url,
         category: plugin.category,
         description: plugin.description,
-        install: `dsh plugin --profile web add github:${plugin.owner}/${plugin.repository}`,
+        install: `npx @deepseek-ai/dsh plugin --profile web add github:${plugin.owner}/${plugin.repository}`,
         added: plugin.added,
         stars: plugin.stars,
       })),

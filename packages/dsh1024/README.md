@@ -20,12 +20,12 @@ provides two entry points:
 npx dsh1024 store
 ```
 
-This runs `dsh plugin --profile web add dsh1024` through the official CLI and
-counts the install anonymously. Installing directly with the official CLI works
-the same way:
+This runs `npx @deepseek-ai/dsh plugin --profile web add dsh1024` through the
+official CLI and counts the install anonymously. Installing directly with the
+official CLI works the same way:
 
 ```sh
-dsh plugin --profile web add dsh1024
+npx @deepseek-ai/dsh plugin --profile web add dsh1024
 ```
 
 Restart DeepSeek Harness after installation.

@@ -150,7 +150,7 @@ describe('catalog snapshot storage', () => {
     const discovered = result.snapshot.plugins.find((plugin) => plugin.owner === 'scanner')
     expect(discovered).toMatchObject({
       category: 'unclassified',
-      install: 'dsh plugin --profile web add github:scanner/discovered-plugin',
+      install: 'npx @deepseek-ai/dsh plugin --profile web add github:scanner/discovered-plugin',
     })
     expect(put).toHaveBeenCalledOnce()
   })

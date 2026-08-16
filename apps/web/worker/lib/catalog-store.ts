@@ -11,7 +11,7 @@ import { fetchGitHubMetrics, metricKey } from './github-metrics'
 import { emptyInstallMetrics, loadInstallMetrics } from './install-metrics'
 import { updateStarHistory } from './star-history'
 
-const SNAPSHOT_KEY = 'catalog:snapshot:v6'
+const SNAPSHOT_KEY = 'catalog:snapshot:v7'
 const SNAPSHOT_TTL_MS = 15 * 60 * 1000
 
 type JsonObject = Record<string, unknown>

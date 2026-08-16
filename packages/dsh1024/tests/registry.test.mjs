@@ -20,7 +20,7 @@ const registry = {
     url: 'https://github.com/owner/repo',
     category: 'tools',
     description: { en: 'Plugin', zh: '插件' },
-    install: 'dsh plugin --profile web add github:owner/repo',
+    install: 'npx @deepseek-ai/dsh plugin --profile web add github:owner/repo',
     added: '2026-08-15',
     stars: 42,
   }],
