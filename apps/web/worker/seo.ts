@@ -1,4 +1,4 @@
-import { findPlugin, repositoryName } from './lib/catalog'
+import { comparePlugins, findPlugin, hasGrowthForSort, repositoryName } from './lib/catalog'
 import {
   renderCollectionShell,
   renderNotFoundShell,
@@ -8,6 +8,7 @@ import {
 } from './seo-content'
 import {
   absoluteUrl,
+  apiDocsNodes,
   collectionCopy,
   collectionPageNode,
   graph,
@@ -16,6 +17,7 @@ import {
   pluginNodes,
   pluginPath,
   pluginTitle,
+  simplePageNode,
   siteNodes,
   SITE_IMAGE,
   SITE_NAME,
@@ -74,20 +76,27 @@ function shellCatalog(catalog: SeoCatalog): ShellCatalog {
   return { updated: catalog.updated, plugins: catalog.plugins, categories: catalog.categories }
 }
 
-function byStars(left: CatalogPlugin, right: CatalogPlugin): number {
-  return (right.stars ?? 0) - (left.stars ?? 0) || left.name.localeCompare(right.name)
-}
+/**
+ * The snapshot arrives ordered by normalized repository name, so any "top
+ * plugins" list has to be re-sorted — and it must be sorted the way the page
+ * the reader lands on actually sorts, or the ItemList claims an order the
+ * rendered page does not show. `/` defaults to 24h star growth, `/plugins` to
+ * stars. Sorting runs on every HTML request, so results are memoised against
+ * the snapshot revision.
+ */
+const rankedCache = new Map<string, CatalogPlugin[]>()
 
-// The snapshot arrives ordered by normalized repository name, so a "top plugins"
-// list has to be re-sorted. That runs on every HTML request, so the result is
-// memoised against the snapshot revision rather than recomputed per hit.
-let rankedCache: { revision: string; plugins: CatalogPlugin[] } | null = null
-
-function topPlugins(catalog: SeoCatalog, limit: number): CatalogPlugin[] {
-  if (rankedCache?.revision !== catalog.revision) {
-    rankedCache = { revision: catalog.revision, plugins: [...catalog.plugins].sort(byStars) }
-  }
-  return rankedCache.plugins.slice(0, limit)
+function rankedPlugins(catalog: SeoCatalog, sort: 'stars' | 'growth24h'): CatalogPlugin[] {
+  const key = `${catalog.revision}:${sort}`
+  const cached = rankedCache.get(key)
+  if (cached) return cached
+  const ranked = catalog.plugins
+    .filter((plugin) => hasGrowthForSort(plugin, sort))
+    .sort(comparePlugins(sort))
+  // One snapshot at a time: an older revision's entries are dead weight.
+  rankedCache.clear()
+  rankedCache.set(key, ranked)
+  return ranked
 }
 
 function safeDecode(value: string): string | null {
@@ -110,8 +119,9 @@ function collectionMetadata(
   language: Language,
 ): PageMetadata {
   const copy = collectionCopy(view, language, catalog.plugins.length)
-  const ranked = topPlugins(catalog, ITEM_LIST_LIMIT)
-  const list = itemListNode(ranked, path, copy.listHeading, catalog.plugins.length)
+  const sort = view === 'rankings' ? 'growth24h' : 'stars'
+  const ranked = rankedPlugins(catalog, sort)
+  const list = itemListNode(ranked.slice(0, ITEM_LIST_LIMIT), path, copy.listHeading, ranked.length)
   return {
     title: copy.title,
     description: copy.description,
@@ -124,7 +134,8 @@ function collectionMetadata(
     ]),
     status: 200,
     shell: renderCollectionShell(shellCatalog(catalog), language, copy, {
-      limit: view === 'rankings' ? 60 : 120,
+      listed: ranked.slice(0, view === 'rankings' ? 60 : 120),
+      showCategories: view === 'catalog',
     }),
     imageAlt: `${SITE_NAME} — ${copy.heading}`,
   }
@@ -151,28 +162,7 @@ export function metadataForPath(
       description: copy.description,
       canonical: url,
       robots: 'index,follow',
-      schema: graph([
-        ...siteNodes(),
-        {
-          '@type': 'TechArticle',
-          '@id': `${url}#webpage`,
-          url,
-          name: copy.title,
-          description: copy.description,
-          inLanguage: language === 'zh' ? 'zh-CN' : 'en',
-          isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
-          mainEntity: { '@id': `${url}#api` },
-        },
-        {
-          '@type': 'WebAPI',
-          '@id': `${url}#api`,
-          name: 'DSH 1024Store Plugin Search API',
-          description: copy.description,
-          documentation: url,
-          url: 'https://api.deepseek1024.com/v1/plugins/search',
-          provider: { '@id': `${SITE_ORIGIN}/#organization` },
-        },
-      ]),
+      schema: graph([...siteNodes(), ...apiDocsNodes(copy, language)]),
       status: 200,
       shell: renderSimpleShell(copy.heading, copy.intro),
       imageAlt: `${SITE_NAME} — ${copy.heading}`,
@@ -187,17 +177,7 @@ export function metadataForPath(
       description: copy.description,
       canonical: url,
       robots: 'noindex,follow',
-      schema: graph([
-        ...siteNodes(),
-        {
-          '@type': 'WebPage',
-          '@id': `${url}#webpage`,
-          url,
-          name: copy.title,
-          description: copy.description,
-          isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
-        },
-      ]),
+      schema: graph([...siteNodes(), simplePageNode('/account', copy, language)]),
       status: 200,
       shell: renderSimpleShell(copy.heading, copy.intro),
     }
@@ -321,6 +301,26 @@ function degradedPluginMetadata(
   }
 }
 
+const INDEXABLE_COLLECTION_PATHS = new Set(['/', '/plugins', '/rankings'])
+const COLLECTION_PARAMS = ['q', 'category', 'sort'] as const
+
+/**
+ * A filtered or searched collection view is a permutation of one page, so it is
+ * noindexed and drops its canonical — the filtered result really is different
+ * content, and pointing it at the unfiltered page would contradict the noindex.
+ *
+ * A campaign tag is the opposite case: `/?utm_source=x` is byte-identical to
+ * `/`, so it stays indexable and simply canonicalises to the clean URL. Treating
+ * those as filters would noindex every shared link and consolidate nothing.
+ */
+export function collectionQueryKind(url: URL): 'clean' | 'filtered' | 'tagged' {
+  if (!INDEXABLE_COLLECTION_PATHS.has(url.pathname)) return 'clean'
+  for (const key of COLLECTION_PARAMS) {
+    if ((url.searchParams.get(key) ?? '').trim().length > 0) return 'filtered'
+  }
+  return [...url.searchParams.keys()].length > 0 ? 'tagged' : 'clean'
+}
+
 function xmlEscape(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -394,7 +394,15 @@ export function buildRobotsTxt(): string {
 
 /** robots.txt for the API-only host, which has no indexable surface at all. */
 export function buildApiHostRobotsTxt(): string {
-  return ['User-agent: *', 'Disallow: /', ''].join('\n')
+  return [
+    'User-agent: *',
+    // The two endpoints llms.txt and /docs/api document; the responses carry
+    // X-Robots-Tag: noindex so they are usable without being indexable.
+    'Allow: /v1/plugins/search',
+    'Allow: /v1/health',
+    'Disallow: /',
+    '',
+  ].join('\n')
 }
 
 /**
@@ -404,7 +412,7 @@ export function buildApiHostRobotsTxt(): string {
  */
 export function buildLlmsFullTxt(catalog: SeoCatalog): string {
   const grouped = new Map<string, CatalogPlugin[]>()
-  for (const plugin of [...catalog.plugins].sort(byStars)) {
+  for (const plugin of [...catalog.plugins].sort(comparePlugins('stars'))) {
     const bucket = grouped.get(plugin.category) ?? []
     bucket.push(plugin)
     grouped.set(plugin.category, bucket)
@@ -460,6 +468,9 @@ export function rewriteHtmlResponse(response: Response, metadata: PageMetadata):
     .on('meta[property="og:url"]', {
       element(element) {
         if (metadata.canonical) element.setAttribute('content', metadata.canonical)
+        // Leaving the static homepage URL on a permutation would describe the
+        // wrong page to anything that unfurls the link.
+        else element.remove()
       },
     })
     .on('meta[property="og:image"], meta[name="twitter:image"]', {

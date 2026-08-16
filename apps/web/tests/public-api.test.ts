@@ -31,7 +31,12 @@ describe('public API host mapping', () => {
 
     const robots = publicApiNotFound('/robots.txt')
     expect(robots.status).toBe(200)
-    await expect(robots.text()).resolves.toBe('User-agent: *\nDisallow: /\n')
+    const body = await robots.text()
+    expect(body).toContain('Disallow: /')
+    // The two endpoints the docs and llms.txt advertise stay reachable; the rest
+    // of the host has nothing an agent should fetch.
+    expect(body).toContain('Allow: /v1/plugins/search')
+    expect(body).toContain('Allow: /v1/health')
 
     const missing = publicApiNotFound('/v1/registry')
     expect(missing.status).toBe(404)

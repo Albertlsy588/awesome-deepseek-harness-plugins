@@ -98,7 +98,8 @@ export function pluginDescription(
   categoryLabel: string,
   language: Language = 'en',
 ): string {
-  const lead = pluginLeadSentence(name, owner, description, categoryLabel, language)
+  const raw = pluginLeadSentence(name, owner, description, categoryLabel, language)
+  const lead = /[.!?。！？…]$/.test(raw) ? raw : `${raw}.`
   const tail = language === 'zh'
     ? ` ${owner} 开发的 DSH 插件，一条命令即可安装。`
     : ` DSH plugin by ${owner}. Install with one command.`
@@ -400,6 +401,44 @@ export function pluginNodes(
       ],
     },
   ]
+}
+
+export function apiDocsNodes(copy: CollectionCopy, language: Language): object[] {
+  const url = absoluteUrl('/docs/api')
+  return [
+    {
+      '@type': 'TechArticle',
+      '@id': `${url}#webpage`,
+      url,
+      name: copy.title,
+      description: copy.description,
+      inLanguage: language === 'zh' ? 'zh-CN' : 'en',
+      isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
+      mainEntity: { '@id': `${url}#api` },
+    },
+    {
+      '@type': 'WebAPI',
+      '@id': `${url}#api`,
+      name: 'DSH 1024Store Plugin Search API',
+      description: copy.description,
+      documentation: url,
+      url: 'https://api.deepseek1024.com/v1/plugins/search',
+      provider: { '@id': `${SITE_ORIGIN}/#organization` },
+    },
+  ]
+}
+
+export function simplePageNode(path: string, copy: CollectionCopy, language: Language): object {
+  const url = absoluteUrl(path)
+  return {
+    '@type': 'WebPage',
+    '@id': `${url}#webpage`,
+    url,
+    name: copy.title,
+    description: copy.description,
+    inLanguage: language === 'zh' ? 'zh-CN' : 'en',
+    isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
+  }
 }
 
 export function graph(nodes: object[]): object {

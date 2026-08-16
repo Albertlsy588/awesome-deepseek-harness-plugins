@@ -103,7 +103,7 @@ function installsForSort(plugin: CatalogPlugin, sort: CatalogSort): number | nul
   return null
 }
 
-function hasGrowthForSort(plugin: CatalogPlugin, sort: CatalogSort): boolean {
+export function hasGrowthForSort(plugin: CatalogPlugin, sort: CatalogSort): boolean {
   return sort !== 'growth24h' && sort !== 'growth7d' && sort !== 'growth30d'
     ? true
     : growthForSort(plugin, sort) !== null

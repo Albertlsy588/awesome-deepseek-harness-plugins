@@ -271,8 +271,10 @@ export function CatalogPage({ view }: CatalogPageProps) {
   )
   const hasIndexableFilters = Boolean(query || category || requestedSort)
   const rankedForSchema = useMemo(
-    () => [...(catalog?.rankings.stars ?? [])].slice(0, 30),
-    [catalog],
+    () => (view === 'catalog'
+      ? catalog?.rankings.stars ?? []
+      : catalog?.rankings[rankingMode] ?? []).slice(0, 30),
+    [catalog, rankingMode, view],
   )
 
   usePageSeo({
@@ -280,6 +282,10 @@ export function CatalogPage({ view }: CatalogPageProps) {
     description: copy.description,
     path: canonicalPath,
     language,
+    // Until the catalog resolves there is no ItemList and no plugin count, and
+    // writing that emptiness over the Worker's populated metadata is strictly
+    // worse than leaving the served head alone.
+    ready: Boolean(catalog),
     robots: hasIndexableFilters ? 'noindex,follow' : 'index,follow',
     canonical: hasIndexableFilters ? null : `${SITE_ORIGIN}${canonicalPath}`,
     schema: graph([

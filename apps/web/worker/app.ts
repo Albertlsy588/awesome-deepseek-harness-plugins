@@ -395,6 +395,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       install: plugin.install,
     }))
     context.header('X-Catalog-Source', snapshotResult.source)
+    context.header('X-Robots-Tag', 'noindex')
     return context.json({
       query: q,
       page,
@@ -418,7 +419,19 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       executionContext(context),
     )
     const plugin = findPlugin(snapshot.snapshot.plugins, owner, name)
-    if (!plugin) return context.json({ error: 'Package not found.' }, 404)
+    if (!plugin) {
+      context.header('X-Catalog-Source', snapshot.source)
+      if (snapshot.source === 'empty') {
+        // Without this the client cannot tell an outage from a deleted plugin,
+        // and would noindex every real page for the duration of the outage.
+        context.header('Cache-Control', 'no-store')
+        return context.json(
+          { error: 'The package catalog is temporarily unavailable.', code: 'CATALOG_UNAVAILABLE' },
+          503,
+        )
+      }
+      return context.json({ error: 'Package not found.', code: 'NOT_FOUND' }, 404)
+    }
 
     const token = context.env?.GITHUB_TOKEN?.trim() || undefined
     const canonicalPluginId = `${plugin.owner}/${repositoryName(plugin)}`
@@ -457,6 +470,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const { snapshot } = result
     context.header('Cache-Control', REGISTRY_CACHE_HEADER)
     context.header('X-Catalog-Source', result.source)
+    context.header('X-Robots-Tag', 'noindex')
     const registry: RegistryProjection = {
       name: 'dsh-1024store-catalog',
       updated: snapshot.generatedAt,

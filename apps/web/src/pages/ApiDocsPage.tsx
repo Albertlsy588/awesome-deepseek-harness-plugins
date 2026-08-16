@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { publicAsset } from '../lib/assets'
 import { useI18n } from '../lib/i18n'
-import { collectionCopy } from '../../worker/seo-templates'
+import { apiDocsNodes, collectionCopy, graph, siteNodes } from '../../worker/seo-templates'
 import { usePageSeo } from '../lib/usePageSeo'
 
 const PUBLIC_API_ORIGIN = 'https://api.deepseek1024.com'
@@ -65,6 +65,7 @@ export function ApiDocsPage() {
     description: copy.description,
     path: '/docs/api',
     language,
+    schema: graph([...siteNodes(), ...apiDocsNodes(copy, language)]),
   })
 
   return (

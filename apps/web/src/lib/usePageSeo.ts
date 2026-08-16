@@ -86,16 +86,22 @@ export function usePageSeo({
     setMeta('name', 'twitter:description', description)
     setMeta('name', 'twitter:image', SITE_IMAGE)
 
-    // Never remove the server-rendered node: an empty client schema means "this
-    // view has nothing to add", not "discard what the Worker published".
-    if (!schemaJson) return
+    // Two different leftovers can be sitting in the head here. The Worker's own
+    // node is correct for this URL and must survive a view that has no schema of
+    // its own. A node this hook wrote for a *previous* view is stale the moment
+    // the router moves, so it has to go — otherwise /docs/api reached in-app
+    // keeps the homepage's CollectionPage graph.
     let schemaElement = document.head.querySelector<HTMLScriptElement>('script[data-seo-schema]')
+    if (!schemaJson) {
+      if (schemaElement?.dataset.seoSchema === 'client') schemaElement.remove()
+      return
+    }
     if (!schemaElement) {
       schemaElement = document.createElement('script')
       schemaElement.type = 'application/ld+json'
-      schemaElement.dataset.seoSchema = ''
       document.head.append(schemaElement)
     }
+    schemaElement.dataset.seoSchema = 'client'
     schemaElement.textContent = schemaJson
   }, [canonicalOverride, description, language, path, ready, robots, schemaJson, title])
 }

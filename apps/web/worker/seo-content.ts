@@ -118,6 +118,38 @@ function categorySummary(catalog: ShellCatalog, language: Language): string {
   ].join('')
 }
 
+/**
+ * Neighbours first, then the category's best known plugins.
+ *
+ * Ranking by stars alone would link the same dozen repositories from every one
+ * of ~2,900 pages and leave the rest of the catalog with no inbound link at
+ * all. Walking the snapshot's own ordering instead chains every plugin to its
+ * neighbours, so each one is reachable, and the starred entries still get
+ * surfaced on top of that.
+ */
+function relatedPlugins(plugin: CatalogPlugin, catalog: ShellCatalog): CatalogPlugin[] {
+  const index = catalog.plugins.findIndex((item) => item.url === plugin.url)
+  const picked = new Map<string, CatalogPlugin>()
+  if (index >= 0) {
+    for (let offset = 1; offset <= 4; offset += 1) {
+      for (const neighbour of [
+        catalog.plugins[(index + offset) % catalog.plugins.length],
+        catalog.plugins[(index - offset + catalog.plugins.length) % catalog.plugins.length],
+      ]) {
+        if (neighbour && neighbour.url !== plugin.url) picked.set(neighbour.url, neighbour)
+      }
+    }
+  }
+  const sameCategory = catalog.plugins
+    .filter((item) => item.category === plugin.category && item.url !== plugin.url)
+    .sort(byStars)
+  for (const item of sameCategory) {
+    if (picked.size >= 12) break
+    picked.set(item.url, item)
+  }
+  return [...picked.values()].slice(0, 12)
+}
+
 function shell(inner: string): string {
   return `<div class="seo-shell" data-seo-shell>${inner}</div>`
 }
@@ -127,9 +159,9 @@ export function renderCollectionShell(
   catalog: ShellCatalog,
   language: Language,
   copy: ShellCopy,
-  options: { limit: number } = { limit: 120 },
+  options: { listed: CatalogPlugin[]; showCategories: boolean },
 ): string {
-  const listed = [...catalog.plugins].sort(byStars).slice(0, options.limit)
+  const listed = options.listed
   const rows = listed.map((plugin) => pluginListItem(plugin, catalog.categories, language)).join('')
   const total = catalog.plugins.length
   const totalNote = language === 'zh'
@@ -146,7 +178,9 @@ export function renderCollectionShell(
     `<h1>${escapeHtml(BRAND_HEADING)}</h1>`,
     `<p>${escapeHtml(copy.intro)}</p>`,
     `<p>${escapeHtml(totalNote)}</p>`,
-    categorySummary(catalog, language),
+    // Only the catalog view renders a category breakdown; showing one on the
+    // rankings view would make `/` a strict subset duplicate of `/plugins`.
+    options.showCategories ? categorySummary(catalog, language) : '',
     `<h2>${escapeHtml(copy.listHeading)}</h2>`,
     `<ol class="seo-shell-list">${rows}</ol>`,
     browseAll,
@@ -160,10 +194,7 @@ export function renderPluginShell(
   categoryLabel: string,
 ): string {
   const zh = language === 'zh'
-  const related = catalog.plugins
-    .filter((item) => item.category === plugin.category && item.url !== plugin.url)
-    .sort(byStars)
-    .slice(0, 12)
+  const related = relatedPlugins(plugin, catalog)
     .map((item) => `<li><a href="${escapeHtml(pluginHref(item))}">${escapeHtml(item.name)}</a></li>`)
     .join('')
   const stars = starCount(plugin)

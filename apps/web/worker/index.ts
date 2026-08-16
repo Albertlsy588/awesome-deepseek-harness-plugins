@@ -3,7 +3,7 @@ import { cleanupExpiredAuthRows } from './lib/auth'
 import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
 import { runPluginDiscoveryTask } from './lib/plugin-discovery-task'
 import { isPublicApiHost, publicApiNotFound, rewritePublicApiUrl } from './public-api'
-import { metadataForPath, rewriteHtmlResponse, seoCatalog } from './seo'
+import { collectionQueryKind, metadataForPath, rewriteHtmlResponse, seoCatalog } from './seo'
 
 const STATS_OBJECT_NAME = 'global'
 const INCREMENTAL_DISCOVERY_CRONS = new Set(['7 * * * *', '37 * * * *'])
@@ -22,30 +22,12 @@ function isWorkerRoute(pathname: string): boolean {
     pathname.startsWith('/api/')
 }
 
-const INDEXABLE_COLLECTION_PATHS = new Set(['/', '/plugins', '/rankings'])
-const COLLECTION_PARAMS = new Set(['q', 'category', 'sort'])
-
-/**
- * Filtered and searched collection views are noindexed: they are permutations
- * of one page. An unknown parameter is treated the same way so that campaign
- * tags and other unbounded querystrings cannot mint infinite crawlable URLs.
- */
-function isFilteredCollection(url: URL): boolean {
-  if (!INDEXABLE_COLLECTION_PATHS.has(url.pathname)) return false
-  for (const key of url.searchParams.keys()) {
-    if (!COLLECTION_PARAMS.has(key)) return true
-  }
-  for (const key of COLLECTION_PARAMS) {
-    if ((url.searchParams.get(key) ?? '').trim().length > 0) return true
-  }
-  return false
-}
-
 function canonicalTrailingSlashRedirect(url: URL): Response | null {
   if (url.pathname === '/' || !url.pathname.endsWith('/')) return null
   // This runs before isWorkerRoute, so API paths have to be excluded or a POST
   // to /api/v1/install-events/ would be answered with a redirect.
   if (url.pathname.startsWith('/api/')) return null
+  if (url.pathname.startsWith('/plugin/') || url.pathname.startsWith('/packages/')) return null
   const canonical = new URL(url)
   canonical.pathname = canonical.pathname.slice(0, -1)
   return Response.redirect(canonical.toString(), 301)
@@ -75,14 +57,21 @@ const worker = {
     if (isWorkerRoute(url.pathname)) return app.fetch(request, env, ctx)
 
     return env.ASSETS.fetch(request).then(async (response) => {
+      const isHtml = Boolean(response.headers.get('Content-Type')?.includes('text/html'))
       // Vite fingerprints everything under /assets/, so revalidating it on every
       // navigation is pure latency. Unhashed files in public/ keep the short TTL.
+      // A miss under /assets/ is the SPA fallback document, not an asset:
+      // marking that immutable would pin a text/html body at a hashed chunk URL
+      // for a year, and content hashing can re-mint that exact filename later.
       if (url.pathname.startsWith('/assets/')) {
-        const headers = new Headers(response.headers)
-        headers.set('Cache-Control', 'public, max-age=31536000, immutable')
-        return new Response(response.body, { status: response.status, headers })
+        if (response.status === 200 && !isHtml) {
+          const headers = new Headers(response.headers)
+          headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+          return new Response(response.body, { status: response.status, headers })
+        }
+        return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } })
       }
-      if (!response.headers.get('Content-Type')?.includes('text/html')) return response
+      if (!isHtml) return response
       // Fresh KV resolves immediately; stale KV answers now and refreshes via
       // ctx.waitUntil, so SSR metadata never blocks on a full catalog rebuild.
       const catalog = await loadCatalogSnapshot(env, ctx)
@@ -90,7 +79,7 @@ const worker = {
         url.pathname,
         seoCatalog(catalog.snapshot, catalog.source === 'empty'),
       )
-      if (isFilteredCollection(url)) {
+      if (collectionQueryKind(url) === 'filtered') {
         metadata.robots = 'noindex,follow'
         // A noindexed permutation pointing its canonical at the unfiltered page
         // is a conflicting pair of signals; no canonical is the cleaner one.

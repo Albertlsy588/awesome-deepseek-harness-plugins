@@ -105,17 +105,27 @@ describe('SEO metadata', () => {
     expect(website).toContain('"DSH"')
   })
 
-  it('ranks the ItemList by stars instead of the snapshot ordering', () => {
-    const schema = JSON.stringify(metadataForPath('/', testSeoCatalog()).schema)
-    const parsed = JSON.parse(schema) as { '@graph': Record<string, unknown>[] }
-    const list = parsed['@graph'].find((node) => node['@type'] === 'ItemList') as {
-      numberOfItems: number
-      itemListElement: { name: string; position: number }[]
+  it('ranks each ItemList the way that page actually ranks', () => {
+    const itemList = (path: string) => {
+      const parsed = JSON.parse(JSON.stringify(metadataForPath(path, testSeoCatalog()).schema)) as {
+        '@graph': Record<string, unknown>[]
+      }
+      return parsed['@graph'].find((node) => node['@type'] === 'ItemList') as {
+        numberOfItems: number
+        itemListElement: { name: string; position: number }[]
+      }
     }
-    const topByStars = [...TEST_PLUGINS].sort((left, right) => (right.stars ?? 0) - (left.stars ?? 0))[0]!
 
-    expect(list.numberOfItems).toBe(TEST_PLUGINS.length)
-    expect(list.itemListElement[0]?.name).toBe(topByStars.name)
+    // `/plugins` sorts by stars; `/` defaults to 24h star growth, and plugins
+    // with no growth reading are absent from that ranking entirely.
+    const topByStars = [...TEST_PLUGINS].sort((left, right) => (right.stars ?? 0) - (left.stars ?? 0))[0]!
+    const withGrowth = TEST_PLUGINS.filter((plugin) => plugin.growth24h !== null)
+    const topByGrowth = [...withGrowth].sort((left, right) => (right.growth24h ?? 0) - (left.growth24h ?? 0))[0]!
+
+    expect(itemList('/plugins').numberOfItems).toBe(TEST_PLUGINS.length)
+    expect(itemList('/plugins').itemListElement[0]?.name).toBe(topByStars.name)
+    expect(itemList('/').numberOfItems).toBe(withGrowth.length)
+    expect(itemList('/').itemListElement[0]?.name).toBe(topByGrowth.name)
   })
 
   it('describes plugins as installable software without inventing ratings', () => {
@@ -180,6 +190,30 @@ describe('crawlable shell', () => {
     expect(shell).toContain('<h2>')
   })
 
+  it('gives every catalog entry an inbound link, not just the starred few', () => {
+    const catalog = testSeoCatalog()
+    const linked = new Set<string>()
+    for (const plugin of TEST_PLUGINS) {
+      const shell = metadataForPath(`/plugins/${plugin.owner}/${plugin.repository}`, catalog).shell ?? ''
+      for (const match of shell.matchAll(/href="(\/plugins\/[^"]+)"/g)) {
+        linked.add(match[1] as string)
+      }
+    }
+    // Ranking related plugins by stars alone would link the same handful from
+    // every page and strand the tail of the catalog with no inbound link.
+    for (const plugin of TEST_PLUGINS) {
+      const path = `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(plugin.repository)}`
+      expect(linked.has(path), `no page links to ${path}`).toBe(true)
+    }
+  })
+
+  it('only breaks the catalog out by category where the page does', () => {
+    const catalog = testSeoCatalog()
+    // A category list on `/` would make it a strict subset duplicate of /plugins.
+    expect(metadataForPath('/', catalog).shell).not.toContain('Plugin categories')
+    expect(metadataForPath('/plugins', catalog).shell).toContain('Plugin categories')
+  })
+
   it('never links to routes that do not exist', () => {
     const catalogPages = testSeoCatalog()
     const plugin = TEST_PLUGINS[0]!
@@ -219,11 +253,18 @@ describe('crawler directives', () => {
     expect(sitemap).not.toContain('/packages/')
 
     // Repository activity, not the catalog-entry date, is what actually changes
-    // a detail page; a plugin with no push data falls back to `added`.
-    const active = TEST_PLUGINS[0]!
-    expect(sitemap).toContain(`<lastmod>${active.pushedAt?.slice(0, 10)}</lastmod>`)
-    const unpushed = TEST_PLUGINS.find((plugin) => plugin.pushedAt === null)!
-    expect(sitemap).toContain(`<lastmod>${unpushed.added}</lastmod>`)
+    // a detail page; a plugin with no push data falls back to `added`. Assert
+    // the pairing, not the mere presence of a date somewhere in the document.
+    const lastmodFor = (path: string) =>
+      sitemap.match(
+        new RegExp(`<loc>https://deepseek1024\\.com${path.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&')}</loc>\\s*<lastmod>([^<]+)</lastmod>`),
+      )?.[1]
+
+    for (const plugin of TEST_PLUGINS) {
+      const path = `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(plugin.repository)}`
+      expect(lastmodFor(path), `lastmod for ${path}`)
+        .toBe((plugin.pushedAt ?? plugin.updatedAt ?? plugin.added).slice(0, 10))
+    }
     // A static reference page with a fabricated lastmod trains crawlers to
     // ignore the field, so /docs/api ships without one.
     expect(sitemap).toMatch(/<loc>https:\/\/deepseek1024\.com\/docs\/api<\/loc>\s*<\/url>/)
@@ -243,8 +284,11 @@ describe('crawler directives', () => {
     }
   })
 
-  it('keeps the API-only host out of the index entirely', () => {
-    expect(buildApiHostRobotsTxt()).toBe('User-agent: *\nDisallow: /\n')
+  it('exposes only the documented endpoints on the API-only host', () => {
+    const robots = buildApiHostRobotsTxt()
+    expect(robots).toContain('Allow: /v1/plugins/search')
+    expect(robots).toContain('Allow: /v1/health')
+    expect(robots).toContain('Disallow: /')
   })
 
   it('publishes the whole catalog as plain text for answer engines', () => {

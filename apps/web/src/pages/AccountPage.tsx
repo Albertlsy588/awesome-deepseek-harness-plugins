@@ -18,7 +18,7 @@ import {
 import { publicAsset } from '../lib/assets'
 import { formatDateTime } from '../lib/format'
 import { useI18n } from '../lib/i18n'
-import { collectionCopy } from '../../worker/seo-templates'
+import { collectionCopy, graph, simplePageNode, siteNodes } from '../../worker/seo-templates'
 import { usePageSeo } from '../lib/usePageSeo'
 
 type SessionState = { status: 'loading' } | { status: 'ready'; user: AuthUser | null }
@@ -44,6 +44,7 @@ export function AccountPage() {
     path: '/account',
     language,
     robots: 'noindex,follow',
+    schema: graph([...siteNodes(), simplePageNode('/account', copy, language)]),
   })
 
   const reload = useCallback(async (signal?: AbortSignal) => {
