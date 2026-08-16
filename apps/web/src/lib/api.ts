@@ -124,6 +124,21 @@ interface ErrorResponse {
 // Absolute origin for the plugin API; empty keeps same-origin requests for the default deployment.
 export const API_ORIGIN: string = (import.meta.env.VITE_API_ORIGIN ?? '').trim().replace(/\/+$/, '')
 
+/**
+ * Carries the HTTP status so callers can tell "this resource does not exist"
+ * apart from "the request failed". Pages use that distinction to decide whether
+ * to noindex themselves — a transport error must never deindex a real page.
+ */
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 export async function requestJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, {
     signal,
@@ -131,7 +146,7 @@ export async function requestJson<T>(url: string, signal?: AbortSignal): Promise
   })
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as ErrorResponse
-    throw new Error(body.error || `Request failed with HTTP ${response.status}`)
+    throw new ApiError(body.error || `Request failed with HTTP ${response.status}`, response.status)
   }
   return (await response.json()) as T
 }

@@ -23,7 +23,7 @@ import {
   parseInstallationEvent,
   recordInstallationEvent,
 } from './lib/install-metrics'
-import { buildRobotsTxt, buildSitemap, seoCatalog } from './seo'
+import { buildLlmsFullTxt, buildRobotsTxt, buildSitemap, seoCatalog } from './seo'
 import type {
   BackgroundContext,
   CatalogSnapshotResult,
@@ -44,6 +44,10 @@ interface AppDependencies {
 }
 
 const CACHE_HEADER = 'public, max-age=30, s-maxage=300, stale-while-revalidate=3600'
+// The catalog listing is a snapshot projection that only moves when the KV
+// snapshot does; the detail endpoint carries live install counters and keeps
+// the shorter TTL above.
+const LIST_CACHE_HEADER = 'public, max-age=300, s-maxage=900, stale-while-revalidate=3600'
 const REGISTRY_CACHE_HEADER = 'public, max-age=300, s-maxage=3600'
 const DEFAULT_SEARCH_LIMIT = 20
 const MAX_SEARCH_LIMIT = 100
@@ -210,9 +214,37 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       context.env,
       executionContext(context),
     )
+    if (result.source === 'empty') {
+      // Publishing a 3-URL sitemap during an outage would tell crawlers the
+      // catalog shrank by 2,900 pages, and the edge would cache that for a day.
+      context.header('Cache-Control', 'no-store')
+      return context.text('Catalog temporarily unavailable.', 503)
+    }
     context.header('Cache-Control', 'public, max-age=3600, s-maxage=86400')
     context.header('Content-Type', 'application/xml; charset=UTF-8')
     return context.body(buildSitemap(seoCatalog(result.snapshot)))
+  })
+
+  app.get('/llms-full.txt', async (context) => {
+    const result = await dependencies.catalogLoader(
+      context.env,
+      executionContext(context),
+    )
+    if (result.source === 'empty') {
+      context.header('Cache-Control', 'no-store')
+      return context.text('Catalog temporarily unavailable.', 503)
+    }
+    context.header('Cache-Control', 'public, max-age=3600, s-maxage=86400')
+    context.header('Content-Type', 'text/plain; charset=UTF-8')
+    return context.body(buildLlmsFullTxt(seoCatalog(result.snapshot)))
+  })
+
+  app.get('/rankings', (context) => {
+    // Nothing links to /rankings and it renders the same view as `/`; a 301
+    // keeps the duplicate out of the index instead of relying on a canonical.
+    const canonicalUrl = new URL(context.req.url)
+    canonicalUrl.pathname = '/'
+    return context.redirect(canonicalUrl.toString(), 301)
   })
 
   app.get('/plugin', (context) => {
@@ -279,8 +311,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       executionContext(context),
     )
     const result = buildCatalog(snapshot, parseCatalogQuery(context.req.query()))
-    context.header('Cache-Control', CACHE_HEADER)
+    context.header('Cache-Control', LIST_CACHE_HEADER)
     context.header('X-Catalog-Source', snapshot.source)
+    // Crawlable so the SPA can be rendered, but the JSON itself must never be
+    // indexed as a page in its own right.
+    context.header('X-Robots-Tag', 'noindex')
     return context.json(result)
   })
 
@@ -360,6 +395,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       install: plugin.install,
     }))
     context.header('X-Catalog-Source', snapshotResult.source)
+    context.header('X-Robots-Tag', 'noindex')
     return context.json({
       query: q,
       page,
@@ -383,7 +419,19 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       executionContext(context),
     )
     const plugin = findPlugin(snapshot.snapshot.plugins, owner, name)
-    if (!plugin) return context.json({ error: 'Package not found.' }, 404)
+    if (!plugin) {
+      context.header('X-Catalog-Source', snapshot.source)
+      if (snapshot.source === 'empty') {
+        // Without this the client cannot tell an outage from a deleted plugin,
+        // and would noindex every real page for the duration of the outage.
+        context.header('Cache-Control', 'no-store')
+        return context.json(
+          { error: 'The package catalog is temporarily unavailable.', code: 'CATALOG_UNAVAILABLE' },
+          503,
+        )
+      }
+      return context.json({ error: 'Package not found.', code: 'NOT_FOUND' }, 404)
+    }
 
     const token = context.env?.GITHUB_TOKEN?.trim() || undefined
     const canonicalPluginId = `${plugin.owner}/${repositoryName(plugin)}`
@@ -406,6 +454,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     ])
     context.header('Cache-Control', CACHE_HEADER)
     context.header('X-Catalog-Source', snapshot.source)
+    context.header('X-Robots-Tag', 'noindex')
     return context.json({
       ...detail,
       ...installMetrics,
@@ -421,6 +470,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const { snapshot } = result
     context.header('Cache-Control', REGISTRY_CACHE_HEADER)
     context.header('X-Catalog-Source', result.source)
+    context.header('X-Robots-Tag', 'noindex')
     const registry: RegistryProjection = {
       name: 'dsh-1024store-catalog',
       updated: snapshot.generatedAt,
