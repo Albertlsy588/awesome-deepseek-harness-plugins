@@ -46,6 +46,11 @@ npx dsh1024 add omdsh-dev/dsh-deep-research --profile web
 npx --yes @deepseek-ai/dsh plugin --profile web add github:omdsh-dev/dsh-deep-research
 ```
 
+如果 PATH 上已经装有官方 `dsh`，包装器会直接复用该可执行文件
+（`dsh plugin --profile web add …`），省掉 npx 每次安装的解析开销；用
+`DSH1024_DSH_PACKAGE` 钉版本时一律走 npx 形式。改变的只是定位官方 CLI 的方式，
+参数、顺序、退出码与 stdio 完全不变。
+
 `web` 是默认 profile。Git ref 可选：
 
 ```sh

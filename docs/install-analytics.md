@@ -77,6 +77,13 @@ bounded error code.
 Arguments passed through to the official CLI are deliberately excluded from
 the event and from local receipts.
 
+The wrapper reuses an official `dsh` already on PATH when it finds one, and
+otherwise falls back to `npx --yes @deepseek-ai/dsh`; pinning a version with
+`DSH1024_DSH_PACKAGE` always takes the npx path. Only the way the official CLI
+is located changes — arguments, ordering, exit codes, and stdio are untouched.
+A PATH-resolved binary carries no version in its spec, so `dshVersion` is
+reported as `null` unless `DSH1024_DSH_VERSION` says otherwise.
+
 Local identity, queue, and receipt updates are atomic and serialized across
 CLI processes. Uploads happen outside the file lock, then remove only event IDs
 the server accepted or permanently rejected, so an install enqueued during an

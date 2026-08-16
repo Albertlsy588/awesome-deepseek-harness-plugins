@@ -53,6 +53,12 @@ The wrapper executes this command without a shell:
 npx --yes @deepseek-ai/dsh plugin --profile web add github:omdsh-dev/dsh-deep-research
 ```
 
+When an official `dsh` is already on PATH the wrapper runs that binary directly
+(`dsh plugin --profile web add …`) instead of going through npx, which removes
+npx's resolution step from every install. Pinning a version with
+`DSH1024_DSH_PACKAGE` always uses the npx form. Only the way the official CLI is
+located differs; arguments, ordering, exit codes, and stdio are unchanged.
+
 `web` is the default profile. A Git ref is optional:
 
 ```sh

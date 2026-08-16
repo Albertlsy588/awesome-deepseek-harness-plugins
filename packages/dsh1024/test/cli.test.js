@@ -637,3 +637,193 @@ test('telemetry controls persist status and reset identity plus queue', async ()
   assert.equal(existsSync(join(storeDirectory, 'pending.json')), false)
   assert.match(reset.stdout[0], /preference was preserved/)
 })
+
+test('reuses an official dsh already on PATH and passes arguments through unchanged', async () => {
+  const dshHome = await makeHome()
+  let invocation
+  const exitCode = await main([
+    'add',
+    'owner/repo#v1.2.3',
+    '--profile',
+    'web',
+    '--ignore-scripts',
+    '--',
+    '--reporter',
+    'append-only',
+  ], {
+    dshHome,
+    env: { DO_NOT_TRACK: '1', PATH: '/opt/empty:/opt/bin' },
+    platform: 'linux',
+    io: ioCapture().io,
+    canExecute: (candidate) => candidate === '/opt/bin/dsh',
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installProfile(dshHome)
+      return fakeChild()
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(invocation.command, '/opt/bin/dsh')
+  assert.deepEqual(invocation.args, [
+    'plugin',
+    '--profile',
+    'web',
+    'add',
+    'github:owner/repo#v1.2.3',
+    '--ignore-scripts',
+    '--reporter',
+    'append-only',
+  ])
+  assert.equal(invocation.options.shell, false)
+})
+
+test('falls back to npx when PATH has no official dsh', async () => {
+  const dshHome = await makeHome()
+  let invocation
+  const exitCode = await main(['add', 'owner/repo'], {
+    dshHome,
+    env: { DO_NOT_TRACK: '1', PATH: '/opt/empty' },
+    platform: 'linux',
+    io: ioCapture().io,
+    canExecute: () => false,
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installProfile(dshHome)
+      return fakeChild()
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(invocation.command, 'npx')
+  assert.deepEqual(invocation.args, [
+    '--yes',
+    '@deepseek-ai/dsh',
+    'plugin',
+    '--profile',
+    'web',
+    'add',
+    'github:owner/repo',
+  ])
+})
+
+test('an explicit package override always goes through npx so the version stays pinnable', async () => {
+  const dshHome = await makeHome()
+  let invocation
+  const exitCode = await main(['add', 'owner/repo'], {
+    dshHome,
+    env: {
+      DO_NOT_TRACK: '1',
+      PATH: '/opt/bin',
+      DSH1024_DSH_PACKAGE: '@deepseek-ai/dsh@0.4.0',
+    },
+    platform: 'linux',
+    io: ioCapture().io,
+    canExecute: (candidate) => candidate === '/opt/bin/dsh',
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installProfile(dshHome)
+      return fakeChild()
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(invocation.command, 'npx')
+  assert.deepEqual(invocation.args.slice(0, 2), ['--yes', '@deepseek-ai/dsh@0.4.0'])
+})
+
+test('resolves dsh through PATHEXT on Windows', async () => {
+  const dshHome = await makeHome()
+  let invocation
+  const exitCode = await main(['add', 'owner/repo'], {
+    dshHome,
+    env: {
+      DO_NOT_TRACK: '1',
+      PATH: 'C:\\tools;C:\\bin',
+      PATHEXT: '.COM;.EXE;.CMD',
+    },
+    execPath: 'C:\\Program Files\\nodejs\\node.exe',
+    platform: 'win32',
+    io: ioCapture().io,
+    canExecute: (candidate) => candidate === 'C:\\bin\\dsh.cmd',
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installProfile(dshHome)
+      return fakeChild()
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(invocation.command, 'C:\\bin\\dsh.cmd')
+  assert.deepEqual(invocation.args, [
+    'plugin',
+    '--profile',
+    'web',
+    'add',
+    'github:owner/repo',
+  ])
+})
+
+test('falls back to the npm entrypoint when Windows PATH has no dsh', async () => {
+  const dshHome = await makeHome()
+  const nodeExecutable = 'C:\\Program Files\\nodejs\\node.exe'
+  const npmExecPath = 'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js'
+  let invocation
+  const exitCode = await main(['add', 'owner/repo'], {
+    dshHome,
+    env: {
+      DO_NOT_TRACK: '1',
+      PATH: 'C:\\tools',
+      PATHEXT: '.COM;.EXE;.CMD',
+      npm_execpath: npmExecPath,
+    },
+    execPath: nodeExecutable,
+    platform: 'win32',
+    io: ioCapture().io,
+    canExecute: () => false,
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installProfile(dshHome)
+      return fakeChild()
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(invocation.command, nodeExecutable)
+  assert.deepEqual(invocation.args.slice(0, 5), [
+    npmExecPath,
+    'exec',
+    '--yes',
+    '--',
+    '@deepseek-ai/dsh',
+  ])
+})
+
+test('telemetry reports a null DSH version when the CLI came from PATH', async () => {
+  const dshHome = await makeHome()
+  const requests = []
+  const exitCode = await main(['add', 'owner/repo'], {
+    dshHome,
+    env: {
+      PATH: '/opt/bin',
+      DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events',
+    },
+    platform: 'linux',
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: (candidate) => candidate === '/opt/bin/dsh',
+    spawn() {
+      installProfile(dshHome)
+      return fakeChild()
+    },
+    async fetchImpl(url, options) {
+      requests.push({ url, options })
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(requests.length, 1)
+  assert.equal(JSON.parse(requests[0].options.body).dshVersion, null)
+})
