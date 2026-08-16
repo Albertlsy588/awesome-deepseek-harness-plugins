@@ -79,8 +79,8 @@ export function ApiDocsPage() {
       </div>
 
       <header className="api-docs-header">
-        <h1>{copy.heading}</h1>
-        <p>{copy.intro}</p>
+        <h1>{t('apiDocsTitle')}</h1>
+        <p>{t('apiDocsIntro')}</p>
         <p className="api-docs-base">
           {t('apiDocsBaseUrl')}: <code>{PUBLIC_API_ORIGIN}</code>
         </p>

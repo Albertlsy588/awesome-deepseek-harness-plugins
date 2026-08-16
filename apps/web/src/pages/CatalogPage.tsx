@@ -350,10 +350,13 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 <div className="hero-lockup-copy">
                   <p className="hero-eyebrow">{t('heroEyebrow')}</p>
                   <h1>
-                    <Link to="/" aria-label="DeepSeek Harness Plugin 1024Store">
+                    <a
+                      href="https://deepseek1024.com/"
+                      aria-label="DeepSeek Harness Plugin 1024Store"
+                    >
                       <span>DeepSeek Harness Plugin</span>
                       <em>1024Store</em>
-                    </Link>
+                    </a>
                   </h1>
                 </div>
               </div>

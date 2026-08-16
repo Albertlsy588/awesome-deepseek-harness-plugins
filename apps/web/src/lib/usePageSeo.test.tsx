@@ -32,7 +32,7 @@ describe('usePageSeo', () => {
     seedServerMetadata()
   })
 
-  it('leaves the server-rendered metadata alone until the page has its data', () => {
+  it('leaves the server-rendered copy alone until the page has its data', () => {
     render({
       title: 'Loading placeholder',
       description: 'Loading placeholder description',
@@ -44,10 +44,26 @@ describe('usePageSeo', () => {
     expect(document.title).toBe('Server title')
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content'))
       .toBe('Server description')
+    expect(document.querySelector('script[data-seo-schema]')?.textContent)
+      .toBe('{"@type":"WebPage"}')
+  })
+
+  it('still applies the URL-derived directives while the data is pending', () => {
+    // A client-side filter must take effect even if the catalog request never
+    // finishes; robots and canonical follow from the URL, not from the data.
+    render({
+      title: 'Loading placeholder',
+      description: 'Loading placeholder description',
+      path: '/plugins',
+      language: 'en',
+      robots: 'noindex,follow',
+      canonical: null,
+      ready: false,
+    })
+
     expect(document.querySelector('meta[name="robots"]')?.getAttribute('content'))
-      .toBe('index,follow')
-    expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href'))
-      .toBe('https://deepseek1024.com/plugins/acme/widget')
+      .toBe('noindex,follow')
+    expect(document.querySelector('link[rel="canonical"]')).toBeNull()
   })
 
   it('keeps the server-rendered schema when the client has none to add', () => {

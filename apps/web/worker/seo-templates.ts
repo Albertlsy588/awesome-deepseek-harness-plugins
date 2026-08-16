@@ -174,7 +174,7 @@ export function collectionCopy(
             'DSH 1024Store 免费公开 API：搜索 DeepSeek Harness 社区插件目录，GitHub 登录即可申请 API Key，限流透明。',
             DESC_MAX,
           ),
-          heading: 'DeepSeek Harness 插件搜索 API',
+          heading: '开发者 API',
           intro: '以编程方式查询 DSH 1024Store 插件目录。匿名请求即开即用；使用 GitHub 登录并创建 API Key 可获得更高配额。',
           listHeading: '接口',
         }
@@ -184,7 +184,7 @@ export function collectionCopy(
             'Search the DeepSeek Harness plugin store over a free public REST API, with GitHub-login API keys and transparent rate limits.',
             DESC_MAX,
           ),
-          heading: 'DeepSeek Harness Plugin Search API',
+          heading: 'Developer API',
           intro: 'Query the DSH 1024Store plugin catalog programmatically. Anonymous requests work out of the box; sign in with GitHub and create an API key for higher limits.',
           listHeading: 'Endpoints',
         }

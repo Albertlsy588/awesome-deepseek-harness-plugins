@@ -16,6 +16,10 @@ interface PageSeoOptions {
    * stamped correct metadata into the served HTML, so overwriting it with a
    * loading-state placeholder is strictly worse than leaving it alone — a
    * crawler that snapshots the DOM mid-flight would record the placeholder.
+   *
+   * Only the data-derived half is withheld. `robots` and `canonical` follow
+   * from the URL alone, so they are always applied: a client-side filter has to
+   * take effect even if the catalog request never finishes.
    */
   ready?: boolean
   /** null removes the canonical link, which is what a noindexed view wants. */
@@ -62,17 +66,19 @@ export function usePageSeo({
   const canonicalOverride = canonical === undefined ? undefined : canonical
 
   useEffect(() => {
-    if (!ready) return
     const resolved = canonicalOverride === undefined
       ? new URL(path, SITE_ORIGIN).toString()
       : canonicalOverride
     const locale = language === 'zh' ? 'zh_CN' : 'en_US'
 
+    // URL-derived directives first, unconditionally.
+    setCanonical(resolved)
+    setMeta('name', 'robots', robots)
+    if (!ready) return
+
     document.title = title
     document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en'
-    setCanonical(resolved)
     setMeta('name', 'description', description)
-    setMeta('name', 'robots', robots)
     setMeta('property', 'og:type', 'website')
     setMeta('property', 'og:site_name', SITE_NAME)
     setMeta('property', 'og:title', title)

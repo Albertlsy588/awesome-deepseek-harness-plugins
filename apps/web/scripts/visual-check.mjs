@@ -197,7 +197,7 @@ try {
   await assertLiveStats(desktop)
   await assertSeo(desktop, 'desktop catalog', '/plugins')
   await assertNoHorizontalOverflow(desktop, 'desktop catalog')
-  if (await desktop.locator('.hero-heading h1 a[href="/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
+  if (await desktop.locator('.hero-heading h1 a[href="https://deepseek1024.com/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
     throw new Error('catalog hero does not show the linked DeepSeek Harness Plugin 1024Store title')
   }
   if (!(await desktop.locator('.hero-heading > p:last-child').textContent())?.includes('收录插件均先经 DSH 插件规范检查与过滤')) {
@@ -266,7 +266,7 @@ try {
   if ((await rankings.locator('.site-header').count()) !== 0) {
     throw new Error('the removed standalone site header is still rendered')
   }
-  if (await rankings.locator('.hero-heading h1 a[href="/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
+  if (await rankings.locator('.hero-heading h1 a[href="https://deepseek1024.com/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
     throw new Error('ranking hero does not keep the shared store title')
   }
   if (!(await rankings.locator('.hero-heading > p:last-child').textContent())?.includes('收录插件均先经 DSH 插件规范检查与过滤')) {
