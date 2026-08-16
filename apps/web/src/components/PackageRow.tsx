@@ -5,6 +5,7 @@ import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
 import { packagePath, pluginListIdentity } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
+import { ROW_LINK_TARGET } from '../lib/link-target'
 import { CategoryTag } from './CategoryTag'
 import { OwnerAvatar } from './OwnerAvatar'
 import { SplitInstallButton } from './SplitInstallButton'
@@ -65,7 +66,12 @@ export const PackageRow = memo(function PackageRow({
           {/* The plugin name is the link text: a row-wide overlay anchor gave
               every one of ~2,900 catalog links the same boilerplate label. */}
           <h3 className="row-title">
-            <Link className="row-link" to={packagePath(plugin)} target="_blank" rel="noreferrer">
+            <Link
+              className="row-link"
+              to={packagePath(plugin)}
+              target={ROW_LINK_TARGET}
+              rel={ROW_LINK_TARGET ? 'noreferrer' : undefined}
+            >
               {listIdentity.displayName}
             </Link>
           </h3>

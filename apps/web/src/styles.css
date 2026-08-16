@@ -119,10 +119,10 @@ body {
 }
 
 .language-switch {
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-translucent);
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .language-switch button {
@@ -134,8 +134,8 @@ body {
 }
 
 .language-switch button.selected {
-  background: var(--ink);
-  color: var(--on-ink);
+  background: transparent;
+  color: var(--ink);
   box-shadow: none;
 }
 
@@ -2842,7 +2842,16 @@ main {
     grid-row: 1;
   }
 
+  /* 窄屏先保名字：来源标签换到第二行，不跟名字抢同一行的宽度。子目录插件的
+     「owner / repo」能吃掉三分之二，名字会被截成两三个字，而名字才是这一行的
+     主语。 */
+  .row-title-line {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
   .row-title {
+    flex: 1 0 100%;
     font-size: 14px;
   }
 
@@ -3364,9 +3373,10 @@ main {
 }
 
 .language-switch {
-  border-color: var(--line);
-  border-radius: 8px;
-  background: var(--surface-translucent);
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .language-switch button {
@@ -3374,8 +3384,8 @@ main {
 }
 
 .language-switch button.selected {
-  background: var(--ink);
-  color: var(--on-ink);
+  background: transparent;
+  color: var(--ink);
   box-shadow: none;
 }
 
@@ -3601,6 +3611,38 @@ main {
   color: var(--brand-dark);
 }
 
+.api-docs-contact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 38px;
+  padding: 20px 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.api-docs-contact h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.api-docs-contact p {
+  max-width: 620px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+.api-docs-contact-link {
+  flex: 0 0 auto;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
 .account-docs-link {
   display: inline-block;
   margin-top: 4px;
@@ -3818,6 +3860,19 @@ main {
 }
 
 @media (max-width: 680px) {
+  .api-docs-contact {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 18px;
+  }
+
+  .api-docs-contact-link {
+    width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
+
   .account-profile,
   .account-key-row {
     flex-direction: column;
