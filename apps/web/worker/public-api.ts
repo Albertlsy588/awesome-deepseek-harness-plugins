@@ -28,6 +28,16 @@ export function rewritePublicApiUrl(url: URL): URL | null {
   return rewritten
 }
 
+export const WWW_HOST = 'www.deepseek1024.com'
+
+/** www is a bound custom domain that permanently redirects to the apex site. */
+export function wwwRedirect(url: URL): Response | null {
+  if (url.hostname !== WWW_HOST) return null
+  const canonical = new URL(url)
+  canonical.hostname = new URL(SITE_ORIGIN).hostname
+  return Response.redirect(canonical.toString(), 301)
+}
+
 export function publicApiNotFound(pathname: string): Response {
   if (pathname === '/') {
     return Response.redirect(`${SITE_ORIGIN}/docs/api`, 302)
