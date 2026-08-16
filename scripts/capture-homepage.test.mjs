@@ -3,6 +3,8 @@ import test from 'node:test'
 
 import {
   assertUsableCapture,
+  expectedSize,
+  locales,
   minimumBytes,
   readPngHeader,
   resolveChrome,
@@ -18,13 +20,22 @@ function pngOf(width, height, padding) {
 }
 
 test('reads PNG dimensions and rejects non-PNG payloads', () => {
-  assert.deepEqual(readPngHeader(pngOf(1280, 760, 0)), { width: 1280, height: 760 })
+  assert.deepEqual(readPngHeader(pngOf(1280, 940, 0)), { width: 1280, height: 940 })
   assert.equal(readPngHeader(Buffer.from('<html>not an image</html>')), null)
 })
 
 test('accepts a full-size capture', () => {
-  const good = pngOf(viewport.width, viewport.height, minimumBytes)
-  assert.deepEqual(assertUsableCapture(good), { width: viewport.width, height: viewport.height })
+  const { width, height } = expectedSize()
+  assert.deepEqual(assertUsableCapture(pngOf(width, height, minimumBytes)), { width, height })
+})
+
+test('captures a taller frame than a letterbox crop', () => {
+  // 1.7:1 read as squat in review; the frame is deliberately closer to a real window.
+  assert.ok(viewport.width / viewport.height < 1.5, 'hero must not be a wide thin strip')
+})
+
+test('names a Chrome locale for each projection language', () => {
+  assert.deepEqual(locales, { zh: 'zh-CN', en: 'en-US' })
 })
 
 test('refuses a capture that is not a PNG', () => {
@@ -37,14 +48,14 @@ test('refuses a capture that is not a PNG', () => {
 test('refuses a capture whose viewport does not match', () => {
   assert.throws(
     () => assertUsableCapture(pngOf(800, 600, minimumBytes)),
-    /is 800x600, expected 1280x760/,
+    /is 800x600, expected 1280x940/,
   )
 })
 
 test('refuses a near-blank capture instead of publishing an outage', () => {
   // A site outage renders an almost-empty page, which compresses to a few KB.
   assert.throws(
-    () => assertUsableCapture(pngOf(viewport.width, viewport.height, 1_000)),
+    () => assertUsableCapture(pngOf(expectedSize().width, expectedSize().height, 1_000)),
     /rendered blank. Refusing to publish it/,
   )
 })
