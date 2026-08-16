@@ -452,6 +452,36 @@ try {
   }
   await mobileRankings.close()
 
+  const apiDocs = await openPage({ width: 1440, height: 900 }, '/docs/api')
+  await apiDocs.locator('.api-docs-contact').waitFor()
+  if ((await apiDocs.locator('.api-docs-contact-link[href="https://www.imsai.cc/"][target="_blank"]').count()) !== 1) {
+    throw new Error('API docs author contact does not link to imsai.cc in a new tab')
+  }
+  if ((await apiDocs.locator('.api-docs-header + .api-docs-contact').count()) !== 1) {
+    throw new Error('API docs author contact is not the first section below the page introduction')
+  }
+  await assertSeo(apiDocs, 'desktop API docs', '/docs/api')
+  await assertNoHorizontalOverflow(apiDocs, 'desktop API docs')
+  await apiDocs.close()
+
+  const mobileApiDocs = await openPage({ width: 390, height: 844 }, '/docs/api', { touch: true })
+  await mobileApiDocs.locator('.api-docs-contact').waitFor()
+  await assertMobileEnvironment(mobileApiDocs, 'mobile API docs')
+  await assertNoHorizontalOverflow(mobileApiDocs, 'mobile API docs')
+  await assertMinTouchTargets(mobileApiDocs, 'mobile API docs', [
+    '.detail-brand',
+    '.detail-utility .language-switch button',
+    '.api-docs-key-button',
+    '.api-docs-contact-link',
+  ])
+  await assertMinFontSize(mobileApiDocs, 'mobile API contact copy', '.api-docs-contact p', 13)
+  await mobileApiDocs.close()
+
+  const compactApiDocs = await openPage({ width: 320, height: 568 }, '/docs/api', { touch: true })
+  await compactApiDocs.locator('.api-docs-contact').waitFor()
+  await assertNoHorizontalOverflow(compactApiDocs, 'compact mobile API docs')
+  await compactApiDocs.close()
+
   const detail = await openPage({ width: 1440, height: 1000 }, '/plugins/openma-ai/deepseek-harness-tui')
   await detail.locator('.detail-header').waitFor()
   await detail.locator('.install-activity-section').waitFor()
