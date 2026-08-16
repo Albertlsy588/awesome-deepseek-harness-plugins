@@ -242,3 +242,17 @@ export function findPluginById<T extends { id: string }>(plugins: T[], id: strin
   const wanted = normalizePluginId(id)
   return plugins.find((plugin) => normalizePluginId(plugin.id) === wanted)
 }
+
+/**
+ * Plugins living under `id` — the monorepo subpackages a repository-level
+ * address should lead to.
+ *
+ * A repository that publishes only a nested bundle used to be catalogued at its
+ * repository id and is now catalogued at the subpackage's id, so previously
+ * published `owner/repository` links have to find their way to the successor
+ * instead of dead-ending.
+ */
+export function findPluginsUnder<T extends { id: string }>(plugins: T[], id: string): T[] {
+  const prefix = `${normalizePluginId(id)}/`
+  return plugins.filter((plugin) => normalizePluginId(plugin.id).startsWith(prefix))
+}

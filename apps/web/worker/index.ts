@@ -3,7 +3,7 @@ import { cleanupExpiredAuthRows } from './lib/auth'
 import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
 import { runPluginDiscoveryTask } from './lib/plugin-discovery-task'
 import { isPublicApiHost, publicApiNotFound, rewritePublicApiUrl } from './public-api'
-import { metadataForPath, rewriteHtmlResponse, seoCatalog } from './seo'
+import { detailRedirectForPath, metadataForPath, rewriteHtmlResponse, seoCatalog } from './seo'
 
 const STATS_OBJECT_NAME = 'global'
 const INCREMENTAL_DISCOVERY_CRONS = new Set(['7 * * * *', '37 * * * *'])
@@ -65,7 +65,18 @@ const worker = {
       // Fresh KV resolves immediately; stale KV answers now and refreshes via
       // ctx.waitUntil, so SSR metadata never blocks on a full catalog rebuild.
       const catalog = await loadCatalogSnapshot(env, ctx)
-      const metadata = metadataForPath(url.pathname, seoCatalog(catalog.snapshot))
+      const seo = seoCatalog(catalog.snapshot)
+      // A repository-level address whose plugin now lives in a subdirectory
+      // redirects to its successor rather than 404ing an indexed URL.
+      const redirect = detailRedirectForPath(url.pathname, seo)
+      if (redirect !== null) {
+        const target = new URL(url)
+        const [pathname, search = ''] = redirect.split('?')
+        target.pathname = pathname!
+        if (search) target.search = search
+        return Response.redirect(target.toString(), 301)
+      }
+      const metadata = metadataForPath(url.pathname, seo)
       if (isFilteredCollection(url)) metadata.robots = 'noindex,follow'
       return rewriteHtmlResponse(response, metadata)
     })

@@ -259,7 +259,7 @@ describe('market API', () => {
     const sibling = await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/packages/dsh-timeline')
     await expect(sibling.json()).resolves.toMatchObject({ name: 'dsh-timeline' })
 
-    // The repository root is not itself a catalog plugin here.
+    // The repository hosts two plugins, so it cannot pick a successor.
     expect((await app.request('/api/v1/plugins/omdsh-dev/dsh-suite')).status).toBe(404)
     // Plain and percent-encoded dot-dot segments are collapsed by URL parsing
     // before routing, so they resolve to a different (absent) id.
@@ -268,6 +268,29 @@ describe('market API', () => {
     // An encoded slash survives parsing and must be rejected, not smuggled into
     // a segment.
     expect((await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/..%2Fsecret')).status).toBe(400)
+  })
+
+  it('redirects a repository id whose only plugin moved into a subdirectory', async () => {
+    const base = testCatalogResult()
+    // One survivor under omdsh-dev/dsh-suite, mirroring a discovered repository
+    // whose bundle lives in a nested package.
+    const app = createApp({
+      catalogLoader: vi.fn(async () => ({
+        ...base,
+        snapshot: {
+          ...base.snapshot,
+          plugins: base.snapshot.plugins.filter(
+            (plugin) => plugin.id !== 'omdsh-dev/dsh-suite/packages/dsh-timeline',
+          ),
+        },
+      })),
+    })
+
+    const response = await app.request('https://store.example/api/v1/plugins/omdsh-dev/dsh-suite')
+    expect(response.status).toBe(301)
+    expect(response.headers.get('Location')).toBe(
+      'https://store.example/api/v1/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector',
+    )
   })
 
   it('serves the built-in unclassified descriptor for scan-discovered plugins', async () => {

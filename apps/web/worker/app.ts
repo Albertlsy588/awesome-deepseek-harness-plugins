@@ -8,6 +8,7 @@ import {
   buildCatalog,
   filterCatalogPackages,
   findPluginById,
+  findPluginsUnder,
   parseCatalogQuery,
 } from './lib/catalog'
 import {
@@ -409,7 +410,19 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       executionContext(context),
     )
     const plugin = findPluginById(snapshot.snapshot.plugins, requestedId)
-    if (!plugin) return context.json({ error: 'Package not found.' }, 404)
+    if (!plugin) {
+      // A repository-level id whose only plugin moved into a subdirectory
+      // redirects, so existing API consumers follow the rename instead of
+      // seeing the plugin disappear. Several successors stay a 404: the
+      // request named a repository, not a plugin.
+      const successors = findPluginsUnder(snapshot.snapshot.plugins, requestedId)
+      if (successors.length === 1) {
+        const canonical = new URL(context.req.url)
+        canonical.pathname = `/api/v1/plugins/${successors[0]!.id.split('/').map(encodeURIComponent).join('/')}`
+        return context.redirect(canonical.toString(), 301)
+      }
+      return context.json({ error: 'Package not found.' }, 404)
+    }
 
     const token = context.env?.GITHUB_TOKEN?.trim() || undefined
     const canonicalPluginId = plugin.id

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildRobotsTxt, buildSitemap, metadataForPath, seoCatalog, type SeoCatalog } from '../worker/seo'
+import {
+  buildRobotsTxt,
+  buildSitemap,
+  detailRedirectForPath,
+  metadataForPath,
+  seoCatalog,
+  type SeoCatalog,
+} from '../worker/seo'
 import { TEST_PLUGINS, testCatalogResult } from './fixtures'
 
 function testSeoCatalog(): SeoCatalog {
@@ -54,5 +61,30 @@ describe('SEO metadata', () => {
     // legitimately contains a `packages/` directory.
     expect(sitemap).not.toContain('https://deepseek1024.com/packages/')
     expect(buildRobotsTxt()).toContain('Disallow: /api/')
+  })
+  it('redirects a repository address to the subpackage that succeeded it', () => {
+    const catalog = testSeoCatalog()
+
+    // omdsh-dev/dsh-suite is not itself a plugin; two subpackages live under
+    // it, so the address cannot pick a winner and lands on the filtered catalog.
+    expect(detailRedirectForPath('/plugins/omdsh-dev/dsh-suite', catalog))
+      .toBe('/plugins?q=omdsh-dev%2Fdsh-suite')
+
+    // With a single successor the old address redirects straight to it.
+    const single: SeoCatalog = {
+      ...catalog,
+      plugins: catalog.plugins.filter((plugin) => plugin.id !== 'omdsh-dev/dsh-suite/packages/dsh-timeline'),
+    }
+    expect(detailRedirectForPath('/plugins/omdsh-dev/dsh-suite', single))
+      .toBe('/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector')
+    expect(detailRedirectForPath('/plugins/omdsh-dev/dsh-suite/', single))
+      .toBe('/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector')
+
+    // An address that resolves to a real plugin is never redirected, and one
+    // with no successors keeps its 404.
+    expect(detailRedirectForPath('/plugins/omdsh-dev/dsh-gomoku', catalog)).toBeNull()
+    expect(detailRedirectForPath('/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector', catalog)).toBeNull()
+    expect(detailRedirectForPath('/plugins/nobody/nothing', catalog)).toBeNull()
+    expect(detailRedirectForPath('/plugins', catalog)).toBeNull()
   })
 })

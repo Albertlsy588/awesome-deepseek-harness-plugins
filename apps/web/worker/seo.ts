@@ -1,4 +1,4 @@
-import { findPluginById } from './lib/catalog'
+import { findPluginById, findPluginsUnder } from './lib/catalog'
 import { pluginDetailPath } from './lib/plugin-id'
 import type { RegistryPlugin, StoredCatalogSnapshot } from './types'
 
@@ -101,6 +101,32 @@ function safeDecode(value: string): string | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Where a `/plugins/...` address should redirect when it names no plugin but
+ * names something plugins live under.
+ *
+ * A repository whose bundle sits in a subdirectory is catalogued at the
+ * subpackage's id, so its previously published repository-level URL would
+ * otherwise 404 and be deindexed. One successor redirects to it; several
+ * (a monorepo publishing many plugins) cannot pick a winner, so the catalog
+ * lists them instead.
+ *
+ * @returns the target path, or null when the address needs no redirect.
+ */
+export function detailRedirectForPath(pathname: string, catalog: SeoCatalog): string | null {
+  const match = pathname.match(/^\/plugins\/([^/]+(?:\/[^/]+)+)\/?$/)
+  if (!match) return null
+  const segments = (match[1] ?? '').split('/').map(safeDecode)
+  if (!segments.every((segment) => segment !== null && segment.length > 0)) return null
+  const requestedId = segments.join('/')
+  if (findPluginById(catalog.plugins, requestedId)) return null
+
+  const successors = findPluginsUnder(catalog.plugins, requestedId)
+  if (successors.length === 1) return pluginDetailPath(successors[0]!.id)
+  if (successors.length > 1) return `/plugins?q=${encodeURIComponent(requestedId)}`
+  return null
 }
 
 export function metadataForPath(
