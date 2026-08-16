@@ -12,8 +12,11 @@ import { normalizePluginId } from './plugin-id'
 import { emptyInstallMetrics, loadInstallMetrics } from './install-metrics'
 import { updateStarHistory } from './star-history'
 
-// v6 adds the explicit plugin `id` field (monorepo subdirectory support).
-const SNAPSHOT_KEY = 'catalog:snapshot:v6'
+// v9 is a fresh key on purpose: both sides of this merge shipped their own
+// numbering, and the tightened plugin validation rejects either side's leftover
+// payload wholesale, which would leave the catalog endpoint empty until the
+// next refresh. Starting clean costs one cold read instead.
+const SNAPSHOT_KEY = 'catalog:snapshot:v9'
 const SNAPSHOT_TTL_MS = 15 * 60 * 1000
 
 type JsonObject = Record<string, unknown>

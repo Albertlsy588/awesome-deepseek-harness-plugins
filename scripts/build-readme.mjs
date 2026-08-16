@@ -258,10 +258,10 @@ ${heroImage(registry, 'zh')}
 不想切浏览器，就把市场本身作为插件装进 DeepSeek Harness：
 
 \`\`\`bash
-dsh plugin --profile web add dsh-1024store
+dsh plugin --profile web add dsh1024
 \`\`\`
 
-重启后「设置」里会出现独立的 **1024 Store** 入口，「设置 → 插件」下也会多出一个 **1024 Store（数量）** 标签页，可以直接搜索目录、按分类筛选、识别已安装状态、安装与卸载，并显示操作进度。安装器只接受目录中已校验过的仓库地址，并自行推导 \`github:owner/repository\`，不会执行目录返回的展示命令。源码见 [\`packages/dsh-1024store\`](packages/dsh-1024store)。
+重启后「设置」里会出现独立的 **1024 Store** 入口，「设置 → 插件」下也会多出一个 **1024 Store（数量）** 标签页，可以直接搜索目录、按分类筛选、识别已安装状态、安装与卸载，并显示操作进度。安装器只接受目录中已校验过的仓库地址，并自行推导 \`github:owner/repository\`，不会执行目录返回的展示命令。源码见 [\`packages/dsh1024\`](packages/dsh1024)。
 
 ### 定时自动收集 + 格式校验
 
@@ -297,12 +297,14 @@ curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'
 网站优先提供开源包装 CLI；它会调用官方 DeepSeek Harness 插件命令、校验 profile 的真实安装结果，并把匿名安装结果可靠地上报到排行榜：
 
 \`\`\`bash
-npx @dsh-1024store/cli add <owner>/<repository>[/<sub/dir>] --profile web
+dsh1024 plugin --profile web add github:<owner>/<repository>
 \`\`\`
 
-插件标识支持 monorepo 子目录形式（如 \`owner/repo/packages/foo\`），会以官方 \`github:owner/repo#path:packages/foo\` 安装 spec 传给官方 CLI。插件标识和 \`--profile\` 之外的参数会原样传给官方 CLI；参数可能与包装器冲突时可放到 \`--\` 后，例如 \`... -- --ignore-scripts --reporter append-only\`。透传参数不会写入遥测或本地 receipt。
+首次使用先一次性全局安装：\`npm install -g dsh1024\`。它与官方命令只差一个名字——\`plugin\` 之后的参数原样转发给官方 CLI，不增删、不改写、不重排，包装器只负责在结束后核对 profile 并记录一条匿名安装结果。参数不会写入遥测或本地 receipt。
 
-统计身份是保存在 \`$DSH_HOME/.dsh-1024store/\` 的随机安装实例 ID，不是实名用户或账号。CLI 不上传命令输出、路径、用户名、环境变量、会话内容或原始错误；可用 \`npx @dsh-1024store/cli telemetry disable\`、\`DO_NOT_TRACK=1\` 或 \`DSH_1024STORE_TELEMETRY=0\` 关闭。直接使用官方 \`dsh plugin\` 命令仍然可用，但不会计入 DSH 1024Store 安装统计。详细字段、口径、存储和部署方式见 [安装统计设计](docs/install-analytics.md)，CLI 源码见 [\`apps/cli\`](apps/cli)。
+monorepo 子目录插件的标识形如 \`owner/repo/packages/foo\`，对应的安装 spec 是官方的 \`github:owner/repo#path:packages/foo\`，同仓库的兄弟插件各自独立计数。
+
+统计身份是保存在 \`$DSH_HOME/.dsh-1024store/\` 的随机安装实例 ID，不是实名用户或账号。CLI 不上传命令输出、路径、用户名、环境变量、会话内容或原始错误；可用 \`npx dsh1024 telemetry disable\`、\`DO_NOT_TRACK=1\` 或 \`DSH1024_TELEMETRY=0\`（旧变量名 \`DSH_1024STORE_TELEMETRY\` 仍兼容）关闭。直接使用官方 \`dsh plugin\` 命令仍然可用，但不会计入 DSH 1024Store 安装统计。详细字段、口径、存储和部署方式见 [安装统计设计](docs/install-analytics.md)，CLI 源码见 [\`packages/dsh1024\`](packages/dsh1024)。
 
 ## 提交插件
 
@@ -326,7 +328,7 @@ npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plug
 
 欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置，通过后自动合并，并由 CI 自动同步到网站与本 README。需要修正或下架既有条目时也可以发 PR，静态审查照常运行，但这类 PR 由维护者人工审核后合并。
 
-安装命令：\`npx @dsh-1024store/cli add <owner>/<repository>[/<sub/dir>] --profile web\`。
+安装命令：\`dsh1024 plugin --profile web add github:<owner>/<repository>[#path:<sub/dir>]\`（首次使用先 \`npm install -g dsh1024\`）。
 
 ## 项目定位
 
@@ -338,10 +340,9 @@ npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plug
 catalog/plugins/    插件提交表单与 curated 元数据（每个插件一个 JSON）
 catalog/categories.json  分类定义（唯一分类信源）
 skills/             面向贡献者的可安装 Agent Skills
-apps/cli/           上报安装统计的开源包装 CLI
 apps/web/src/       React + Vite 前端
 apps/web/worker/    Cloudflare Worker API 与数据刷新（唯一读写 D1 的进程）
-packages/dsh-1024store/  1024 品牌的 DSH 设置页内插件市场
+packages/dsh1024/   dsh1024 npm 包：上报安装统计的包装 CLI + DSH 设置页内插件市场
 scripts/            提交审查、目录同步与 README 生成脚本
 \`\`\`
 
@@ -425,7 +426,7 @@ ${heroImage(registry, 'en')}
 ## What this repository ships
 
 - **Hosted plugin marketplace, one fork away.** [deepseek1024.com](https://deepseek1024.com/) offers search, category filters, install rankings, plugin detail pages, and GitHub activity data on Cloudflare Workers + D1 + KV ([\`apps/web\`](../apps/web)). To self-host: fork the repository, point \`routes\` in \`apps/web/wrangler.jsonc\` at your own domain, create the D1 database and KV namespace, set the Worker secrets listed under \`secrets.required\`, and add \`CLOUDFLARE_API_TOKEN\` and \`CLOUDFLARE_ACCOUNT_ID\` as repository secrets. From then on every push to \`main\` runs the D1 migrations and deploys the Worker for you.
-- **The marketplace as a \`dsh\` plugin.** \`dsh plugin --profile web add dsh-1024store\` adds a **1024 Store** entry to Settings and a **1024 Store (count)** tab under Settings → Plugins, with search, filters, installed-state detection, install, and uninstall ([\`packages/dsh-1024store\`](../packages/dsh-1024store)).
+- **The marketplace as a \`dsh\` plugin.** \`dsh plugin --profile web add dsh1024\` adds a **1024 Store** entry to Settings and a **1024 Store (count)** tab under Settings → Plugins, with search, filters, installed-state detection, install, and uninstall ([\`packages/dsh1024\`](../packages/dsh1024)).
 - **Scheduled collection with format validation.** Cron scans GitHub for \`dsh-plugin\` topic repositories every 30 minutes and reconciles the full set weekly. Every candidate is statically validated — the default-branch Git tree, \`package.json\`, \`dsh.bundle.patch\`, and the patch blob must exist — by reading files only, never installing dependencies or executing repository code ([\`docs/plugin-discovery.md\`](../docs/plugin-discovery.md)).
 - **Free query API.** \`curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'\` works anonymously at 50 requests/day (10/minute); a GitHub-login API key raises that to 500/day (30/minute). \`/api/v1/registry\` returns the full catalog snapshot that generates this file ([\`docs/api.md\`](../docs/api.md)).
 
@@ -439,10 +440,11 @@ ${heroImage(registry, 'en')}
 Install any plugin and count it on the leaderboard with:
 
 \`\`\`bash
-npx @dsh-1024store/cli add <owner>/<repository>[/<sub/dir>] --profile web
+npm install -g dsh1024   # once
+dsh1024 plugin --profile web add github:<owner>/<repository>
 \`\`\`
 
-Monorepo subpackage plugins use the subdirectory form (for example \`owner/repo/packages/foo\`), forwarded to the official CLI as the \`github:owner/repo#path:packages/foo\` install spec. A pull request that adds one new entry is merged automatically once static review passes; one that updates or removes an existing entry passes the same review but waits for maintainer approval. Merged submissions are synced to the website database and into this file automatically; no manual list editing is involved.
+Monorepo subpackage plugins add the subdirectory to the spec (for example \`github:owner/repo#path:packages/foo\`), and each sibling is counted on its own. A pull request that adds one new entry is merged automatically once static review passes; one that updates or removes an existing entry passes the same review but waits for maintainer approval. Merged submissions are synced to the website database and into this file automatically; no manual list editing is involved.
 
 ## Categories
 

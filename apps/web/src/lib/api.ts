@@ -1,5 +1,10 @@
 import type { PluginInstallMethod } from '../../worker/lib/install-methods'
-import { parsePluginId, pluginDetailPath } from '../../worker/lib/plugin-id'
+import {
+  normalizePluginId,
+  parsePluginId,
+  pluginDetailPath,
+  pluginInstallSpec,
+} from '../../worker/lib/plugin-id'
 
 export type Language = 'en' | 'zh'
 
@@ -203,10 +208,46 @@ export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): st
   }
 }
 
+export const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
+export const SELF_TRACKED_COMMAND = 'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024'
+export const SELF_OFFICIAL_COMMAND = 'dsh plugin --profile web add dsh1024'
+
+// The catalog lists this repository itself as the store client plugin; the
+// generic spec would tell people to install the whole catalog repository, so it
+// gets the published package name instead.
+function isSelfPlugin(plugin: Pick<RegistryPlugin, 'id'>): boolean {
+  return normalizePluginId(plugin.id) === SELF_PLUGIN_ID
+}
+
+/**
+ * The bare official install spec for a plugin.
+ *
+ * Derived from the plugin id, never from the repository URL: a monorepo
+ * subpackage's URL is its repository root, so reverse-engineering the spec from
+ * it would silently install the wrong package.
+ */
+export function installSpec(plugin: Pick<RegistryPlugin, 'id'>): string {
+  return pluginInstallSpec(plugin.id)
+}
+
 export function trackedInstallCommand(plugin: Pick<RegistryPlugin, 'id'>): string {
-  // The full id (including any monorepo subdirectory) is what the wrapper CLI
-  // maps to the official `github:owner/repo#path:sub/dir` install spec.
-  return `npx @dsh-1024store/cli add ${plugin.id} --profile web`
+  if (isSelfPlugin(plugin)) return SELF_TRACKED_COMMAND
+  return `dsh1024 plugin --profile web add ${installSpec(plugin)}`
+}
+
+export function officialInstallCommand(plugin: Pick<RegistryPlugin, 'id'>): string {
+  if (isSelfPlugin(plugin)) return SELF_OFFICIAL_COMMAND
+  return `dsh plugin --profile web add ${installSpec(plugin)}`
+}
+
+
+export async function getSelfInstallStats(signal?: AbortSignal): Promise<InstallMetrics | null> {
+  const response = await fetch(`${API_ORIGIN}/api/v1/self/install-stats`, {
+    signal,
+    headers: { Accept: 'application/json' },
+  })
+  if (!response.ok) return null
+  return (await response.json()) as InstallMetrics
 }
 
 export function githubAvatar(owner: string): string {

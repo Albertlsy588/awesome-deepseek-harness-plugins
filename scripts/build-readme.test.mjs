@@ -116,7 +116,8 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   assert.match(zh, /# DSH 1024Store/)
   assert.match(zh, /共收录 \*\*5\*\* 个插件/)
   assert.match(zh, /2026-08-15/)
-  assert.match(zh, /npx @dsh-1024store\/cli add <owner>\/<repository>\[\/<sub\/dir>\] --profile web/)
+  assert.match(zh, /dsh1024 plugin --profile web add github:<owner>\/<repository>/)
+  assert.doesNotMatch(zh, /npx @dsh-1024store\/cli add/)
   // A subdirectory plugin renders like any other entry, linking to its repository root.
   assert.match(zh, /- \[nested-plugin\]\(https:\/\/github\.com\/owner\/monorepo\) — monorepo 子包插件。/)
   assert.match(zh, /自动合并/)
@@ -174,7 +175,7 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   // The four things this repository ships beyond the list itself.
   assert.match(zh, /deepseek1024\.com/)
   assert.match(zh, /CLOUDFLARE_API_TOKEN/)
-  assert.match(zh, /dsh plugin --profile web add dsh-1024store/)
+  assert.match(zh, /dsh plugin --profile web add dsh1024/)
   assert.match(zh, /定时收集/)
   assert.match(zh, /格式校验/)
   assert.match(zh, /绝不执行仓库代码/)
@@ -187,7 +188,7 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   assert.match(zh, /\/fork\)/)
 
   assert.match(en, /CLOUDFLARE_API_TOKEN/)
-  assert.match(en, /dsh plugin --profile web add dsh-1024store/)
+  assert.match(en, /dsh plugin --profile web add dsh1024/)
   assert.match(en, /never installing dependencies or executing repository code/)
   assert.match(en, /api\.deepseek1024\.com\/v1\/plugins\/search/)
   for (const suffix of ['/stargazers)', '/issues/new)', '/pulls)', '/fork)']) {

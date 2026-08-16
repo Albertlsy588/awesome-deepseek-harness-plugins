@@ -13,6 +13,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { LoadingState } from '../components/LoadingState'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { PackageRow } from '../components/PackageRow'
+import { SelfInstallBanner } from '../components/SelfInstallBanner'
 import type { CatalogSort, Language, RankingMode } from '../lib/api'
 import {
   deriveCatalogView,
@@ -399,6 +400,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
               )}
             </dl>
 
+            <SelfInstallBanner />
           </header>
         </div>
       </section>

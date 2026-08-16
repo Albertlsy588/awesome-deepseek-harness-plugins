@@ -122,6 +122,79 @@ async function assertHorizontalTouchScroller(page, label, selector, { requireOve
   }
 }
 
+// Install commands must stay fully readable: they wrap onto a second line
+// instead of hiding their tail behind an inner horizontal scrollbar.
+async function assertInstallCommandsReadable(page, label, scope) {
+  const clipped = await page.locator(`${scope} .install-command code`).evaluateAll((nodes) => nodes
+    .filter((node) => node.scrollWidth > node.clientWidth + 1)
+    .map((node) => node.textContent ?? ''))
+  if (clipped.length > 0) {
+    throw new Error(`${label} clips its install commands: ${JSON.stringify(clipped)}`)
+  }
+}
+
+// The hero labels sit in one shared column, so all three command boxes have to
+// start and end on the same pixel regardless of label width or language.
+async function assertHeroCommandsAligned(page, label) {
+  const edges = await page.locator('.catalog-hero .self-install-banner .install-command').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const box = node.getBoundingClientRect()
+      return { left: Math.round(box.left), right: Math.round(box.right) }
+    }))
+  if (edges.length !== 2) {
+    throw new Error(`${label} should render two install commands, saw ${edges.length}`)
+  }
+  const lefts = new Set(edges.map((edge) => edge.left))
+  const rights = new Set(edges.map((edge) => edge.right))
+  if (lefts.size !== 1 || rights.size !== 1) {
+    throw new Error(`${label} install commands are misaligned: ${JSON.stringify(edges)}`)
+  }
+}
+
+// The menu is portaled to document.body, so nothing in the list should be able
+// to paint over it. Hit-test its four corners and confirm the topmost element
+// at each point still belongs to the menu, and that it fits inside the viewport.
+async function assertMenuOnTop(page, label) {
+  const result = await page.locator('.split-install-menu').evaluate((menu) => {
+    const box = menu.getBoundingClientRect()
+    // Stay clear of the 9px rounded corners: a tighter inset lands on the
+    // antialiased arc and reports whatever sits behind the menu.
+    const inset = 10
+    const corners = [
+      ['top-left', box.left + inset, box.top + inset],
+      ['top-right', box.right - inset, box.top + inset],
+      ['bottom-left', box.left + inset, box.bottom - inset],
+      ['bottom-right', box.right - inset, box.bottom - inset],
+      ['center', (box.left + box.right) / 2, (box.top + box.bottom) / 2],
+    ]
+    return {
+      box: {
+        bottom: Math.round(box.bottom),
+        left: Math.round(box.left),
+        right: Math.round(box.right),
+        top: Math.round(box.top),
+      },
+      covered: corners
+        .filter(([, x, y]) => {
+          const hit = document.elementFromPoint(x, y)
+          return !(hit && (menu === hit || menu.contains(hit)))
+        })
+        .map(([corner, x, y]) => {
+          const hit = document.elementFromPoint(x, y)
+          return `${corner}: ${hit ? `${hit.tagName.toLowerCase()}.${hit.className}` : 'null'}`
+        }),
+      viewport: { height: window.innerHeight, width: window.innerWidth },
+    }
+  })
+  if (result.covered.length > 0) {
+    throw new Error(`${label} is covered by other elements at ${JSON.stringify(result.covered)}`)
+  }
+  const { box, viewport } = result
+  if (box.left < 0 || box.top < 0 || box.right > viewport.width || box.bottom > viewport.height) {
+    throw new Error(`${label} does not fit inside the viewport: ${JSON.stringify({ box, viewport })}`)
+  }
+}
+
 async function assertSeo(page, label, canonicalPath, robots = 'index,follow') {
   const result = await page.evaluate(() => ({
     canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
@@ -214,6 +287,23 @@ try {
   }
   if ((await desktop.locator('.directory-section .sort-segments button').count()) !== 3) {
     throw new Error('directory sort controls should only contain stars, newest, and active')
+  }
+  if ((await desktop.locator('.catalog-hero .self-install-banner').count()) !== 1) {
+    throw new Error('directory hero is missing the self install banner')
+  }
+  const desktopBannerText = await desktop.locator('.catalog-hero .self-install-banner').textContent()
+  for (const command of [
+    'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024',
+    'dsh plugin --profile web add dsh1024',
+  ]) {
+    if (!desktopBannerText?.includes(command)) {
+      throw new Error(`directory self install banner is missing the command: ${command}`)
+    }
+  }
+  await assertHeroCommandsAligned(desktop, 'desktop directory hero')
+  await assertInstallCommandsReadable(desktop, 'desktop directory hero', '.catalog-hero')
+  if ((await desktop.locator('.directory-section .package-row .split-install-main').count()) === 0) {
+    throw new Error('directory rows are missing the split install button')
   }
   await assertLiveStats(desktop)
   await assertSeo(desktop, 'desktop catalog', '/plugins')
@@ -331,11 +421,61 @@ try {
   if ((await rankings.locator('footer, .reset-button').count()) !== 0) {
     throw new Error('removed footer or refresh control is still rendered')
   }
+  if ((await rankings.locator('.catalog-hero .self-install-banner').count()) !== 1) {
+    throw new Error('rankings hero is missing the self install banner')
+  }
+  const rankingsBannerText = await rankings.locator('.catalog-hero .self-install-banner').textContent()
+  for (const command of [
+    'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024',
+    'dsh plugin --profile web add dsh1024',
+  ]) {
+    if (!rankingsBannerText?.includes(command)) {
+      throw new Error(`rankings self install banner is missing the command: ${command}`)
+    }
+  }
+  await assertHeroCommandsAligned(rankings, 'desktop rankings hero')
+  await assertInstallCommandsReadable(rankings, 'desktop rankings hero', '.catalog-hero')
   await assertSeo(rankings, 'desktop rankings', '/')
   await rankings.locator('.ranking-section .segmented-control button').last().click()
   await rankings.locator('.ranking-section .package-row').first().waitFor()
   if ((await rankings.locator('.ranking-section .package-row').count()) !== 100) {
     throw new Error('GitHub activity rankings did not render the top 100 packages')
+  }
+  if ((await rankings.locator('.ranking-section .package-row .split-install-main').count()) === 0) {
+    throw new Error('ranking rows are missing the split install button')
+  }
+  // A middle row is the interesting case: rows below it used to paint over the
+  // menu back when it was anchored inside the row's stacking context.
+  await rankings.locator('.ranking-section .package-row .split-install-toggle').nth(4).click()
+  await rankings.locator('.split-install-menu').waitFor()
+  await assertMenuOnTop(rankings, 'desktop rankings split install menu')
+  await assertNoHorizontalOverflow(rankings, 'desktop rankings with the install menu open')
+  if ((await rankings.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
+    throw new Error('split install menu does not expose exactly two command options')
+  }
+  // The first row may be the store's own catalog entry, whose menu shows the
+  // dedicated `… add dsh1024` pair instead of the generic
+  // owner/repository commands.
+  const splitMenuText = await rankings.locator('.split-install-menu').textContent()
+  // Two fixed options: the tracked wrapper and the official CLI. The row may be
+  // the store's own entry, whose commands target dsh1024.
+  for (const command of ['dsh1024 plugin --profile web add', 'dsh plugin --profile web add']) {
+    if (!splitMenuText?.includes(command)) {
+      throw new Error(`split install menu is missing an install command: ${command}`)
+    }
+  }
+  // Commands must be fully readable: wide menu, wrapping instead of clipping.
+  const clippedMenuCommands = await rankings
+    .locator('.split-install-menu code')
+    .evaluateAll((nodes) => nodes
+      .filter((node) => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1)
+      .map((node) => node.textContent ?? ''))
+  if (clippedMenuCommands.length > 0) {
+    throw new Error(`split install menu clips its commands: ${JSON.stringify(clippedMenuCommands)}`)
+  }
+  await rankings.keyboard.press('Escape')
+  if ((await rankings.locator('.split-install-menu').count()) !== 0) {
+    throw new Error('split install menu did not close on Escape')
   }
   if ((await rankings.locator('a[href^="/plugins/"]').count()) === 0) {
     throw new Error('catalog cards do not use the canonical plural plugins path')
@@ -402,10 +542,14 @@ try {
     '.catalog-view-tabs a',
     '.category-filter button',
     '.segmented-control button',
-    '.package-row .icon-button',
+    '.self-install-banner .install-command .icon-button',
+    '.package-row .split-install-main',
+    '.package-row .split-install-toggle',
     '.package-row .row-link',
     '.load-more-row .button',
   ])
+  await assertHeroCommandsAligned(mobile, 'mobile catalog hero')
+  await assertInstallCommandsReadable(mobile, 'mobile catalog hero', '.catalog-hero')
   await assertMinFontSize(mobile, 'mobile search input', 'input[type="search"]', 16)
   await assertMinFontSize(mobile, 'mobile package title', '.row-title', 14)
   await assertMinFontSize(mobile, 'mobile package description', '.row-identity p', 12)
@@ -431,8 +575,22 @@ try {
   // counting rows immediately races the re-render rather than testing the search.
   await mobile.locator('.directory-section .package-row').first().waitFor({ timeout: 10_000 })
     .catch(() => { throw new Error('search returned no package rows') })
-  await mobile.locator('.directory-section .package-row .icon-button').first().click()
-  await mobile.locator('.directory-section .package-row .icon-button[aria-label="已复制"]').waitFor()
+  await mobile.locator('.directory-section .package-row .split-install-main').first().click()
+  await mobile.locator('.directory-section .package-row .split-install-main[aria-label="已复制"]').waitFor()
+  // The filtered list is short, so this is the first row; the portal assertion
+  // below still proves nothing paints over the menu.
+  await mobile.locator('.directory-section .package-row .split-install-toggle').first().click()
+  await mobile.locator('.split-install-menu').waitFor()
+  await assertMenuOnTop(mobile, 'mobile split install menu')
+  if ((await mobile.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
+    throw new Error('mobile split install menu does not expose exactly two command options')
+  }
+  await assertMinTouchTargets(mobile, 'mobile split install menu', ['.split-install-menu [role="menuitem"]'])
+  await assertNoHorizontalOverflow(mobile, 'mobile catalog with the install menu open')
+  await mobile.keyboard.press('Escape')
+  if ((await mobile.locator('.split-install-menu').count()) !== 0) {
+    throw new Error('mobile split install menu did not close on Escape')
+  }
   await mobile.locator('.catalog-hero .language-switch button').last().click()
   await mobile.waitForFunction(() => document.documentElement.lang === 'en')
   await assertNoHorizontalOverflow(mobile, 'English mobile catalog')
@@ -510,25 +668,55 @@ try {
   const detail = await openPage({ width: 1440, height: 1000 }, '/plugins/openma-ai/deepseek-harness-tui')
   await detail.locator('.detail-header').waitFor()
   await detail.locator('.install-activity-section').waitFor()
-  // Only the OFFICIAL DeepSeek Harness CLI command is shown for now; the
-  // wrapper CLI must not appear anywhere on the page (regression: the
-  // registry install field was once overwritten with the wrapper command).
-  const installCommand = await detail
-    .locator('.install-section .install-command code')
-    .first()
-    .textContent()
-  if (!installCommand?.trim().startsWith('dsh plugin --profile')) {
-    throw new Error(`detail install command is not the official CLI command: ${installCommand}`)
+  const detailInstallCommands = await detail.locator('.install-section .install-command code:visible').allTextContents()
+  if (!detailInstallCommands.some((text) => text.trim().startsWith('dsh plugin --profile web add github:'))) {
+    throw new Error('detail page is missing the bare official CLI install command')
   }
-  if ((await detail.locator('.detail-layout').textContent())?.includes('@dsh-1024store/cli')) {
-    throw new Error('detail page still shows the wrapper CLI command')
+  if (!detailInstallCommands.some((text) => text.trim().startsWith('dsh1024 plugin --profile web add github:'))) {
+    throw new Error('detail page is missing the tracked dsh1024 install command')
   }
+  if (detailInstallCommands.some((text) => text.includes('@dsh-1024store/cli'))) {
+    throw new Error('detail page still renders the legacy @dsh-1024store/cli command')
+  }
+  // main ships the verification badges without any assertion; pin their shape
+  // and the three states' copy so a wording change cannot silently drop them.
+  const methodCount = await detail.locator('.install-section .install-method').count()
+  if (methodCount > 0) {
+    const badges = await detail.locator('.install-section .install-method .install-badge').allTextContents()
+    if (badges.length === 0) throw new Error('install methods render without a verification badge')
+    const known = ['已验证', '未验证', '检查中', '需授权构建']
+    const unknownBadge = badges.find((text) => !known.includes(text.trim()))
+    if (unknownBadge !== undefined) {
+      throw new Error(`unexpected install verification badge: ${JSON.stringify(unknownBadge)}`)
+    }
+    // Every method carries both ways to run it, not just the official one.
+    for (const selector of ['.install-option-recommended', '.install-option-official']) {
+      const rows = await detail.locator(`.install-section .install-method ${selector}`).count()
+      if (rows !== methodCount) {
+        throw new Error(`each install method needs one ${selector}; saw ${rows} for ${methodCount} methods`)
+      }
+    }
+  }
+  await assertInstallCommandsReadable(detail, 'desktop detail', '.install-options')
   await assertSeo(detail, 'desktop detail', '/plugins/openma-ai/deepseek-harness-tui')
   await assertNoHorizontalOverflow(detail, 'desktop detail')
   await detail.locator('.detail-brand').click()
   await detail.waitForURL((url) => url.pathname === '/')
   await detail.locator('.ranking-section').waitFor()
   await detail.close()
+
+  // The store's own catalog entry must show the dedicated dsh1024 commands,
+  // never a generic "install the whole monorepo" command.
+  const selfDetail = await openPage({ width: 1440, height: 1000 }, '/plugins/imsai-sh/awesome-deepseek-harness-plugins')
+  await selfDetail.locator('.detail-header').waitFor()
+  const selfInstallCommands = await selfDetail.locator('.install-section .install-command code:visible').allTextContents()
+  if (!selfInstallCommands.some((text) => text.includes('npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024'))) {
+    throw new Error('self entry detail page is missing the global dsh1024 store install command')
+  }
+  if (selfInstallCommands.some((text) => text.includes('add imsai-sh/awesome-deepseek-harness-plugins') || text.includes('add github:imsai-sh/awesome-deepseek-harness-plugins'))) {
+    throw new Error('self entry detail page renders a generic monorepo install command')
+  }
+  await selfDetail.close()
 
   const scoped = await openPage({ width: 390, height: 844 }, '/plugins/zhaoolee/notes', { touch: true })
   await scoped.locator('.detail-header').waitFor()
@@ -539,7 +727,7 @@ try {
     '.detail-utility .language-switch button',
     '.back-link',
     '.detail-actions .button',
-    '.install-command-prominent .icon-button',
+    '.install-options .icon-button',
     '.site-bottom-link a',
   ])
   await assertMinFontSize(scoped, 'mobile detail prose', '.detail-description', 15)
@@ -567,6 +755,7 @@ try {
   ) {
     throw new Error(`mobile detail content priority is incorrect: ${JSON.stringify(detailOrder)}`)
   }
+  await assertInstallCommandsReadable(scoped, 'mobile package detail', '.install-options')
   await scoped.locator('.install-command-prominent .icon-button').click()
   await scoped.locator('.install-command-prominent .icon-button[aria-label="已复制"]').waitFor()
   await scoped.locator('.detail-brand').click()
@@ -585,8 +774,25 @@ try {
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
     '.catalog-view-tabs a',
+    '.self-install-banner .install-command .icon-button',
+    '.package-row .split-install-main',
+    '.package-row .split-install-toggle',
     '.package-row .row-link',
   ])
+  await assertHeroCommandsAligned(compactMobile, 'compact mobile hero')
+  await assertInstallCommandsReadable(compactMobile, 'compact mobile hero', '.catalog-hero')
+  await compactMobile.locator('.ranking-section .package-row .split-install-toggle').nth(3).click()
+  await compactMobile.locator('.split-install-menu').waitFor()
+  await assertMenuOnTop(compactMobile, 'compact split install menu')
+  if ((await compactMobile.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
+    throw new Error('compact split install menu does not expose exactly two command options')
+  }
+  await assertMinTouchTargets(compactMobile, 'compact split install menu', ['.split-install-menu [role="menuitem"]'])
+  await assertNoHorizontalOverflow(compactMobile, 'compact mobile rankings with the install menu open')
+  await compactMobile.keyboard.press('Escape')
+  if ((await compactMobile.locator('.split-install-menu').count()) !== 0) {
+    throw new Error('compact split install menu did not close on Escape')
+  }
   await compactMobile.close()
 
   // 看板娘（桌宠）回归：固定在视口内不越界、触屏按钮 ≥44px、
@@ -620,7 +826,7 @@ try {
   await pet.close()
 
   if (errors.length > 0) throw new Error(`browser errors:\n${errors.join('\n')}`)
-  console.log('Visual smoke check passed: desktop, touch-enabled 390px mobile, compact 320px mobile, search, copy actions, local scrollers, and package details.')
+  console.log('Visual smoke check passed: desktop, touch-enabled 390px mobile, compact 320px mobile, search, split install menus, self install banner, copy actions, local scrollers, and package details.')
 } finally {
   await desktopContext.close()
   await mobileContext.close()

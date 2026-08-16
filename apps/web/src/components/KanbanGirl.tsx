@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { Fish, Gamepad2 } from 'lucide-react'
+import { publicAsset } from '../lib/assets'
 import { useI18n } from '../lib/i18n'
 
 // 看板娘（桌宠）：右下角悬浮的 DeepSeek 鲸鱼娘。
 // 角色素材来自 whale-girl（https://github.com/vlln/whale-girl，MIT）：
 //   角色「鲸鱼娘」by ZipZipPipe，15 状态精灵图契约（帧横排 256×256、帧0=常态起点），
 //   本页用到 idle/joy/eat/play/welcome/drag/think/sleep/wake/walk 十个状态，
-//   许可文本随资源存放于 /pet/whale-girl/LICENSE。
+//   许可文本随资源存放于 public/pet/whale-girl/LICENSE。
 // 所有偏好都存在 localStorage 里，读写都是非致命的（沙箱 iframe / 隐私模式可能抛错）。
 
 const STORAGE_POS = 'dsh-1024store-pet-pos'
@@ -30,8 +31,8 @@ const WALK_MARGIN = 12
 const KEEP_VISIBLE = 28
 /** 3D 倾斜最大角度（pointer 跟随）。 */
 const TILT_MAX_DEG = 10
-/** 静态资源根。 */
-const SHEET_BASE = '/pet/whale-girl/'
+/** 静态资源根：跟随 Vite base，静态子路径部署下才不会 404。 */
+const SHEET_BASE = publicAsset('pet/whale-girl/')
 
 /** 用到的状态子集（帧数/fps/播放行为与 whale-girl manifest 一致）。 */
 const PET_STATE_KEYS = ['idle', 'joy', 'eat', 'play', 'welcome', 'drag', 'think', 'sleep', 'wake', 'walk'] as const

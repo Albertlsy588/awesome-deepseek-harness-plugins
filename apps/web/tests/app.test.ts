@@ -699,6 +699,53 @@ describe('market API', () => {
     expect(eventRecorder).not.toHaveBeenCalled()
   })
 
+  it('serves the store plugin install stats with cache metadata', async () => {
+    const metrics = {
+      ...emptyInstallMetrics(),
+      installCount: 21,
+      installerCount: 13,
+      installs7d: 5,
+      latestInstallAt: '2026-08-14T12:05:00.000Z',
+    }
+    const installStatsLoader = vi.fn(async () => metrics)
+    const app = createApp({
+      catalogLoader: vi.fn(async () => testCatalogResult()),
+      installStatsLoader,
+      clock: () => Date.parse('2026-08-14T12:06:00Z'),
+    })
+
+    const response = await app.request('/api/v1/self/install-stats', undefined, TELEMETRY_ENV)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toBe(
+      'public, max-age=30, s-maxage=300, stale-while-revalidate=3600',
+    )
+    await expect(response.json()).resolves.toEqual(metrics)
+    expect(installStatsLoader).toHaveBeenCalledOnce()
+    expect(installStatsLoader).toHaveBeenCalledWith(
+      TELEMETRY_ENV.CATALOG_DB,
+      'imsai-sh/awesome-deepseek-harness-plugins',
+      Date.parse('2026-08-14T12:06:00Z'),
+    )
+  })
+
+  it('returns empty store plugin install stats when the database is unavailable', async () => {
+    const installStatsLoader = vi.fn(async () => {
+      throw new Error('must not query a missing database')
+    })
+    const app = createApp({
+      catalogLoader: vi.fn(async () => testCatalogResult()),
+      installStatsLoader,
+    })
+
+    const response = await app.request('/api/v1/self/install-stats')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual(emptyInstallMetrics())
+    expect(installStatsLoader).not.toHaveBeenCalled()
+    // Every other read endpoint is noindex; this one must not be the exception
+    // that ends up as the only indexable JSON on the domain.
+    expect(response.headers.get('X-Robots-Tag')).toBe('noindex')
+  })
+
   it('merges aggregate installation metrics into package details', async () => {
     const metrics = {
       ...emptyInstallMetrics(),

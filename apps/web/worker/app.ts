@@ -51,6 +51,7 @@ interface AppDependencies {
 }
 
 const CACHE_HEADER = 'public, max-age=30, s-maxage=300, stale-while-revalidate=3600'
+const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
 // The catalog listing is a snapshot projection that only moves when the KV
 // snapshot does; the detail endpoint carries live install counters and keeps
 // the shorter TTL above.
@@ -497,6 +498,16 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       ...installMetrics,
       category: categoryDescriptor(plugin.category),
     })
+  })
+
+  app.get('/api/v1/self/install-stats', async (context) => {
+    const db = context.env?.CATALOG_DB
+    const metrics = db
+      ? await dependencies.installStatsLoader(db, SELF_PLUGIN_ID, dependencies.clock())
+      : emptyInstallMetrics()
+    context.header('Cache-Control', CACHE_HEADER)
+    context.header('X-Robots-Tag', 'noindex')
+    return context.json(metrics)
   })
 
   app.get('/api/v1/registry', async (context) => {

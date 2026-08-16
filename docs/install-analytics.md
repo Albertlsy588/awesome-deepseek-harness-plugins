@@ -1,17 +1,65 @@
 # Install analytics
 
 DSH 1024Store counts installs reported through two channels, distinguished by
-the event's `sourceChannel` field:
+the event's `sourceChannel` field. Both channels ship in the single `dsh1024`
+npm package (`packages/dsh1024`); the channel values are stable historical
+identifiers and never change with package renames:
 
-- `dsh-1024store-cli` — the open-source wrapper CLI (`npx @dsh-1024store/cli`);
-- `dsh-1024store-plugin` — the in-DSH marketplace plugin
-  (`packages/dsh-1024store`), which installs plugins from the DSH settings page.
+- `dsh-1024store-cli` — the open-source wrapper CLI (`dsh1024 plugin ...`);
+- `dsh-1024store-plugin` — the in-DSH marketplace plugin, which installs
+  plugins from the DSH settings page.
 
-The wrapper CLI delegates package management to the official DeepSeek Harness
-CLI and only reports an event after checking the profile state on disk.
+The wrapper CLI is a pure rename of the official plugin command: everything
+from `plugin` onwards is forwarded to the official DeepSeek Harness CLI exactly
+as written, with nothing added, removed, reordered, or defaulted. It only reports
+an event after checking the profile state on disk.
+
+The install target is read to attribute the event, never rewritten.
+
+## What is counted, and what is not
+
+An install is only counted when the argument vector is unambiguous **and** the
+target resolves to a catalog repository. Everything else is installed exactly the
+same way and simply goes uncounted; the failure mode is a missing count, never a
+wrong one.
+
+The vector must name a profile (`--profile <name>` or `--profile=<name>`; the
+official CLI has no `-p` alias), use an installing verb (`add`, `i`, `install`),
+and stay inside the profile's own dependencies (`-D`, `--save-dev`, `-O`,
+`--save-optional`, `--save-peer`, `-g` and `--global` are not counted, because
+the dependency lands somewhere the profile check cannot see).
+
+Extra arguments are forwarded and behave normally — passing `--reporter
+append-only`, `--registry <url>` or anything else changes nothing about the
+install. They only affect counting in one case: if the arguments leave more than
+one possible install target (two repositories in one command, or an option the
+wrapper does not know takes a separate value), the install is not counted rather
+than attributed to a guess.
+
+| Target | Counted as | Where the id comes from |
+| --- | --- | --- |
+| `github:owner/repository`, `owner/repository` (optionally `#ref`, `.git`) | `owner/repository` | the argument itself |
+| `github:owner/repository#path:sub/dir`, `owner/repository/sub/dir` (optionally `#ref&path:…`) | `owner/repository/sub/dir` | the argument itself |
+| `dsh1024`, `dsh1024@<version>` | this catalog repository | fixed |
+| Published package names, scoped or not, with or without a version/tag/range | the repository in the installed manifest | `repository` field of `node_modules/<name>/package.json` after a successful install |
+| Local paths, `file:`, `link:`, `portal:`, URLs, drive letters, `~` | never reported | — |
+| `gitlab:`, `bitbucket:`, `gist:`, `jsr:`, `workspace:`, `catalog:`, npm aliases (`x@npm:y`), full git URLs | not counted | — |
+
+The published-package lookup reads one local file and nothing else: the
+installed package's own `repository` field, accepted in npm's string and object
+spellings (`github:owner/repo`, `https://github.com/owner/repo(.git)`,
+`git+https://…`, `git@github.com:owner/repo.git`, `{type, url, directory}`) and
+only for github.com hosts. A monorepo `directory` is part of the identity — it
+becomes the id's path, so sibling packages in one repository never share a
+counter. If the field is missing, points elsewhere, declares a directory that
+escapes the repository, or the install failed so there is nothing to read, the
+install is not counted.
+
+Local, `file:`, `link:` and `portal:` targets are a hard boundary: a filesystem
+path can never reach an install event, a local receipt, or the retry queue.
 
 ```text
-npx @dsh-1024store/cli add owner/repository[/sub/dir] --profile web
+dsh1024 plugin --profile web add github:owner/repository[#path:sub/dir]
         |
         +-- official @deepseek-ai/dsh plugin command
         +-- before/after profile verification
@@ -78,6 +126,13 @@ bounded error code.
 Arguments passed through to the official CLI are deliberately excluded from
 the event and from local receipts.
 
+The wrapper reuses an official `dsh` already on PATH when it finds one, and
+otherwise falls back to `npx --yes @deepseek-ai/dsh`; pinning a version with
+`DSH1024_DSH_PACKAGE` always takes the npx path. Only the way the official CLI
+is located changes — arguments, ordering, exit codes, and stdio are untouched.
+A PATH-resolved binary carries no version in its spec, so `dshVersion` is
+reported as `null` unless `DSH1024_DSH_VERSION` says otherwise.
+
 Local identity, queue, and receipt updates are atomic and serialized across
 CLI processes. Uploads happen outside the file lock, then remove only event IDs
 the server accepted or permanently rejected, so an install enqueued during an
@@ -86,16 +141,16 @@ in-flight upload is retained.
 The CLI does **not** send command output, file paths, usernames, environment
 variables, source files, session contents, prompts, raw errors, IP addresses,
 or a host-derived User-Agent. Requests use the fixed identifier
-`@dsh-1024store/cli`. The Worker HMACs the client UUID with
+`dsh1024/<version>`. The Worker HMACs the client UUID with
 `INSTALL_CLIENT_HASH_SECRET` and never writes the raw UUID to D1. Cloudflare may
 still process ordinary connection metadata as the hosting provider.
 
 Telemetry is enabled by default with a first-run notice. It can be disabled
-before execution with either `DO_NOT_TRACK=1` or
-`DSH_1024STORE_TELEMETRY=0`, or persistently with:
+before execution with either `DO_NOT_TRACK=1` or `DSH1024_TELEMETRY=0` (the
+legacy name `DSH_1024STORE_TELEMETRY` is still honored), or persistently with:
 
 ```bash
-npx @dsh-1024store/cli telemetry disable
+npx dsh1024 telemetry disable
 ```
 
 Use `telemetry status` to inspect the local setting, `telemetry enable` to opt
@@ -103,6 +158,24 @@ back in, and `telemetry reset` to rotate the local anonymous identifier and
 clear unsent events without changing the enabled/disabled preference.
 Persistently disabling telemetry also clears unsent events. Resetting does not
 rewrite historical aggregate data.
+
+## Self-install events (`dsh1024 plugin ... add dsh1024`)
+
+`dsh1024 plugin --profile web add dsh1024` installs the 1024 Store marketplace
+plugin itself into a DeepSeek Harness profile. It uses the same event schema and
+channel (`sourceChannel: "dsh-1024store-cli"`) as any other install, with a fixed
+identity:
+
+- `pluginId` is the catalog repository id
+  `imsai-sh/awesome-deepseek-harness-plugins` and `requestedRef` is `null`;
+  the official CLI receives the npm package name `dsh1024` as the install
+  target.
+- Profile verification recognizes the npm dependency spec (`dsh1024`) in
+  addition to GitHub specs, so before/after versions come from the installed
+  npm package.
+- Aggregates for that plugin id are exposed read-only at
+  `GET /api/v1/self/install-stats` and rendered by the website's self-install
+  banner; no separate counting rules apply.
 
 ## Storage
 
@@ -137,17 +210,26 @@ the primary tables retain the full HMAC for correct deduplication.
 
 ## Deployment
 
-Publish the wrapper package after verifying its exact tarball contents:
+Publish the unified `dsh1024` package after verifying its exact tarball
+contents:
 
 ```bash
 npm run test:cli
 npm run pack:cli
-npm publish --workspace @dsh-1024store/cli --access public
+npm publish --workspace dsh1024
 ```
 
-The `@dsh-1024store` npm organization must exist and the publisher must have access
-to it. Do not switch the website to another package name without updating the
-CLI package, UI command builder, tests, and this document together.
+`dsh1024` is an unscoped package, so no npm organization is required. After
+the first successful publish, deprecate the two legacy packages so existing
+users are redirected:
+
+```bash
+npm deprecate dsh-1024store "Renamed: install dsh1024 instead"
+npm deprecate @dsh-1024store/cli "Renamed: use npx dsh1024"
+```
+
+Do not switch the website to another package name without updating the
+package, UI command builder, tests, and this document together.
 
 Apply D1 migrations and set a high-entropy Worker secret before deploying:
 
@@ -172,7 +254,9 @@ as new instances.
 
 The CLI endpoint defaults to
 `https://deepseek1024.com/api/v1/install-events`. For local testing only, set
-`DSH_1024STORE_TELEMETRY_URL` to a different full endpoint URL.
+`DSH1024_TELEMETRY_URL` to a different full endpoint URL. Every `DSH1024_*`
+variable also reads its legacy `DSH_1024STORE_*` counterpart; when both are
+set, the `DSH1024_*` value wins.
 
 ## Trust boundary and abuse
 
