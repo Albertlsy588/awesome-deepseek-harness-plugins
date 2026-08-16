@@ -179,7 +179,11 @@ function catalogDatabase(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
   // Applied in order, so the tests run against the migrated production shape
   // rather than the original one.
-  for (const migration of ['0002_plugin_catalog.sql', '0005_catalog_plugin_paths.sql']) {
+  for (const migration of [
+    '0002_plugin_catalog.sql',
+    '0005_catalog_plugin_paths.sql',
+    '0006_plugin_install_methods.sql',
+  ]) {
     database.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'))
   }
   return database
@@ -498,6 +502,88 @@ describe('catalog snapshot identity', () => {
       'dsh plugin --profile web add github:Acme/Mono#path:packages/bar',
       'dsh plugin --profile web add github:Acme/Mono#path:packages/foo',
     ])
+    database.close()
+  })
+})
+
+
+describe('published plugin set', () => {
+  const now = '2026-08-16T00:00:00.000Z'
+
+  function seedRepository(
+    database: DatabaseSync,
+    overrides: Record<string, string | number | null>,
+  ): void {
+    const row = {
+      github_id: null as number | null,
+      full_name: 'Acme/Repo',
+      normalized_full_name: 'acme/repo',
+      owner: 'Acme',
+      repository_name: 'Repo',
+      package_path: null as string | null,
+      validation_status: 'accepted',
+      topic_present: 1,
+      ...overrides,
+    }
+    database.prepare(`
+      INSERT INTO catalog_repositories (github_id, full_name, normalized_full_name, owner,
+        repository_name, html_url, package_path, validation_status, topic_present,
+        first_seen_at, last_seen_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(row.github_id, row.full_name, row.normalized_full_name, row.owner, row.repository_name,
+      `https://github.com/${row.full_name}`, row.package_path, row.validation_status,
+      row.topic_present, now, now, now, now)
+  }
+
+  // The set served to readers and the set fed to the validation queue used to be
+  // two different predicates, and they disagreed: every curated plugin was
+  // published without ever being inspected. One view now defines both.
+  it('covers curated and topic-discovered plugins alike', async () => {
+    const database = catalogDatabase()
+    seedRepository(database, {
+      full_name: 'Scan/Nested', normalized_full_name: 'scan/nested', repository_name: 'Nested',
+      github_id: 7, package_path: 'packages/deep/package.json',
+    })
+    seedRepository(database, {
+      full_name: 'Scan/Root', normalized_full_name: 'scan/root', repository_name: 'Root',
+      github_id: 8, package_path: 'package.json',
+    })
+    // Not accepted and not curated: not published, so not queued either.
+    seedRepository(database, {
+      full_name: 'Scan/Rejected', normalized_full_name: 'scan/rejected', repository_name: 'Rejected',
+      github_id: 9, package_path: 'package.json', validation_status: 'rejected',
+    })
+    await syncCuratedEntries(sqliteD1(database), [
+      curatedEntry({ id: 'Acme/Mono/packages/foo', name: 'foo', repository: 'https://github.com/Acme/Mono' }),
+      curatedEntry({ id: 'Acme/Mono/packages/bar', name: 'bar', repository: 'https://github.com/Acme/Mono' }),
+    ], now)
+
+    expect(database.prepare(
+      'SELECT full_name, plugin_path FROM catalog_published_plugins ORDER BY full_name, plugin_path',
+    ).all()).toEqual([
+      // One row per curated plugin, so a monorepo contributes several.
+      { full_name: 'Acme/Mono', plugin_path: 'packages/bar' },
+      { full_name: 'Acme/Mono', plugin_path: 'packages/foo' },
+      // A topic-only repository sits at its accepted manifest's directory.
+      { full_name: 'Scan/Nested', plugin_path: 'packages/deep' },
+      { full_name: 'Scan/Root', plugin_path: '' },
+    ])
+    database.close()
+  })
+
+  it('seeds the inspection queue from the same set', async () => {
+    const database = catalogDatabase()
+    // The migration's backfill only sees rows that existed when it ran, so a
+    // repository added afterwards proves the view, not the backfill.
+    seedRepository(database, { github_id: 11, package_path: 'package.json' })
+
+    expect(database.prepare(`
+      SELECT COUNT(*) AS pending FROM catalog_published_plugins p
+       WHERE NOT EXISTS (
+         SELECT 1 FROM catalog_plugin_manifests m
+          WHERE m.repository_id = p.repository_id AND m.plugin_path = p.plugin_path
+       )
+    `).get()).toEqual({ pending: 1 })
     database.close()
   })
 })
