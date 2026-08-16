@@ -47,14 +47,21 @@ export async function withFileLock(path, callback, options = {}) {
   const lockDirectory = `${path}.lock`
   const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS
   let ownerPath
+  let lastCreationError
 
   while (true) {
     try {
       await mkdir(lockDirectory, { mode: 0o700 })
     } catch (error) {
-      if (error?.code !== 'EEXIST') throw error
-      if (!await removeStaleLock(lockDirectory)) {
-        if (Date.now() >= deadline) throw new Error(`timed out waiting for file lock: ${path}`)
+      if (!isTransientCreationError(error)) throw error
+      lastCreationError = error
+      // EEXIST means the directory is genuinely there, so it may be a stale lock
+      // worth reaping. The Windows race codes mean the create itself was refused
+      // and there is nothing to inspect yet — just back off and try again.
+      if (error.code !== 'EEXIST' || !await removeStaleLock(lockDirectory)) {
+        if (Date.now() >= deadline) {
+          throw new Error(`timed out waiting for file lock: ${path} (last ${lastCreationError.code})`)
+        }
         await delay(10 + Math.floor(Math.random() * 20))
       }
       continue
@@ -165,6 +172,17 @@ async function removeStaleLock(lockDirectory) {
 function isTransientRemovalError(error) {
   return error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST'
     || error?.code === 'EPERM' || error?.code === 'EBUSY'
+}
+
+// The mirror image on the acquisition side. POSIX reports a contended lock
+// directory as EEXIST, but Windows reports EPERM/EBUSY when the create races
+// another process — most often when the name is still in a pending-delete state
+// because the previous owner just released it. Those are contention, not
+// failure, so they wait like EEXIST rather than crashing the caller. A genuine
+// permission problem still surfaces: it exhausts the wait and the timeout
+// message carries the underlying code.
+function isTransientCreationError(error) {
+  return error?.code === 'EEXIST' || error?.code === 'EPERM' || error?.code === 'EBUSY'
 }
 
 async function ownerIsStale(ownerPath) {
