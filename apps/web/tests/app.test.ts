@@ -132,6 +132,43 @@ describe('market API', () => {
     expect((sitemapBody.match(/<url>/g) ?? []).length).toBe(TEST_PLUGINS.length + 3)
   })
 
+  it('serves the catalog as plain text for crawlers that will not run JavaScript', async () => {
+    const response = await testApp().request('https://store.example/llms-full.txt')
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toContain('text/plain')
+    const body = await response.text()
+    expect(body).toContain(TEST_PLUGINS[0]!.name)
+    expect(body).toContain('dsh plugin --profile web add github:')
+  })
+
+  it('withholds the sitemap during a catalog outage instead of shrinking it', async () => {
+    const app = createApp({
+      catalogLoader: vi.fn(async () => ({ ...testCatalogResult('empty'), source: 'empty' as const })),
+    })
+    const sitemap = await app.request('https://store.example/sitemap.xml')
+    const llms = await app.request('https://store.example/llms-full.txt')
+
+    expect(sitemap.status).toBe(503)
+    expect(sitemap.headers.get('Cache-Control')).toBe('no-store')
+    expect(llms.status).toBe(503)
+  })
+
+  it('redirects the duplicate rankings route to the canonical home page', async () => {
+    const response = await testApp().request('https://store.example/rankings')
+
+    expect(response.status).toBe(301)
+    expect(response.headers.get('Location')).toBe('https://store.example/')
+  })
+
+  it('keeps the catalog JSON crawlable but unindexable', async () => {
+    const response = await testApp().request('/api/v1/plugins')
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('X-Robots-Tag')).toBe('noindex')
+    expect(response.headers.get('Cache-Control')).toContain('max-age=300')
+  })
+
   it('reports service health without exposing internals', async () => {
     const response = await testApp().request('/api/v1/health')
     expect(response.status).toBe(200)

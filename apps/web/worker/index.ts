@@ -13,6 +13,8 @@ const app = createApp()
 function isWorkerRoute(pathname: string): boolean {
   return pathname === '/robots.txt' ||
     pathname === '/sitemap.xml' ||
+    pathname === '/llms-full.txt' ||
+    pathname === '/rankings' ||
     pathname === '/plugin' ||
     pathname.startsWith('/plugin/') ||
     pathname === '/packages' ||
@@ -20,18 +22,30 @@ function isWorkerRoute(pathname: string): boolean {
     pathname.startsWith('/api/')
 }
 
+const INDEXABLE_COLLECTION_PATHS = new Set(['/', '/plugins', '/rankings'])
+const COLLECTION_PARAMS = new Set(['q', 'category', 'sort'])
+
+/**
+ * Filtered and searched collection views are noindexed: they are permutations
+ * of one page. An unknown parameter is treated the same way so that campaign
+ * tags and other unbounded querystrings cannot mint infinite crawlable URLs.
+ */
 function isFilteredCollection(url: URL): boolean {
-  if (url.pathname !== '/' && url.pathname !== '/plugins' && url.pathname !== '/rankings') return false
-  return url.searchParams.has('q') ||
-    url.searchParams.has('category') ||
-    url.searchParams.has('sort')
+  if (!INDEXABLE_COLLECTION_PATHS.has(url.pathname)) return false
+  for (const key of url.searchParams.keys()) {
+    if (!COLLECTION_PARAMS.has(key)) return true
+  }
+  for (const key of COLLECTION_PARAMS) {
+    if ((url.searchParams.get(key) ?? '').trim().length > 0) return true
+  }
+  return false
 }
 
 function canonicalTrailingSlashRedirect(url: URL): Response | null {
-  const shouldRedirect = url.pathname === '/plugins/' ||
-    url.pathname === '/rankings/' ||
-    /^\/plugins\/[^/]+\/[^/]+\/$/.test(url.pathname)
-  if (!shouldRedirect) return null
+  if (url.pathname === '/' || !url.pathname.endsWith('/')) return null
+  // This runs before isWorkerRoute, so API paths have to be excluded or a POST
+  // to /api/v1/install-events/ would be answered with a redirect.
+  if (url.pathname.startsWith('/api/')) return null
   const canonical = new URL(url)
   canonical.pathname = canonical.pathname.slice(0, -1)
   return Response.redirect(canonical.toString(), 301)
@@ -61,12 +75,27 @@ const worker = {
     if (isWorkerRoute(url.pathname)) return app.fetch(request, env, ctx)
 
     return env.ASSETS.fetch(request).then(async (response) => {
+      // Vite fingerprints everything under /assets/, so revalidating it on every
+      // navigation is pure latency. Unhashed files in public/ keep the short TTL.
+      if (url.pathname.startsWith('/assets/')) {
+        const headers = new Headers(response.headers)
+        headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+        return new Response(response.body, { status: response.status, headers })
+      }
       if (!response.headers.get('Content-Type')?.includes('text/html')) return response
       // Fresh KV resolves immediately; stale KV answers now and refreshes via
       // ctx.waitUntil, so SSR metadata never blocks on a full catalog rebuild.
       const catalog = await loadCatalogSnapshot(env, ctx)
-      const metadata = metadataForPath(url.pathname, seoCatalog(catalog.snapshot))
-      if (isFilteredCollection(url)) metadata.robots = 'noindex,follow'
+      const metadata = metadataForPath(
+        url.pathname,
+        seoCatalog(catalog.snapshot, catalog.source === 'empty'),
+      )
+      if (isFilteredCollection(url)) {
+        metadata.robots = 'noindex,follow'
+        // A noindexed permutation pointing its canonical at the unfiltered page
+        // is a conflicting pair of signals; no canonical is the cleaner one.
+        metadata.canonical = null
+      }
       return rewriteHtmlResponse(response, metadata)
     })
   },

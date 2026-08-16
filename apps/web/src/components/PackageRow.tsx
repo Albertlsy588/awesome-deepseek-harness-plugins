@@ -53,14 +53,6 @@ export const PackageRow = memo(function PackageRow({
 
   return (
     <article className={`package-row${ranking ? ' ranking-row' : ''}`}>
-      <Link
-        className="row-link"
-        to={packagePath(plugin)}
-        target="_blank"
-        rel="noreferrer"
-        aria-label={`${t('details')}: ${plugin.name}`}
-      />
-
       <span className={`row-index${index < 3 && ranking ? ' is-leading' : ''}`} aria-label={`${t('rank')} ${index + 1}`}>
         {String(index + 1).padStart(2, '0')}
       </span>
@@ -69,7 +61,13 @@ export const PackageRow = memo(function PackageRow({
 
       <div className="row-identity">
         <div className="row-title-line">
-          <span className="row-title">{plugin.name}</span>
+          {/* The plugin name is the link text: a row-wide overlay anchor gave
+              every one of ~2,900 catalog links the same boilerplate label. */}
+          <h3 className="row-title">
+            <Link className="row-link" to={packagePath(plugin)} target="_blank" rel="noreferrer">
+              {plugin.name}
+            </Link>
+          </h3>
           <span className="row-owner">{plugin.owner}</span>
         </div>
         <p>{plugin.description[language]}</p>

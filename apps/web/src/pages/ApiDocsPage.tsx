@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { publicAsset } from '../lib/assets'
 import { useI18n } from '../lib/i18n'
+import { collectionCopy } from '../../worker/seo-templates'
 import { usePageSeo } from '../lib/usePageSeo'
 
 const PUBLIC_API_ORIGIN = 'https://api.deepseek1024.com'
@@ -57,9 +58,11 @@ const PARAM_ROWS = [
 
 export function ApiDocsPage() {
   const { language, t } = useI18n()
+  const copy = collectionCopy('apiDocs', language)
+
   usePageSeo({
-    title: t('apiDocsSeoTitle'),
-    description: t('apiDocsSeoDescription'),
+    title: copy.title,
+    description: copy.description,
     path: '/docs/api',
     language,
   })
@@ -75,8 +78,8 @@ export function ApiDocsPage() {
       </div>
 
       <header className="api-docs-header">
-        <h1>{t('apiDocsTitle')}</h1>
-        <p>{t('apiDocsIntro')}</p>
+        <h1>{copy.heading}</h1>
+        <p>{copy.intro}</p>
         <p className="api-docs-base">
           {t('apiDocsBaseUrl')}: <code>{PUBLIC_API_ORIGIN}</code>
         </p>

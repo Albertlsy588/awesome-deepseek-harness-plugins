@@ -99,8 +99,10 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   const zh = files['README.md']
   const en = files['catalog/README.md']
 
-  assert.match(zh, /# DSH 1024Store/)
-  assert.match(zh, /共收录 \*\*4\*\* 个插件/)
+  assert.match(zh, /^# Awesome DeepSeek Harness Plugins · DSH 1024Store$/m)
+  assert.match(zh, /DeepSeek Harness 插件市场 \/ 插件商店 \/ 插件目录/)
+  assert.match(zh, /共收录 \*\*4\*\* 个 dsh 插件，分为 2 个分类/)
+  assert.match(zh, /## 如何安装 DeepSeek Harness 插件 \/ How to install a DeepSeek Harness plugin/)
   assert.match(zh, /2026-08-15/)
   assert.match(zh, /npx @dsh-1024store\/cli add <owner>\/<repository> --profile web/)
   assert.match(zh, /自动合并/)
@@ -110,19 +112,71 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   // multi-line descriptions collapse into a single line.
   assert.match(zh, /- \[ui-thing\]\(https:\/\/github\.com\/owner\/ui-thing\) — 界面 增强。/)
   assert.match(zh, /## 待分类/)
+  assert.match(zh, /还有 \*\*1\*\* 个插件等待分类/)
   assert.doesNotMatch(zh, /stars?:? \d/i)
 
-  assert.match(en, /DSH 1024Store/)
-  assert.match(en, /\*\*4\*\* plugins, updated 2026-08-15/)
+  assert.match(en, /^# Awesome DeepSeek Harness Plugins — the DSH plugin store$/m)
+  assert.match(en, /plugin store, marketplace and hub for \[DeepSeek Harness\]/)
+  assert.match(en, /\*\*4\*\* dsh plugins across 2 categories, updated 2026-08-15/)
+  assert.match(en, /https:\/\/api\.deepseek1024\.com\/v1\/plugins\/search\?q=theme/)
+  assert.match(en, /\[中文目录\]\(\.\.\/README\.md\)/)
+  assert.match(en, /## How to install a DeepSeek Harness plugin/)
   assert.match(en, /- \[Zeta-Tool\]\(https:\/\/github\.com\/owner\/zeta\) — Zeta tool\./)
   // en line falls back to Chinese when the English description is missing.
   assert.match(en, /- \[ui-thing\]\(https:\/\/github\.com\/owner\/ui-thing\) — 界面 增强。/)
   assert.match(en, /## Unclassified/)
+  assert.match(en, /1 plugins are still awaiting classification — \[browse them on deepseek1024\.com\]\(https:\/\/deepseek1024\.com\/plugins\) or \[help classify them\]\(\.\.\/CONTRIBUTING\.md\)\./)
   assert.match(en, /merged submissions are synced/i)
+  // The unclassified bucket is 91% of the live catalog; it must never be inlined again.
+  assert.doesNotMatch(en, /- \[scanned-plugin\]/)
+  assert.doesNotMatch(zh, /- \[scanned-plugin\]/)
+
+  // Categories below the row cap carry no tail line.
+  assert.doesNotMatch(en, /- … and \d+ more/)
+  assert.doesNotMatch(zh, /- … 还有/)
 
   // Category index order and counts.
   const zhIndex = zh.slice(zh.indexOf('## 插件分类'))
   assert.match(zhIndex, /- \[UI 增强\]\(#ui\) \(1\)\n- \[工具与能力\]\(#tools\) \(2\)\n- \[待分类\]\(#unclassified\) \(1\)/)
+})
+
+function bulkRegistry(count, description = 'A tool.') {
+  const plugins = Array.from({ length: count }, (unused, index) => {
+    const slug = `tool-${String(index).padStart(4, '0')}`
+    return {
+      id: `owner/${slug}`,
+      name: slug,
+      owner: 'owner',
+      url: `https://github.com/owner/${slug}`,
+      category: 'tools',
+      description: { en: description, zh: description },
+      install: `dsh plugin --profile web add github:owner/${slug}`,
+      added: '2026-08-01',
+      stars: 1,
+    }
+  })
+  return { ...registryFixture, count, plugins }
+}
+
+test('caps each category at 40 rows and links the tail to the website', async () => {
+  const files = await buildReadmeFiles(normalizeRegistry(bulkRegistry(72)), categories)
+  const zh = files['README.md']
+  const en = files['catalog/README.md']
+
+  assert.equal(en.split('\n').filter(line => line.startsWith('- [tool-')).length, 40)
+  assert.equal(zh.split('\n').filter(line => line.startsWith('- [tool-')).length, 40)
+  assert.match(en, /- … and 32 more — \[browse the full Tools & Capabilities list on deepseek1024\.com\]\(https:\/\/deepseek1024\.com\/plugins\?category=tools\)/)
+  assert.match(zh, /- … 还有 32 个插件 — \[在 DSH 1024Store 浏览完整的「工具与能力」插件列表\]\(https:\/\/deepseek1024\.com\/plugins\?category=tools\)/)
+  // The index keeps reporting the true size even though the list is truncated.
+  assert.match(en, /- \[Tools & Capabilities\]\(#tools\) \(72\)/)
+})
+
+test('refuses to emit a projection GitHub would truncate', async () => {
+  const oversized = normalizeRegistry(bulkRegistry(40, 'x'.repeat(20000)))
+  await assert.rejects(
+    buildReadmeFiles(oversized, categories),
+    /^Error: README\.md is \d+\.\d KiB; GitHub stops rendering markdown past 512 KiB, so generated files must stay under 480 KiB\.$/,
+  )
 })
 
 test('adapts the legacy /plugins.json shape', () => {

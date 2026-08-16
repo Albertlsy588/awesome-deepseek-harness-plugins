@@ -29,6 +29,10 @@ describe('public API host mapping', () => {
     expect(root.status).toBe(302)
     expect(root.headers.get('Location')).toBe('https://deepseek1024.com/docs/api')
 
+    const robots = publicApiNotFound('/robots.txt')
+    expect(robots.status).toBe(200)
+    await expect(robots.text()).resolves.toBe('User-agent: *\nDisallow: /\n')
+
     const missing = publicApiNotFound('/v1/registry')
     expect(missing.status).toBe(404)
     await expect(missing.json()).resolves.toMatchObject({ code: 'NOT_FOUND' })

@@ -26,27 +26,39 @@ import { CategoryTag } from '../components/CategoryTag'
 import { InstallCommand } from '../components/InstallCommand'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
-import { getPackage, repositoryName, type PackageDetail } from '../lib/api'
+import { ApiError, getPackage, repositoryName, type PackageDetail } from '../lib/api'
 import { publicAsset } from '../lib/assets'
 import { formatDate, formatDateTime, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
-import { fitSeoText, SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
+import {
+  graph,
+  pluginDescription,
+  pluginNodes,
+  pluginTitle,
+  siteNodes,
+} from '../../worker/seo-templates'
+import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 export function PackagePage() {
   const { owner = '', name = '' } = useParams()
   const { language, t } = useI18n()
   const [detail, setDetail] = useState<PackageDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [missing, setMissing] = useState(false)
   const [reload, setReload] = useState(0)
 
   useEffect(() => {
     const controller = new AbortController()
     setDetail(null)
     setError(null)
+    setMissing(false)
     getPackage(owner, name, controller.signal)
       .then(setDetail)
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+        // Only a 404 proves the plugin is gone. Anything else is a failure of
+        // this request, and must not be allowed to noindex a live page.
+        if (requestError instanceof ApiError && requestError.status === 404) setMissing(true)
         setError(requestError instanceof Error ? requestError.message : t('notFoundBody'))
       })
     return () => controller.abort()
@@ -56,68 +68,45 @@ export function PackagePage() {
   const canonicalRepository = detail ? repositoryName(detail) : name
   const canonicalPath = `/plugins/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`
   const canonicalUrl = `${SITE_ORIGIN}${canonicalPath}`
+  const categoryLabel = detail?.category?.label[language] ?? ''
   const seoTitle = detail
-    ? fitSeoText(
-        language === 'zh'
-          ? `${detail.name} DeepSeek Harness 插件 | DSH 1024Store`
-          : `${detail.name} DeepSeek Harness Plugin | DSH 1024Store`,
-        60,
-      )
-    : error
+    ? pluginTitle(detail.name, detail.owner, language)
+    : missing
       ? language === 'zh' ? '插件未找到 | DSH 1024Store' : 'Plugin not found | DSH 1024Store'
-      : language === 'zh' ? 'DeepSeek Harness 插件 | DSH 1024Store' : 'DeepSeek Harness Plugin | DSH 1024Store'
+      : pluginTitle(name || 'DeepSeek Harness', owner || 'DSH 1024Store', language)
   const seoDescription = detail
-    ? fitSeoText(
-        language === 'zh'
-          ? `了解由 ${detail.owner} 开发的 DeepSeek Harness 插件 ${detail.name}。${detail.description.zh}`
-          : `Explore ${detail.name}, a DeepSeek Harness plugin by ${detail.owner}. ${detail.description.en}`,
-        160,
-      )
-    : language === 'zh'
-      ? '浏览 DeepSeek Harness 社区插件的功能、安装命令与仓库信息。'
-      : 'Explore features, install commands, and repository details for a DeepSeek Harness community plugin.'
+    ? pluginDescription(detail.name, detail.owner, detail.description[language], categoryLabel, language)
+    : missing
+      ? language === 'zh'
+        ? '该插件不在 DeepSeek Harness 社区插件目录中。'
+        : 'This plugin is not in the DeepSeek Harness community plugin catalog.'
+      : language === 'zh'
+        ? '浏览 DeepSeek Harness 社区插件的功能、安装命令与仓库信息。'
+        : 'Explore features, install commands, and repository details for a DeepSeek Harness community plugin.'
   const schema = detail
-    ? {
-        '@context': 'https://schema.org',
-        '@graph': [
+    ? graph([
+        ...siteNodes(),
+        ...pluginNodes(
           {
-            '@type': 'WebPage',
-            '@id': `${canonicalUrl}#webpage`,
-            url: canonicalUrl,
-            name: seoTitle,
-            description: seoDescription,
-            isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
-            mainEntity: { '@id': `${canonicalUrl}#software` },
-          },
-          {
-            '@type': 'SoftwareSourceCode',
-            '@id': `${canonicalUrl}#software`,
             name: detail.name,
+            owner: detail.owner,
+            url: detail.url,
             description: detail.description[language],
-            codeRepository: detail.url,
-            runtimePlatform: 'DeepSeek Harness',
-            dateCreated: detail.added,
-            license: detail.manifest?.license ?? detail.github?.license ?? undefined,
+            categoryLabel,
+            added: detail.added,
+            stars: detail.github?.stars ?? null,
+            pushedAt: detail.github?.pushedAt ?? null,
+            updatedAt: detail.github?.updatedAt ?? null,
+            license: detail.manifest?.license ?? detail.github?.license ?? null,
+            repository: canonicalRepository,
           },
-          {
-            '@type': 'BreadcrumbList',
-            itemListElement: [
-              {
-                '@type': 'ListItem',
-                position: 1,
-                name: t('catalog'),
-                item: `${SITE_ORIGIN}/plugins`,
-              },
-              {
-                '@type': 'ListItem',
-                position: 2,
-                name: detail.name,
-                item: canonicalUrl,
-              },
-            ],
-          },
-        ],
-      }
+          canonicalUrl,
+          seoTitle,
+          seoDescription,
+          language,
+          t('catalog'),
+        ),
+      ])
     : null
 
   usePageSeo({
@@ -125,8 +114,12 @@ export function PackagePage() {
     description: seoDescription,
     path: canonicalPath,
     language,
-    robots: detail ? 'index,follow' : 'noindex,follow',
+    // Only a confirmed 404 deindexes. While the fetch is in flight the Worker's
+    // own metadata stays untouched, so a crawler never snapshots a placeholder.
+    robots: missing ? 'noindex,follow' : 'index,follow',
+    canonical: missing ? null : canonicalUrl,
     schema,
+    ready: Boolean(detail || missing),
   })
 
   if (error) {

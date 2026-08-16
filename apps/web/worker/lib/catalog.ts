@@ -217,11 +217,12 @@ export function deriveCatalogResponse(
   }
 }
 
-export function findPlugin(
-  plugins: RegistryPlugin[],
+/** Generic so callers holding full catalog rows keep their metrics fields. */
+export function findPlugin<T extends RegistryPlugin>(
+  plugins: T[],
   owner: string,
   repository: string,
-): RegistryPlugin | undefined {
+): T | undefined {
   return plugins.find(
     (plugin) =>
       plugin.owner.toLocaleLowerCase() === owner.toLocaleLowerCase() &&

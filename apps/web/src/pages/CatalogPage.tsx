@@ -23,7 +23,15 @@ import { publicAsset } from '../lib/assets'
 import { formatDateTime, formatNumber, formatRelativeUpdate } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { useLiveStats } from '../lib/useLiveStats'
-import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
+import {
+  collectionCopy,
+  collectionPageNode,
+  graph,
+  itemListNode,
+  siteNodes,
+  SITE_ORIGIN,
+} from '../../worker/seo-templates'
+import { usePageSeo } from '../lib/usePageSeo'
 
 const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
 // Directory rows render in bounded batches so a filter click does not mount
@@ -254,32 +262,41 @@ export function CatalogPage({ view }: CatalogPageProps) {
   const catalogHref = query ? `/plugins?q=${encodeURIComponent(query)}` : '/plugins'
   const rankingsHref = query ? `/?q=${encodeURIComponent(query)}` : '/'
   const canonicalPath = view === 'catalog' ? '/plugins' : '/'
-  const seoTitle = t(view === 'catalog' ? 'catalogSeoTitle' : 'rankingsSeoTitle')
-  const seoDescription = t(
-    view === 'catalog' ? 'catalogSeoDescription' : 'rankingsSeoDescription',
+  // Titles, descriptions and JSON-LD come from the same module the Worker uses,
+  // so a client-side navigation cannot disagree with the served HTML.
+  const copy = collectionCopy(
+    view === 'catalog' ? 'catalog' : 'rankings',
+    language,
+    catalog?.meta.catalogTotal ?? 0,
   )
   const hasIndexableFilters = Boolean(query || category || requestedSort)
+  const rankedForSchema = useMemo(
+    () => [...(catalog?.rankings.stars ?? [])].slice(0, 30),
+    [catalog],
+  )
 
   usePageSeo({
-    title: seoTitle,
-    description: seoDescription,
+    title: copy.title,
+    description: copy.description,
     path: canonicalPath,
     language,
     robots: hasIndexableFilters ? 'noindex,follow' : 'index,follow',
-    schema: {
-      '@context': 'https://schema.org',
-      '@type': 'CollectionPage',
-      '@id': `${SITE_ORIGIN}${canonicalPath}#webpage`,
-      url: `${SITE_ORIGIN}${canonicalPath}`,
-      name: seoTitle,
-      description: seoDescription,
-      isPartOf: {
-        '@type': 'WebSite',
-        '@id': `${SITE_ORIGIN}/#website`,
-        name: 'DSH 1024Store',
-        url: `${SITE_ORIGIN}/`,
-      },
-    },
+    canonical: hasIndexableFilters ? null : `${SITE_ORIGIN}${canonicalPath}`,
+    schema: graph([
+      ...siteNodes(),
+      collectionPageNode(
+        canonicalPath,
+        copy,
+        language,
+        `${SITE_ORIGIN}${canonicalPath === '/' ? '/' : canonicalPath}#items`,
+      ),
+      itemListNode(
+        rankedForSchema,
+        canonicalPath,
+        copy.listHeading,
+        catalog?.meta.catalogTotal ?? rankedForSchema.length,
+      ),
+    ]),
   })
 
   return (
@@ -290,7 +307,11 @@ export function CatalogPage({ view }: CatalogPageProps) {
         <div className="page-container catalog-hero-inner">
           <header className="hero-stage">
             <div className="hero-actions" aria-label={t('siteActions')}>
-              <Link className="hero-action-link" to="/docs/api" aria-label={t('apiDocsTitle')}>
+              <Link
+                className="hero-action-link"
+                to="/docs/api"
+                aria-label={collectionCopy('apiDocs', language).heading}
+              >
                 <Code size={16} aria-hidden="true" />
                 <span>{t('navApi')}</span>
               </Link>
@@ -323,17 +344,14 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 <div className="hero-lockup-copy">
                   <p className="hero-eyebrow">{t('heroEyebrow')}</p>
                   <h1>
-                    <a
-                      href="https://deepseek1024.com/"
-                      aria-label="DeepSeek Harness Plugin 1024Store"
-                    >
+                    <Link to="/" aria-label="DeepSeek Harness Plugin 1024Store">
                       <span>DeepSeek Harness Plugin</span>
                       <em>1024Store</em>
-                    </a>
+                    </Link>
                   </h1>
                 </div>
               </div>
-              <p>{t('rankingsIntro')}</p>
+              <p>{copy.intro}</p>
             </div>
 
             <dl className="hero-tally">
@@ -431,7 +449,8 @@ export function CatalogPage({ view }: CatalogPageProps) {
         )}
 
         {view === 'rankings' && (
-          <section className="catalog-section ranking-section" aria-label={t('rankings')}>
+          <section className="catalog-section ranking-section" aria-labelledby="rankings-heading">
+            <h2 id="rankings-heading" className="section-title">{copy.listHeading}</h2>
             <div className="view-controls">
               <div className="ranking-mode-groups">
                 <div className="ranking-mode-group">
@@ -505,7 +524,8 @@ export function CatalogPage({ view }: CatalogPageProps) {
         )}
 
         {view === 'catalog' && (
-          <section className="catalog-section directory-section" aria-label={t('allPackages')}>
+          <section className="catalog-section directory-section" aria-labelledby="directory-heading">
+            <h2 id="directory-heading" className="section-title">{copy.listHeading}</h2>
             <div className="view-controls">
               <div className="segmented-control sort-segments" role="group" aria-label={t('sort')}>
                 {SORT_MODES.map((mode) => (
