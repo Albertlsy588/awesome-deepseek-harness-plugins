@@ -290,7 +290,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
         <div className="page-container catalog-hero-inner">
           <header className="hero-stage">
             <div className="hero-actions" aria-label={t('siteActions')}>
-              <Link className="hero-action-link" to="/docs/api" aria-label={t('apiDocsTitle')}>
+              <Link className="hero-action-link hero-api" to="/docs/api" aria-label={t('apiDocsTitle')}>
                 <Code size={16} aria-hidden="true" />
                 <span>{t('navApi')}</span>
               </Link>
