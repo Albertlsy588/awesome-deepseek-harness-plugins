@@ -113,8 +113,8 @@ async function assertHeroCommandsAligned(page, label) {
       const box = node.getBoundingClientRect()
       return { left: Math.round(box.left), right: Math.round(box.right) }
     }))
-  if (edges.length !== 3) {
-    throw new Error(`${label} should render three install commands, saw ${edges.length}`)
+  if (edges.length !== 2) {
+    throw new Error(`${label} should render two install commands, saw ${edges.length}`)
   }
   const lefts = new Set(edges.map((edge) => edge.left))
   const rights = new Set(edges.map((edge) => edge.right))
@@ -129,12 +129,15 @@ async function assertHeroCommandsAligned(page, label) {
 async function assertMenuOnTop(page, label) {
   const result = await page.locator('.split-install-menu').evaluate((menu) => {
     const box = menu.getBoundingClientRect()
-    const inset = 3
+    // Stay clear of the 9px rounded corners: a tighter inset lands on the
+    // antialiased arc and reports whatever sits behind the menu.
+    const inset = 10
     const corners = [
       ['top-left', box.left + inset, box.top + inset],
       ['top-right', box.right - inset, box.top + inset],
       ['bottom-left', box.left + inset, box.bottom - inset],
       ['bottom-right', box.right - inset, box.bottom - inset],
+      ['center', (box.left + box.right) / 2, (box.top + box.bottom) / 2],
     ]
     return {
       box: {
@@ -238,7 +241,6 @@ try {
   for (const command of [
     'npx dsh1024 store',
     'dsh plugin --profile web add dsh1024',
-    'npx @deepseek-ai/dsh plugin --profile web add dsh1024',
   ]) {
     if (!desktopBannerText?.includes(command)) {
       throw new Error(`directory self install banner is missing the command: ${command}`)
@@ -340,7 +342,6 @@ try {
   for (const command of [
     'npx dsh1024 store',
     'dsh plugin --profile web add dsh1024',
-    'npx @deepseek-ai/dsh plugin --profile web add dsh1024',
   ]) {
     if (!rankingsBannerText?.includes(command)) {
       throw new Error(`rankings self install banner is missing the command: ${command}`)
@@ -363,16 +364,16 @@ try {
   await rankings.locator('.split-install-menu').waitFor()
   await assertMenuOnTop(rankings, 'desktop rankings split install menu')
   await assertNoHorizontalOverflow(rankings, 'desktop rankings with the install menu open')
-  if ((await rankings.locator('.split-install-menu [role="menuitem"]').count()) !== 3) {
-    throw new Error('split install menu does not expose exactly three command options')
+  if ((await rankings.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
+    throw new Error('split install menu does not expose exactly two command options')
   }
   // The first row may be the store's own catalog entry, whose menu shows the
   // dedicated `npx dsh1024 store` / `… add dsh1024` pair instead of the generic
   // owner/repository commands.
   const splitMenuText = await rankings.locator('.split-install-menu').textContent()
-  // Three fixed options: tracked wrapper, bare official CLI, official via npx.
-  // The row may be the store's own entry, whose commands target dsh1024.
-  for (const command of ['npx dsh1024 ', 'dsh plugin --profile web add', 'npx @deepseek-ai/dsh plugin --profile web add']) {
+  // Two fixed options: the tracked wrapper and the official CLI. The row may be
+  // the store's own entry, whose commands target dsh1024.
+  for (const command of ['npx dsh1024 ', 'dsh plugin --profile web add']) {
     if (!splitMenuText?.includes(command)) {
       throw new Error(`split install menu is missing an install command: ${command}`)
     }
@@ -492,7 +493,7 @@ try {
   await mobile.locator('.directory-section .package-row .split-install-toggle').first().click()
   await mobile.locator('.split-install-menu').waitFor()
   await assertMenuOnTop(mobile, 'mobile split install menu')
-  if ((await mobile.locator('.split-install-menu [role="menuitem"]').count()) !== 3) {
+  if ((await mobile.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
     throw new Error('mobile split install menu does not expose exactly two command options')
   }
   await assertMinTouchTargets(mobile, 'mobile split install menu', ['.split-install-menu [role="menuitem"]'])
@@ -554,9 +555,6 @@ try {
   }
   if (!detailInstallCommands.some((text) => text.includes('npx dsh1024 add '))) {
     throw new Error('detail page is missing the tracked dsh1024 install command')
-  }
-  if (!detailInstallCommands.some((text) => text.includes('npx @deepseek-ai/dsh plugin --profile web add github:'))) {
-    throw new Error('detail page is missing the official CLI install command')
   }
   if (detailInstallCommands.some((text) => text.includes('@dsh-1024store/cli'))) {
     throw new Error('detail page still renders the legacy @dsh-1024store/cli command')
@@ -647,8 +645,8 @@ try {
   await compactMobile.locator('.ranking-section .package-row .split-install-toggle').nth(3).click()
   await compactMobile.locator('.split-install-menu').waitFor()
   await assertMenuOnTop(compactMobile, 'compact split install menu')
-  if ((await compactMobile.locator('.split-install-menu [role="menuitem"]').count()) !== 3) {
-    throw new Error('compact split install menu does not expose exactly three command options')
+  if ((await compactMobile.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
+    throw new Error('compact split install menu does not expose exactly two command options')
   }
   await assertMinTouchTargets(compactMobile, 'compact split install menu', ['.split-install-menu [role="menuitem"]'])
   await assertNoHorizontalOverflow(compactMobile, 'compact mobile rankings with the install menu open')

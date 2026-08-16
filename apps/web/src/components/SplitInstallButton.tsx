@@ -8,15 +8,10 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  officialInstallCommand,
-  officialNpxInstallCommand,
-  trackedInstallCommand,
-  type RegistryPlugin,
-} from '../lib/api'
+import { officialInstallCommand, trackedInstallCommand, type RegistryPlugin } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 
-type Kind = 'tracked' | 'official' | 'officialNpx'
+type Kind = 'tracked' | 'official'
 
 interface Placement {
   top: number
@@ -114,11 +109,7 @@ export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'o
   }, [closeMenu, open, updatePlacement])
 
   async function copy(kind: Kind) {
-    const command = kind === 'tracked'
-      ? trackedInstallCommand(plugin)
-      : kind === 'official'
-        ? officialInstallCommand(plugin)
-        : officialNpxInstallCommand(plugin)
+    const command = kind === 'tracked' ? trackedInstallCommand(plugin) : officialInstallCommand(plugin)
     await navigator.clipboard.writeText(command)
     setCopied(kind)
     closeMenu()
@@ -154,11 +145,6 @@ export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'o
         <span className="split-menu-label">{t('officialCliCommand')}</span>
         <code>{officialInstallCommand(plugin)}</code>
         {copied === 'official' ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-      </button>
-      <button type="button" role="menuitem" ref={(el) => { itemRefs.current[2] = el }} onClick={() => copy('officialNpx')}>
-        <span className="split-menu-label">{t('officialNpxCommand')}</span>
-        <code>{officialNpxInstallCommand(plugin)}</code>
-        {copied === 'officialNpx' ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
       </button>
     </div>,
     document.body,
