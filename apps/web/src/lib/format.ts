@@ -33,3 +33,34 @@ export function formatNumber(value: number, language: Language): string {
     maximumFractionDigits: 1,
   }).format(value)
 }
+
+export function formatRelativeUpdate(
+  value: string,
+  language: Language,
+  now = Date.now(),
+): string | null {
+  const updatedAt = new Date(value).getTime()
+  if (Number.isNaN(updatedAt)) return null
+
+  const elapsedSeconds = Math.max(0, Math.floor((now - updatedAt) / 1000))
+  const units = elapsedSeconds < 60
+    ? { count: elapsedSeconds, en: 'second' }
+    : elapsedSeconds < 60 * 60
+      ? { count: Math.floor(elapsedSeconds / 60), en: 'minute' }
+      : elapsedSeconds < 24 * 60 * 60
+        ? { count: Math.floor(elapsedSeconds / (60 * 60)), en: 'hour' }
+        : { count: Math.floor(elapsedSeconds / (24 * 60 * 60)), en: 'day' }
+
+  if (language === 'zh') {
+    const zhUnit = units.en === 'second'
+      ? '秒'
+      : units.en === 'minute'
+        ? '分钟'
+        : units.en === 'hour'
+          ? '小时'
+          : '天'
+    return `${units.count} ${zhUnit}前更新`
+  }
+
+  return `Updated ${units.count} ${units.en}${units.count === 1 ? '' : 's'} ago`
+}

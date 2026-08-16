@@ -18,6 +18,8 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      # GitHub Actions requires pull-request write access for PR issue comments.
+      # The trusted reviewer only calls comment endpoints; it never updates PR state.
       pull-requests: write
     steps:
       - name: Check out trusted reviewer
@@ -30,7 +32,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           # Base-branch scripts only parse this checkout as data; no submitted code is executed.
-          allow-unsafe-pr-checkout: true
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.sha }}
           path: submission
@@ -53,7 +54,6 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write
-      pull-requests: write
       actions: write
     steps:
       - name: Check out trusted merger

@@ -18,8 +18,13 @@ async function openPage(viewport, path, { touch = false } = {}) {
   const page = await context.newPage()
   await page.setViewportSize(viewport)
   page.on('pageerror', (error) => errors.push(error.message))
+  page.on('response', (response) => {
+    if (response.status() >= 400) errors.push(`HTTP ${response.status()} ${response.url()}`)
+  })
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text())
+    if (message.type() === 'error' && !message.text().startsWith('Failed to load resource:')) {
+      errors.push(`${page.url()}: ${message.text()}`)
+    }
   })
   await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle' })
   return page
@@ -159,6 +164,41 @@ try {
   await assertLiveStats(desktop)
   await assertSeo(desktop, 'desktop catalog', '/plugins')
   await assertNoHorizontalOverflow(desktop, 'desktop catalog')
+  if (await desktop.locator('.hero-heading h1 a[href="https://deepseek1024.com/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
+    throw new Error('catalog hero does not show the linked DeepSeek Harness Plugin 1024Store title')
+  }
+  if (!(await desktop.locator('.hero-heading > p:last-child').textContent())?.includes('收录插件均先经 DSH 插件规范检查与过滤')) {
+    throw new Error('catalog hero does not keep the shared plugin screening description')
+  }
+  if (!/^\d+ (秒|分钟|小时|天)前更新$/.test((await desktop.locator('.hero-updated').textContent())?.trim() ?? '')) {
+    throw new Error('catalog tally does not show a relative update time')
+  }
+  const heroAlignment = await desktop.evaluate(() => {
+    const heading = document.querySelector('.hero-heading')?.getBoundingClientRect()
+    const actions = document.querySelector('.hero-stage > .hero-actions')?.getBoundingClientRect()
+    const hero = document.querySelector('.catalog-hero')?.getBoundingClientRect()
+    const navigation = document.querySelector('.catalog-content > .catalog-navigation')?.getBoundingClientRect()
+    return {
+      actionsTop: actions?.top,
+      headingTop: heading?.top,
+      heroBottom: hero?.bottom,
+      heroControlCount: document.querySelectorAll('.catalog-hero .catalog-toolbar, .catalog-hero .catalog-view-tabs').length,
+      legacyToplineCount: document.querySelectorAll('.hero-topline').length,
+      navigationTop: navigation?.top,
+    }
+  })
+  if (
+    heroAlignment.legacyToplineCount !== 0
+    || heroAlignment.heroControlCount !== 0
+    || heroAlignment.actionsTop === undefined
+    || heroAlignment.headingTop === undefined
+    || heroAlignment.heroBottom === undefined
+    || heroAlignment.navigationTop === undefined
+    || Math.abs(heroAlignment.actionsTop - heroAlignment.headingTop) > 1
+    || heroAlignment.navigationTop < heroAlignment.heroBottom
+  ) {
+    throw new Error(`hero and catalog controls have incorrect structure: ${JSON.stringify(heroAlignment)}`)
+  }
   await desktop.close()
 
   const rankings = await openPage({ width: 1440, height: 1000 }, '/rankings')
@@ -187,14 +227,17 @@ try {
   if ((await rankings.locator('.catalog-hero .hero-submit[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"][target="_blank"]').count()) !== 1) {
     throw new Error('submit button does not link to the GitHub repository')
   }
-  if ((await rankings.locator('.catalog-hero a.hero-brand[href="/"]').count()) !== 1) {
-    throw new Error('banner brand does not link to the home page')
+  if ((await rankings.locator('.catalog-hero .hero-brand').count()) !== 0) {
+    throw new Error('removed top-left banner title is still rendered')
   }
   if ((await rankings.locator('.site-header').count()) !== 0) {
     throw new Error('the removed standalone site header is still rendered')
   }
-  if ((await rankings.locator('.catalog-hero .hero-brand-copy strong').textContent())?.trim() !== 'DeepSeek Harness Plugin 1024Store') {
-    throw new Error('catalog banner is missing the DeepSeek Harness Plugin 1024Store brand')
+  if (await rankings.locator('.hero-heading h1 a[href="https://deepseek1024.com/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
+    throw new Error('ranking hero does not keep the shared store title')
+  }
+  if (!(await rankings.locator('.hero-heading > p:last-child').textContent())?.includes('收录插件均先经 DSH 插件规范检查与过滤')) {
+    throw new Error('ranking hero does not keep the shared plugin screening description')
   }
   if ((await rankings.locator('.catalog-hero .hero-lockup-mark img[src="/deepseek1024.png"]').count()) !== 1) {
     throw new Error('hero poster mark is missing the store icon')
@@ -236,10 +279,15 @@ try {
     if (request.url().includes('/api/v1/plugins')) catalogRequests += 1
   })
   const initialRows = await mobile.locator('.directory-section .package-row').count()
-  if (initialRows > 60) {
-    throw new Error(`directory mounted ${initialRows} rows at once; expected incremental rendering`)
+  if (initialRows !== 100) {
+    throw new Error(`directory mounted ${initialRows} rows at once; expected the first 100 rows`)
   }
   await mobile.locator('.load-more-row button').waitFor()
+  await mobile.locator('.load-more-row button').scrollIntoViewIfNeeded()
+  await mobile.waitForTimeout(500)
+  if ((await mobile.locator('.directory-section .package-row').count()) !== initialRows) {
+    throw new Error('directory loaded more rows automatically before the button was clicked')
+  }
   await mobile.locator('.load-more-row button').click()
   await mobile.waitForFunction(
     (before) => document.querySelectorAll('.directory-section .package-row').length > before,
@@ -260,7 +308,6 @@ try {
   await assertMobileEnvironment(mobile, 'mobile catalog')
   await assertNoHorizontalOverflow(mobile, 'mobile catalog')
   await assertMinTouchTargets(mobile, 'mobile catalog', [
-    '.catalog-hero .hero-brand',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
     '.catalog-hero .hero-language button',
@@ -415,7 +462,6 @@ try {
     throw new Error('compact mobile header did not hide the secondary language control')
   }
   await assertMinTouchTargets(compactMobile, 'compact mobile header', [
-    '.catalog-hero .hero-brand',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
     '.catalog-view-tabs a',

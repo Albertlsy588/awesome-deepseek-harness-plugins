@@ -107,8 +107,8 @@ catalog: add owner/repository
 
 1. 返回 PR URL。
 2. 检查 `Plugin submission review / static-review` 及其机器人评论。
-3. 如果检查失败，仅通过修改目录 JSON 修复。不得为了通过检查而加入 README 或其他生成投影。
-4. 非草稿 PR 检查通过后会自动 squash merge；草稿 PR 会在标记 ready for review 后重新检查并自动合并。
+3. 如果检查失败，PR 会保持打开且不会被工作流自动关闭；仅通过修改目录 JSON 修复。不得为了通过检查而加入 README 或其他生成投影。
+4. 非草稿 PR 检查通过后会自动 squash merge，GitHub 随后将其记录为已合并（因此不再保持打开）；草稿 PR 会在标记 ready for review 后重新检查并自动合并。
 5. 不要请求维护者批准 fork CI，也不要手动合并；目录 PR 不运行贡献者分支上的通用 CI。
 
 静态审查通过即表示该目录元数据符合自动收录规则，并触发自动合并。合并进入 `main` 后，catalog-sync 工作流会自动把条目同步到线上目录数据库并刷新 `README.md` 与 `catalog/README.md`（github-actions[bot] 提交），插件随即出现在 [deepseek1024.com](https://deepseek1024.com/) 与两个 README 目录中。该结果仍不代表对第三方插件行为、安全性或质量的背书。

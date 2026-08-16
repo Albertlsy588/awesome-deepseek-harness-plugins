@@ -128,28 +128,36 @@ test('documents automatic merge and automatic sync behavior consistently', async
 
   assert.match(contributing, /merged automatically/i)
   assert.match(contributing, /synced automatically/i)
+  assert.match(contributing, /failed review leaves the pull request open/i)
   assert.doesNotMatch(contributing, /merges it manually|CI \/ verify|maintainer(s)? refresh/i)
   assert.match(readme, /自动合并/)
   assert.match(readme, /自动同步/)
   assert.doesNotMatch(readme, /结构化目录数据|catalog\/generated/)
   assert.match(pullRequestTemplate, /merged automatically/i)
   assert.match(pullRequestTemplate, /refresh(es)? automatically/i)
+  assert.match(pullRequestTemplate, /failed review leaves this PR open/i)
   assert.doesNotMatch(pullRequestTemplate, /maintainer reviews and merges/i)
   assert.match(skill, /自动合并/)
   assert.match(skill, /自动同步/)
+  assert.match(skill, /检查失败，PR 会保持打开且不会被工作流自动关闭/)
   assert.doesNotMatch(skill, /人工审查和合并|CI \/ verify|由维护者单独更新/)
   assert.match(reference, /自动合并/)
   assert.match(reference, /自动同步/)
+  assert.match(reference, /自动审查失败时，PR 会保持打开/)
   assert.doesNotMatch(reference, /人工审查并合并/)
 })
 
 test('runs only the trusted static gate for pull requests', async () => {
   const ciWorkflow = await readFile(path.join(root, '.github/workflows/ci.yml'), 'utf8')
   const reviewWorkflow = await readFile(path.join(root, '.github/workflows/plugin-review.yml'), 'utf8')
+  const staticReviewJob = reviewWorkflow.match(/\n  static-review:[\s\S]*?\n  merge:/)?.[0] ?? ''
+  const mergeJob = reviewWorkflow.match(/\n  merge:[\s\S]*/)?.[0] ?? ''
 
   assert.doesNotMatch(ciWorkflow, /^\s*pull_request:/m)
   assert.match(reviewWorkflow, /^\s*pull_request_target:/m)
   assert.match(reviewWorkflow, /^\s+merge:\n\s+needs: static-review/m)
   assert.match(reviewWorkflow, /PLUGIN_REVIEW_EXPECTED_HEAD_SHA/)
   assert.match(reviewWorkflow, /contents: write/)
+  assert.match(staticReviewJob, /^\s+pull-requests: write$/m)
+  assert.doesNotMatch(mergeJob, /^\s+pull-requests: write$/m)
 })
