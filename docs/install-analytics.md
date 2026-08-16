@@ -9,11 +9,18 @@ identifiers and never change with package renames:
 - `dsh-1024store-plugin` — the in-DSH marketplace plugin, which installs
   plugins from the DSH settings page.
 
-The wrapper CLI delegates package management to the official DeepSeek Harness
-CLI and only reports an event after checking the profile state on disk.
+The wrapper CLI is a pure rename of the official plugin command: everything
+from `plugin` onwards is forwarded to the official DeepSeek Harness CLI exactly
+as written, with nothing added, removed, reordered, or defaulted. It only reports
+an event after checking the profile state on disk.
+
+The install target is read to attribute the event, never rewritten. Targets that
+cannot be identified as catalog plugins are installed the same way but are not
+counted, and local paths, `file:` and `link:` targets are never reported at all —
+a filesystem path can never reach an install event.
 
 ```text
-dsh1024 add owner/repository
+dsh1024 plugin --profile web add github:owner/repository
         |
         +-- official @deepseek-ai/dsh plugin command
         +-- before/after profile verification
@@ -110,12 +117,12 @@ clear unsent events without changing the enabled/disabled preference.
 Persistently disabling telemetry also clears unsent events. Resetting does not
 rewrite historical aggregate data.
 
-## Self-install events (`dsh1024 store`)
+## Self-install events (`dsh1024 plugin ... add dsh1024`)
 
-`dsh1024 store` installs the 1024 Store marketplace plugin itself into a
-DeepSeek Harness profile (default `web`, override with `--profile`). It uses
-the same event schema and channel (`sourceChannel: "dsh-1024store-cli"`) as a
-regular `add`, with a fixed identity:
+`dsh1024 plugin --profile web add dsh1024` installs the 1024 Store marketplace
+plugin itself into a DeepSeek Harness profile. It uses the same event schema and
+channel (`sourceChannel: "dsh-1024store-cli"`) as any other install, with a fixed
+identity:
 
 - `pluginId` is the catalog repository id
   `imsai-sh/awesome-deepseek-harness-plugins` and `requestedRef` is `null`;

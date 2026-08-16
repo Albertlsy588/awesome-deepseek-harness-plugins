@@ -156,7 +156,7 @@ export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): st
   }
 }
 
-export const SELF_TRACKED_COMMAND = 'npm install -g dsh1024 && dsh1024 store'
+export const SELF_TRACKED_COMMAND = 'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024'
 export const SELF_OFFICIAL_COMMAND = 'dsh plugin --profile web add dsh1024'
 
 // The catalog lists this monorepo itself as the store client plugin; generic
@@ -170,7 +170,7 @@ export function trackedInstallCommand(
   plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
 ): string {
   if (isSelfPlugin(plugin)) return SELF_TRACKED_COMMAND
-  return `dsh1024 add ${plugin.owner}/${repositoryName(plugin)}`
+  return `dsh1024 plugin --profile web add github:${plugin.owner}/${repositoryName(plugin)}`
 }
 
 export function officialInstallCommand(

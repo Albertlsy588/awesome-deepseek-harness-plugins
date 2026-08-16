@@ -24,14 +24,13 @@ npm install -g dsh1024
 ## 安装店内插件
 
 ```sh
-npm install -g dsh1024 && dsh1024 store
+npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024
 ```
 
-该命令通过官方 CLI 执行 `npx @deepseek-ai/dsh plugin --profile web add dsh1024`，
-并匿名计入安装统计。直接使用官方 CLI 效果相同：
+直接用官方 CLI 是同一条命令，只是换了个名字：
 
 ```sh
-npx @deepseek-ai/dsh plugin --profile web add dsh1024
+dsh plugin --profile web add dsh1024
 ```
 
 安装完成后重启 DeepSeek Harness。
@@ -46,30 +45,51 @@ POST，并且同一时间只允许一个插件操作。插件变更会在重启 
 
 需要 Node.js 22 或更高版本。
 
-```sh
-dsh1024 add omdsh-dev/dsh-deep-research --profile web
-```
-
-包装器会在不经过 shell 的情况下执行：
+`dsh1024 plugin ...` **就是** `dsh plugin ...`，只是换了个命令名。`plugin`
+之后的所有参数原样转发给官方 CLI —— 不增、不删、不重排、不补默认值：
 
 ```sh
-npx --yes @deepseek-ai/dsh plugin --profile web add github:omdsh-dev/dsh-deep-research
+dsh1024 plugin --profile web add github:omdsh-dev/dsh-deep-research
+dsh plugin      --profile web add github:omdsh-dev/dsh-deep-research
 ```
 
-如果 PATH 上已经装有官方 `dsh`，包装器会直接复用该可执行文件
-（`dsh plugin --profile web add …`），省掉 npx 每次安装的解析开销；用
-`DSH1024_DSH_PACKAGE` 钉版本时一律走 npx 形式。改变的只是定位官方 CLI 的方式，
-参数、顺序、退出码与 stdio 完全不变。
+上面两行执行的是同一个官方操作。包装器只负责它之外的事：核对结果 profile，
+并记录一条匿名安装结果。
 
-`web` 是默认 profile。Git ref 可选：
+因为不补任何默认值，所有选项的行为与官方文档完全一致：不写 `--profile`
+就照原样转发，而不是被悄悄补上；`--`、ref 以及其他官方参数也都保持官方语义：
 
 ```sh
-dsh1024 add owner/repository#v1.2.0
+dsh1024 plugin --profile web add github:owner/repository#v1.2.0
+dsh1024 plugin --profile web add github:owner/repository -- \
+  --ignore-scripts --reporter append-only --config.confirmModulesPurge=false
 ```
 
-包装器只消费被追踪的 `owner/repository`、共享的 `--profile`/`-p` 选项和第一个
-`--` 分隔符；其余参数原样透传给官方插件命令。透传参数不会进入遥测事件或本地
-receipt。完整的参数透传说明见 [English README](README.md)。
+包装器会在不经过 shell 的情况下把第一条示例执行为：
+
+```sh
+npx --yes @deepseek-ai/dsh plugin --profile web add github:owner/repository#v1.2.0
+```
+
+如果 PATH 上已经装有官方 `dsh`，包装器会直接复用该可执行文件，省掉 npx 每次
+安装的解析开销；用 `DSH1024_DSH_PACKAGE` 钉版本时一律走 npx 形式。改变的只是
+定位官方 CLI 的方式，参数、顺序、退出码与 stdio 完全不变。
+
+参数不会进入遥测事件或本地 receipt。
+
+### 什么会被计入
+
+包装器只读取安装目标用于归因，绝不改写它。识别不出是目录插件的目标一样正常
+安装，只是不计入统计：
+
+| 目标 | 归因为 |
+| --- | --- |
+| `github:owner/repository`、`owner/repository`（可带 `#ref`、`.git`） | `owner/repository` |
+| `dsh1024` | 本目录仓库 |
+| 本地路径、`file:`、`link:`、URL | 一律不上报 |
+| 其他已发布的包名 | 暂不计入 |
+
+本地路径与 `file:`/`link:` 是硬边界：文件系统路径永远不会进入安装事件。
 
 ## 匿名安装遥测
 

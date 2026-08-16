@@ -26,11 +26,26 @@ function stopChild(child, spawnImpl) {
  * @returns the exit code with captured output; never rejects.
  */
 export function runPluginCommand(options) {
-    const { invocation, action, profile, target, extraArgs = [], onLine, timeoutMs, spawnImpl = spawn } = options;
+    const { invocation, action, profile, target, extraArgs = [] } = options;
     if (!TARGET_RE.test(target)) {
         return Promise.resolve({ exitCode: 1, timedOut: false, error: null, stdout: '', stderr: 'unsafe plugin target' });
     }
-    const args = [...invocation.prefixArgs, 'plugin', '--profile', profile, action, target, ...extraArgs];
+    return runOfficialCommand({
+        ...options,
+        args: ['plugin', '--profile', profile, action, target, ...extraArgs],
+    });
+}
+/**
+ * Run the official CLI with a verbatim argument vector.
+ *
+ * The dsh1024 CLI is a pure wrapper: it forwards the user's own arguments
+ * unchanged, so it cannot use the structured helper above.
+ * @param options - injected invocation plus the exact arguments to forward.
+ * @returns the exit code with captured output; never rejects.
+ */
+export function runOfficialCommand(options) {
+    const { invocation, onLine, timeoutMs, spawnImpl = spawn } = options;
+    const args = [...invocation.prefixArgs, ...options.args];
     return new Promise(resolvePromise => {
         let stdout = '';
         let stderr = '';

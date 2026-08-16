@@ -125,9 +125,11 @@ Compact full-catalog registry for the `dsh1024` in-DSH marketplace plugin, the R
 
 `stars` is `null` when unknown. The registry is projected from the same KV snapshot as the
 other read endpoints. The `install` field always carries the official DeepSeek Harness CLI
-command in its bare form. The website derives the tracked wrapper command
-(`dsh1024 add owner/repository`, after a one-off `npm install -g dsh1024`) at the
-presentation layer and never stores it here.
+command in its bare form. The website derives the tracked wrapper command at the
+presentation layer and never stores it here; that command is the same official
+command under a different name
+(`dsh1024 plugin --profile web add github:owner/repository`, after a one-off
+`npm install -g dsh1024`).
 
 ## POST /api/v1/install-events
 

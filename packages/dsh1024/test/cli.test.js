@@ -76,10 +76,11 @@ test('delegates without a shell, verifies state, receipts locally, and posts the
   const requests = []
   let invocation
   const exitCode = await main([
-    'add',
-    'Owner/Repo#v1.2.3',
+    'plugin',
     '--profile',
     'web',
+    'add',
+    'github:Owner/Repo#v1.2.3',
     '--ignore-scripts',
     '--',
     '--reporter',
@@ -113,6 +114,7 @@ test('delegates without a shell, verifies state, receipts locally, and posts the
 
   assert.equal(exitCode, 0)
   assert.equal(invocation.command, 'npx')
+  // Byte-for-byte the user's own vector, with only the npx prefix in front.
   assert.deepEqual(invocation.args, [
     '--yes',
     '@deepseek-ai/dsh@0.1.0-rc.5',
@@ -122,6 +124,7 @@ test('delegates without a shell, verifies state, receipts locally, and posts the
     'add',
     'github:Owner/Repo#v1.2.3',
     '--ignore-scripts',
+    '--',
     '--reporter',
     'append-only',
     'value;still-one-argument',
@@ -160,8 +163,11 @@ test('uses the npm JavaScript entrypoint on Windows and preserves argument bound
   const npmExecPath = 'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js'
   let invocation
   const exitCode = await main([
+    'plugin',
+    '--profile',
+    'web',
     'add',
-    'owner/repo',
+    'github:owner/repo',
     '--',
     '--',
     'value&still-one-argument',
@@ -193,6 +199,7 @@ test('uses the npm JavaScript entrypoint on Windows and preserves argument bound
     'add',
     'github:owner/repo',
     '--',
+    '--',
     'value&still-one-argument',
     '%PATH%',
   ])
@@ -203,7 +210,7 @@ test('bounds the reported DSH version to the Worker contract', async () => {
   const dshHome = await makeHome()
   const events = []
   const longVersion = `v${'1'.repeat(99)}`
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: { DSH_1024STORE_DSH_VERSION: longVersion },
     io: ioCapture().io,
@@ -230,7 +237,7 @@ test('reports reinstall when the plugin already exists', async () => {
   const dshHome = await makeHome()
   installProfile(dshHome)
   const events = []
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: {},
     io: ioCapture().io,
@@ -252,7 +259,7 @@ test('reports reinstall when the plugin already exists', async () => {
 test('DO_NOT_TRACK disables identity creation, queueing, and upload', async () => {
   const dshHome = await makeHome()
   let fetchCalls = 0
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: { DO_NOT_TRACK: '1' },
     io: ioCapture().io,
@@ -275,7 +282,7 @@ test('DO_NOT_TRACK disables identity creation, queueing, and upload', async () =
 test('legacy DSH_1024STORE_TELEMETRY=0 disables identity creation, queueing, and upload', async () => {
   const dshHome = await makeHome()
   let fetchCalls = 0
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: { DSH_1024STORE_TELEMETRY: '0' },
     io: ioCapture().io,
@@ -297,7 +304,7 @@ test('legacy DSH_1024STORE_TELEMETRY=0 disables identity creation, queueing, and
 test('DSH1024_TELEMETRY=0 disables identity creation, queueing, and upload', async () => {
   const dshHome = await makeHome()
   let fetchCalls = 0
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: { DSH1024_TELEMETRY: '0' },
     io: ioCapture().io,
@@ -320,7 +327,7 @@ test('prefers DSH1024_* over the legacy DSH_1024STORE_* variables', async () => 
   const dshHome = await makeHome()
   const requests = []
   let invocation
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: {
       DSH1024_TELEMETRY: '1',
@@ -357,7 +364,7 @@ test('prefers DSH1024_* over the legacy DSH_1024STORE_* variables', async () => 
 test('keeps failed uploads and retries them before the next current event', async () => {
   const dshHome = await makeHome()
   const firstOutput = ioCapture()
-  await main(['add', 'owner/repo'], {
+  await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: {},
     io: firstOutput.io,
@@ -377,7 +384,7 @@ test('keeps failed uploads and retries them before the next current event', asyn
   assert.match(firstOutput.stderr.at(-1), /queued locally/)
 
   const delivered = []
-  await main(['add', 'owner/repo'], {
+  await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: {},
     io: ioCapture().io,
@@ -400,7 +407,7 @@ test('keeps failed uploads and retries them before the next current event', asyn
 test('preserves official exit code and emits a narrow failed event', async () => {
   const dshHome = await makeHome()
   const events = []
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: {},
     io: ioCapture().io,
@@ -425,7 +432,7 @@ test('preserves official exit code and emits a narrow failed event', async () =>
 test('reports spawn errors without exposing the error message', async () => {
   const dshHome = await makeHome()
   const events = []
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: {},
     io: ioCapture().io,
@@ -449,7 +456,7 @@ test('turns an unverifiable exit-zero result into a wrapper failure', async () =
   const dshHome = await makeHome()
   const events = []
   const output = ioCapture()
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: {},
     io: output.io,
@@ -469,11 +476,11 @@ test('turns an unverifiable exit-zero result into a wrapper failure', async () =
   assert.match(output.stderr.join('\n'), /could not verify/)
 })
 
-test('store installs the self plugin through the official CLI and reports npm-backed metadata', async () => {
+test('installing the store package reports npm-backed metadata for the catalog entry', async () => {
   const dshHome = await makeHome()
   const events = []
   let invocation
-  const exitCode = await main(['store'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'dsh1024'], {
     dshHome,
     env: {},
     io: ioCapture().io,
@@ -520,7 +527,7 @@ test('store installs the self plugin through the official CLI and reports npm-ba
   assert.equal(installed.packages.dsh1024.version, '0.3.1')
 
   const secondRun = []
-  assert.equal(await main(['store'], {
+  assert.equal(await main(['plugin', '--profile', 'web', 'add', 'dsh1024'], {
     dshHome,
     env: {},
     io: ioCapture().io,
@@ -536,12 +543,12 @@ test('store installs the self plugin through the official CLI and reports npm-ba
   assert.equal(secondRun.at(-1).pluginId, SELF_PLUGIN_ID)
 })
 
-test('store uses the npm JavaScript entrypoint on Windows and forwards pass-through arguments', async () => {
+test('the store package install uses the npm JavaScript entrypoint on Windows and keeps argument boundaries', async () => {
   const dshHome = await makeHome()
   const nodeExecutable = 'C:\\Program Files\\nodejs\\node.exe'
   const npmExecPath = 'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js'
   let invocation
-  const exitCode = await main(['store', '--profile', 'desktop', '--', '--ignore-scripts'], {
+  const exitCode = await main(['plugin', '--profile', 'desktop', 'add', 'dsh1024', '--', '--ignore-scripts'], {
     dshHome,
     env: { DO_NOT_TRACK: '1', npm_execpath: npmExecPath },
     execPath: nodeExecutable,
@@ -567,16 +574,17 @@ test('store uses the npm JavaScript entrypoint on Windows and forwards pass-thro
     'desktop',
     'add',
     'dsh1024',
+    '--',
     '--ignore-scripts',
   ])
   assert.equal(invocation.options.shell, false)
 })
 
-test('store succeeds when the dependency already exists with an unchanged spec and no receipt', async () => {
+test('the store package install succeeds when the dependency already exists with an unchanged spec and no receipt', async () => {
   const dshHome = await makeHome()
   installSelfProfile(dshHome)
   const events = []
-  const exitCode = await main(['store'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'dsh1024'], {
     dshHome,
     env: {},
     io: ioCapture().io,
@@ -642,10 +650,11 @@ test('reuses an official dsh already on PATH and passes arguments through unchan
   const dshHome = await makeHome()
   let invocation
   const exitCode = await main([
-    'add',
-    'owner/repo#v1.2.3',
+    'plugin',
     '--profile',
     'web',
+    'add',
+    'github:owner/repo#v1.2.3',
     '--ignore-scripts',
     '--',
     '--reporter',
@@ -672,6 +681,7 @@ test('reuses an official dsh already on PATH and passes arguments through unchan
     'add',
     'github:owner/repo#v1.2.3',
     '--ignore-scripts',
+    '--',
     '--reporter',
     'append-only',
   ])
@@ -681,7 +691,7 @@ test('reuses an official dsh already on PATH and passes arguments through unchan
 test('falls back to npx when PATH has no official dsh', async () => {
   const dshHome = await makeHome()
   let invocation
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: { DO_NOT_TRACK: '1', PATH: '/opt/empty' },
     platform: 'linux',
@@ -710,7 +720,7 @@ test('falls back to npx when PATH has no official dsh', async () => {
 test('an explicit package override always goes through npx so the version stays pinnable', async () => {
   const dshHome = await makeHome()
   let invocation
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: {
       DO_NOT_TRACK: '1',
@@ -735,7 +745,7 @@ test('an explicit package override always goes through npx so the version stays 
 test('resolves dsh through PATHEXT on Windows', async () => {
   const dshHome = await makeHome()
   let invocation
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: {
       DO_NOT_TRACK: '1',
@@ -769,7 +779,7 @@ test('falls back to the npm entrypoint when Windows PATH has no dsh', async () =
   const nodeExecutable = 'C:\\Program Files\\nodejs\\node.exe'
   const npmExecPath = 'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js'
   let invocation
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: {
       DO_NOT_TRACK: '1',
@@ -802,7 +812,7 @@ test('falls back to the npm entrypoint when Windows PATH has no dsh', async () =
 test('telemetry reports a null DSH version when the CLI came from PATH', async () => {
   const dshHome = await makeHome()
   const requests = []
-  const exitCode = await main(['add', 'owner/repo'], {
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', 'github:owner/repo'], {
     dshHome,
     env: {
       PATH: '/opt/bin',
@@ -826,4 +836,103 @@ test('telemetry reports a null DSH version when the CLI came from PATH', async (
   assert.equal(exitCode, 0)
   assert.equal(requests.length, 1)
   assert.equal(JSON.parse(requests[0].options.body).dshVersion, null)
+})
+
+test('forwards an omitted --profile as written instead of injecting a default', async () => {
+  const dshHome = await makeHome()
+  let invocation
+  const exitCode = await main(['plugin', 'add', 'github:owner/repo'], {
+    dshHome,
+    env: { DO_NOT_TRACK: '1' },
+    platform: 'linux',
+    io: ioCapture().io,
+    canExecute: () => false,
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installProfile(dshHome)
+      return fakeChild()
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.deepEqual(invocation.args, ['--yes', '@deepseek-ai/dsh', 'plugin', 'add', 'github:owner/repo'])
+})
+
+test('a local path target is installed but never reported', async () => {
+  const dshHome = await makeHome()
+  const requests = []
+  let invocation
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', './work/secret-plugin'], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+    platform: 'linux',
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installProfile(dshHome)
+      return fakeChild()
+    },
+    async fetchImpl(url, options) {
+      requests.push({ url, options })
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  // Forwarded exactly as written...
+  assert.deepEqual(invocation.args, [
+    '--yes',
+    '@deepseek-ai/dsh',
+    'plugin',
+    '--profile',
+    'web',
+    'add',
+    './work/secret-plugin',
+  ])
+  // ...but nothing is uploaded and no local state records the path.
+  assert.equal(requests.length, 0)
+  assert.equal(existsSync(join(dshHome, '.dsh-1024store', 'receipts.json')), false)
+  assert.equal(existsSync(join(dshHome, '.dsh-1024store', 'pending.json')), false)
+})
+
+test('an unrecognised package target is installed but not counted', async () => {
+  const dshHome = await makeHome()
+  const requests = []
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', '@opendsh/dsh-plugin-setting-mcp'], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+    platform: 'linux',
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn() {
+      installProfile(dshHome)
+      return fakeChild()
+    },
+    async fetchImpl(url, options) {
+      requests.push({ url, options })
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(requests.length, 0)
+})
+
+test('preserves the official exit code for an unattributed target', async () => {
+  const dshHome = await makeHome()
+  const exitCode = await main(['plugin', '--profile', 'web', 'add', './local/plugin'], {
+    dshHome,
+    env: { DO_NOT_TRACK: '1' },
+    platform: 'linux',
+    io: ioCapture().io,
+    canExecute: () => false,
+    spawn() { return fakeChild({ status: 7 }) },
+  })
+
+  assert.equal(exitCode, 7)
 })

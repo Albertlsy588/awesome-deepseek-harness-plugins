@@ -30,6 +30,16 @@ export interface RunPluginCommandOptions {
     /** Test injection point for the child process implementation. */
     spawnImpl?: typeof spawn;
 }
+export interface RunOfficialCommandOptions {
+    invocation: InstallInvocation;
+    /** Argument vector appended to the invocation, verbatim. */
+    args: string[];
+    stdio: 'inherit' | 'capture';
+    timeoutMs?: number;
+    env?: NodeJS.ProcessEnv;
+    onLine?: (line: string) => void;
+    spawnImpl?: typeof spawn;
+}
 export interface RunPluginCommandResult {
     /** Exit code of the official CLI; null when it could not run or was killed. */
     exitCode: number | null;
@@ -45,3 +55,12 @@ export interface RunPluginCommandResult {
  * @returns the exit code with captured output; never rejects.
  */
 export declare function runPluginCommand(options: RunPluginCommandOptions): Promise<RunPluginCommandResult>;
+/**
+ * Run the official CLI with a verbatim argument vector.
+ *
+ * The dsh1024 CLI is a pure wrapper: it forwards the user's own arguments
+ * unchanged, so it cannot use the structured helper above.
+ * @param options - injected invocation plus the exact arguments to forward.
+ * @returns the exit code with captured output; never rejects.
+ */
+export declare function runOfficialCommand(options: RunOfficialCommandOptions): Promise<RunPluginCommandResult>;

@@ -239,7 +239,7 @@ try {
   }
   const desktopBannerText = await desktop.locator('.catalog-hero .self-install-banner').textContent()
   for (const command of [
-    'npm install -g dsh1024 && dsh1024 store',
+    'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024',
     'dsh plugin --profile web add dsh1024',
   ]) {
     if (!desktopBannerText?.includes(command)) {
@@ -340,7 +340,7 @@ try {
   }
   const rankingsBannerText = await rankings.locator('.catalog-hero .self-install-banner').textContent()
   for (const command of [
-    'npm install -g dsh1024 && dsh1024 store',
+    'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024',
     'dsh plugin --profile web add dsh1024',
   ]) {
     if (!rankingsBannerText?.includes(command)) {
@@ -368,12 +368,12 @@ try {
     throw new Error('split install menu does not expose exactly two command options')
   }
   // The first row may be the store's own catalog entry, whose menu shows the
-  // dedicated `dsh1024 store` / `… add dsh1024` pair instead of the generic
+  // dedicated `… add dsh1024` pair instead of the generic
   // owner/repository commands.
   const splitMenuText = await rankings.locator('.split-install-menu').textContent()
   // Two fixed options: the tracked wrapper and the official CLI. The row may be
   // the store's own entry, whose commands target dsh1024.
-  for (const command of ['dsh1024 ', 'dsh plugin --profile web add']) {
+  for (const command of ['dsh1024 plugin --profile web add', 'dsh plugin --profile web add']) {
     if (!splitMenuText?.includes(command)) {
       throw new Error(`split install menu is missing an install command: ${command}`)
     }
@@ -553,7 +553,7 @@ try {
   if (!detailInstallCommands.some((text) => text.trim().startsWith('dsh plugin --profile web add github:'))) {
     throw new Error('detail page is missing the bare official CLI install command')
   }
-  if (!detailInstallCommands.some((text) => text.trim().startsWith('dsh1024 add '))) {
+  if (!detailInstallCommands.some((text) => text.trim().startsWith('dsh1024 plugin --profile web add github:'))) {
     throw new Error('detail page is missing the tracked dsh1024 install command')
   }
   if (detailInstallCommands.some((text) => text.includes('@dsh-1024store/cli'))) {
@@ -572,8 +572,8 @@ try {
   const selfDetail = await openPage({ width: 1440, height: 1000 }, '/plugins/imsai-sh/awesome-deepseek-harness-plugins')
   await selfDetail.locator('.detail-header').waitFor()
   const selfInstallCommands = await selfDetail.locator('.install-section .install-command code:visible').allTextContents()
-  if (!selfInstallCommands.some((text) => text.includes('npm install -g dsh1024 && dsh1024 store'))) {
-    throw new Error('self entry detail page is missing the global dsh1024 store command')
+  if (!selfInstallCommands.some((text) => text.includes('npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024'))) {
+    throw new Error('self entry detail page is missing the global dsh1024 store install command')
   }
   if (selfInstallCommands.some((text) => text.includes('add imsai-sh/awesome-deepseek-harness-plugins') || text.includes('add github:imsai-sh/awesome-deepseek-harness-plugins'))) {
     throw new Error('self entry detail page renders a generic monorepo install command')

@@ -1,84 +1,100 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseArgs, parseRepository, UsageError } from '../cli/args.js'
+import { attributeTarget, parseArgs, scanPluginArgs, UsageError } from '../cli/args.js'
 import { SELF_PACKAGE_NAME, SELF_PLUGIN_ID } from '../cli/constants.js'
 
-test('parses add commands, default profile, and refs', () => {
-  assert.deepEqual(parseArgs(['add', 'Owner/Plugin']), {
-    command: 'add',
-    profile: 'web',
-    passthroughArgs: [],
-    pluginId: 'owner/plugin',
-    requestedRef: null,
-    source: 'github:Owner/Plugin',
-  })
-  assert.deepEqual(parseArgs(['add', 'github:Owner/Plugin.git#v1.2.0', '--profile=desktop']), {
-    command: 'add',
-    profile: 'desktop',
-    passthroughArgs: [],
-    pluginId: 'owner/plugin',
-    requestedRef: 'v1.2.0',
-    source: 'github:Owner/Plugin#v1.2.0',
-  })
-})
-
-test('rejects ambiguous repositories and unsafe profiles', () => {
-  assert.throws(() => parseRepository('https://github.com/owner/plugin'), UsageError)
-  assert.throws(() => parseArgs(['add', 'owner/plugin', '--profile', '../secret']), UsageError)
-  assert.throws(() => parseArgs(['add', 'owner/plugin', '--profile', '_private']), UsageError)
-  assert.throws(() => parseArgs(['add', 'owner/plugin', '--profile', '-web']), UsageError)
-  assert.equal(parseArgs(['add', 'owner/plugin', '--profile', 'web.preview_1']).profile, 'web.preview_1')
-  assert.deepEqual(parseArgs(['add', 'owner/plugin', 'owner/other']).passthroughArgs, ['owner/other'])
-  assert.throws(() => parseArgs(['add', '--ignore-scripts', 'owner/plugin']), UsageError)
-  assert.throws(() => parseRepository('owner/plugin#bad ref'), UsageError)
-})
-
-test('passes every non-wrapper argument unchanged and stops parsing after --', () => {
-  const parsed = parseArgs([
-    'add',
-    'Owner/Plugin',
-    '--ignore-scripts',
-    '--config.confirmModulesPurge=false',
-    'value;still-one-argument',
+test('forwards the official argument vector verbatim', () => {
+  const argv = [
+    'plugin',
     '--profile',
     'desktop',
-    '--',
-    '--profile',
-    '../belongs-to-official-cli',
-    '--',
-  ])
-
-  assert.equal(parsed.profile, 'desktop')
-  assert.deepEqual(parsed.passthroughArgs, [
+    'add',
+    'github:Owner/Plugin#v1.2.0',
     '--ignore-scripts',
     '--config.confirmModulesPurge=false',
     'value;still-one-argument',
+    '--',
     '--profile',
     '../belongs-to-official-cli',
     '--',
-  ])
+  ]
+  const parsed = parseArgs([...argv])
+
+  assert.equal(parsed.command, 'plugin')
+  assert.deepEqual(parsed.officialArgs, argv)
+  assert.equal(parsed.profile, 'desktop')
+  assert.equal(parsed.target, 'github:Owner/Plugin#v1.2.0')
+  assert.deepEqual(parsed.attribution, {
+    pluginId: 'owner/plugin',
+    requestedRef: 'v1.2.0',
+    knownPackageNames: [],
+  })
 })
 
-test('parses store as a normalized self-install add command', () => {
-  assert.deepEqual(parseArgs(['store']), {
-    command: 'add',
-    profile: 'web',
-    passthroughArgs: [],
+test('never injects a default profile into the forwarded arguments', () => {
+  const parsed = parseArgs(['plugin', 'add', 'github:owner/plugin'])
+  assert.deepEqual(parsed.officialArgs, ['plugin', 'add', 'github:owner/plugin'])
+  assert.equal(parsed.profile, null)
+})
+
+test('reads the profile from every official spelling and ignores the rest', () => {
+  assert.equal(scanPluginArgs(['plugin', '--profile', 'web', 'add', 'owner/plugin']).profile, 'web')
+  assert.equal(scanPluginArgs(['plugin', '--profile=desktop', 'add', 'owner/plugin']).profile, 'desktop')
+  assert.equal(scanPluginArgs(['plugin', '-p', 'demo', 'add', 'owner/plugin']).profile, 'demo')
+  // Arguments after the official separator belong to a deeper tool.
+  assert.equal(scanPluginArgs(['plugin', 'add', 'owner/plugin', '--', '--profile', 'other']).profile, null)
+  assert.equal(scanPluginArgs(['plugin', 'remove', 'owner/plugin']).target, null)
+})
+
+test('attributes catalog targets and the store package itself', () => {
+  assert.deepEqual(attributeTarget('github:Owner/Plugin'), {
+    pluginId: 'owner/plugin',
+    requestedRef: null,
+    knownPackageNames: [],
+  })
+  assert.deepEqual(attributeTarget('Owner/Plugin.git#v1.2.0'), {
+    pluginId: 'owner/plugin',
+    requestedRef: 'v1.2.0',
+    knownPackageNames: [],
+  })
+  assert.deepEqual(attributeTarget(SELF_PACKAGE_NAME), {
     pluginId: SELF_PLUGIN_ID,
     requestedRef: null,
-    source: SELF_PACKAGE_NAME,
     knownPackageNames: [SELF_PACKAGE_NAME],
   })
-  assert.equal(parseArgs(['store', '-p', 'demo']).profile, 'demo')
-  assert.equal(parseArgs(['store', '--profile=desktop']).profile, 'desktop')
-  assert.deepEqual(parseArgs(['store', '--', '--ignore-scripts']).passthroughArgs, ['--ignore-scripts'])
 })
 
-test('store rejects positional arguments and unsafe profiles', () => {
-  assert.throws(() => parseArgs(['store', 'extra']), UsageError)
-  assert.throws(() => parseArgs(['store', '--ignore-scripts']), UsageError)
-  assert.throws(() => parseArgs(['store', '--profile']), UsageError)
-  assert.throws(() => parseArgs(['store', '--profile', '../secret']), UsageError)
+test('never attributes a location target, so no path can reach an event', () => {
+  for (const target of [
+    './local/plugin',
+    '../local/plugin',
+    '/absolute/path/plugin',
+    '~/plugins/mine',
+    'C:\\Users\\someone\\plugin',
+    'file:../local/plugin',
+    'link:./local/plugin',
+    'portal:./local/plugin',
+    'https://github.com/owner/plugin',
+    'git+ssh://git@github.com/owner/plugin.git',
+    'github:./local/plugin',
+  ]) {
+    assert.equal(attributeTarget(target), null, target)
+  }
+})
+
+test('leaves unrecognised targets unattributed instead of guessing', () => {
+  // Published package names other than this CLI's own package are forwarded and
+  // installed normally, but are not counted until their catalog mapping exists.
+  assert.equal(attributeTarget('@opendsh/dsh-plugin-setting-mcp'), null)
+  assert.equal(attributeTarget('some-plugin'), null)
+  assert.equal(attributeTarget('owner/plugin/extra'), null)
+  assert.equal(attributeTarget('owner/plugin#bad ref'), null)
+})
+
+test('rejects commands the wrapper does not own', () => {
+  assert.throws(() => parseArgs(['add', 'owner/plugin']), UsageError)
+  assert.throws(() => parseArgs(['store']), UsageError)
+  assert.throws(() => parseArgs(['install', 'owner/plugin']), UsageError)
 })
 
 test('parses telemetry controls', () => {

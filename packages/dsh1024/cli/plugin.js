@@ -4,7 +4,8 @@ import { accessSync, constants as fsConstants } from 'node:fs'
 import { win32 as win32Path, posix as posixPath } from 'node:path'
 import { arch as hostArch, execPath as hostExecPath, platform as hostPlatform } from 'node:process'
 import { CLI_VERSION, DEFAULT_DSH_PACKAGE, readCliEnv } from './constants.js'
-import { runPluginCommand } from '../lib/shared/install-runner.js'
+import { telemetryProfile } from './args.js'
+import { runOfficialCommand } from '../lib/shared/install-runner.js'
 import { readProfileState, inspectInstallation, createReceipt } from './profile.js'
 import { getReceipt, readReceipts, saveReceipt } from './receipts.js'
 import {
@@ -126,7 +127,7 @@ function failureCode(result, inspection) {
   return null
 }
 
-export async function addPlugin(command, context) {
+export async function forwardPluginCommand(command, context) {
   const {
     dshHome,
     env,
@@ -141,13 +142,20 @@ export async function addPlugin(command, context) {
   } = context
   const packageOverride = readCliEnv(env, 'DSH_PACKAGE')
   const officialPackage = packageOverride || DEFAULT_DSH_PACKAGE
-  const receipts = await readReceipts(dshHome)
-  const previousReceipt = getReceipt(receipts, command.profile, command.pluginId)
-  const before = await readProfileState(dshHome, command.profile)
+  // Only catalog plugins are attributable. Anything else (local paths, URLs,
+  // unknown npm packages) runs exactly the same way but is never reported.
+  const attribution = command.attribution
+  const profile = telemetryProfile(command.profile)
+  const receipts = attribution === null ? null : await readReceipts(dshHome)
+  const previousReceipt = attribution === null
+    ? null
+    : getReceipt(receipts, profile, attribution.pluginId)
+  const before = attribution === null ? null : await readProfileState(dshHome, profile)
 
   let telemetryConfig = null
   try {
     telemetryConfig = await loadTelemetryConfig(dshHome)
+    if (attribution === null) throw new Error('unattributable target')
     if (!telemetryConfig && !environmentDisablesTelemetry(env)) {
       telemetryConfig = (await ensureTelemetryConfig(dshHome, { now, uuid })).config
     }
@@ -166,19 +174,21 @@ export async function addPlugin(command, context) {
     packageOverridden: Boolean(packageOverride),
     canExecute: context.canExecute,
   })
-  const result = await runPluginCommand({
+  // The user's own argument vector, forwarded without a single edit.
+  const result = await runOfficialCommand({
     invocation,
-    action: 'add',
-    profile: command.profile,
-    target: command.source,
-    extraArgs: command.passthroughArgs,
+    args: command.officialArgs,
     stdio: 'inherit',
     env,
     spawnImpl: spawn,
   })
   const completedAt = now()
-  const after = await readProfileState(dshHome, command.profile)
-  const inspection = inspectInstallation(before, after, command.pluginId, previousReceipt, command.knownPackageNames ?? [])
+  if (attribution === null) {
+    return Number.isInteger(result.exitCode) ? result.exitCode : 1
+  }
+
+  const after = await readProfileState(dshHome, profile)
+  const inspection = inspectInstallation(before, after, attribution.pluginId, previousReceipt, attribution.knownPackageNames)
   const errorCode = failureCode(result, inspection)
   const operation = inspection.beforePresent ? 'reinstall' : 'install'
   const succeeded = errorCode === null
@@ -186,9 +196,9 @@ export async function addPlugin(command, context) {
   if (succeeded) {
     const receipt = createReceipt({
       previousReceipt,
-      pluginId: command.pluginId,
-      profile: command.profile,
-      source: command.source,
+      pluginId: attribution.pluginId,
+      profile,
+      source: command.target,
       packageNames: inspection.packageNames,
       state: after,
       completedAt: completedAt.toISOString(),
@@ -206,8 +216,8 @@ export async function addPlugin(command, context) {
     const event = {
       eventId: uuid(),
       clientId: telemetryConfig.clientId,
-      pluginId: command.pluginId,
-      profile: command.profile,
+      pluginId: attribution.pluginId,
+      profile,
       operation,
       status: succeeded ? 'success' : 'failed',
       clientStartedAt: startedAt.toISOString(),
@@ -215,7 +225,7 @@ export async function addPlugin(command, context) {
       durationMs: boundedDuration(startedAt, completedAt),
       beforeVersion: inspection.beforeVersion,
       afterVersion: inspection.afterVersion,
-      requestedRef: command.requestedRef,
+      requestedRef: attribution.requestedRef,
       cliVersion: CLI_VERSION,
       dshVersion: invocation.prefixArgs.length === 0
         ? officialDshVersion('', env)

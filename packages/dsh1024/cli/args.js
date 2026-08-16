@@ -1,7 +1,10 @@
 import { DEFAULT_PROFILE, SELF_PACKAGE_NAME, SELF_PLUGIN_ID } from './constants.js'
 
-const PROFILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 const REPOSITORY_PART_PATTERN = /^[A-Za-z0-9_.-]{1,100}$/
+// Anything that names a location rather than a catalog repository. This is a
+// hard privacy boundary: such targets are forwarded like any other argument but
+// never reported, so an install event can never carry a filesystem path.
+const LOCATION_TARGET_PATTERN = /^(?:file:|link:|portal:|https?:|git\+|[.~]|\/|\\|[A-Za-z]:[\\/])/
 
 export class UsageError extends Error {
   constructor(message) {
@@ -27,121 +30,94 @@ export function parseArgs(argv) {
     return { command: 'telemetry', action }
   }
 
-  if (argv[0] === 'store') {
-    return parseStore(argv)
-  }
-
-  if (argv[0] !== 'add') {
+  if (argv[0] !== 'plugin') {
     throw new UsageError(`unknown command: ${argv[0]}`)
   }
 
-  let profile = DEFAULT_PROFILE
-  let repository
-  const passthroughArgs = []
-  let passthroughOnly = false
+  // The wrapper mirrors the official argument surface exactly: everything from
+  // `plugin` onwards is forwarded verbatim. The scan below is read-only and only
+  // feeds telemetry; it never rewrites, reorders, or defaults anything in argv.
+  return { command: 'plugin', officialArgs: [...argv], ...scanPluginArgs(argv) }
+}
+
+/**
+ * Read-only scan of an official `plugin` argument vector.
+ *
+ * @returns `profile` (explicit value or null), `attribution` (null when the
+ *   target is not a catalog plugin, so nothing is reported).
+ */
+export function scanPluginArgs(argv) {
+  let profile = null
+  let target = null
+  let sawAdd = false
 
   for (let index = 1; index < argv.length; index += 1) {
     const value = argv[index]
-    if (passthroughOnly) {
-      passthroughArgs.push(value)
-      continue
-    }
-    if (value === '--') {
-      if (!repository) throw new UsageError('add requires owner/repository before --')
-      passthroughOnly = true
-      continue
-    }
+    // Everything past the official `--` separator belongs to a deeper tool.
+    if (value === '--') break
     if (value === '--profile' || value === '-p') {
       const next = argv[index + 1]
-      if (!next) throw new UsageError('--profile requires a value')
-      profile = next
-      index += 1
-      continue
-    }
-    if (value.startsWith('--profile=')) {
-      profile = value.slice('--profile='.length)
-      continue
-    }
-    if (!repository) {
-      if (value.startsWith('-')) {
-        throw new UsageError('owner/repository must appear before pass-through arguments')
+      if (typeof next === 'string' && !next.startsWith('-')) {
+        profile = next
+        index += 1
       }
-      repository = value
-      continue
-    }
-    passthroughArgs.push(value)
-  }
-
-  if (!repository) throw new UsageError('add requires owner/repository')
-  if (!PROFILE_PATTERN.test(profile)) {
-    throw new UsageError('profile must contain only letters, numbers, dot, underscore, or hyphen (1-64 characters)')
-  }
-
-  return { command: 'add', profile, passthroughArgs, ...parseRepository(repository) }
-}
-
-function parseStore(argv) {
-  let profile = DEFAULT_PROFILE
-  const passthroughArgs = []
-  let passthroughOnly = false
-
-  for (let index = 1; index < argv.length; index += 1) {
-    const value = argv[index]
-    if (passthroughOnly) {
-      passthroughArgs.push(value)
-      continue
-    }
-    if (value === '--') {
-      passthroughOnly = true
-      continue
-    }
-    if (value === '--profile' || value === '-p') {
-      const next = argv[index + 1]
-      if (!next) throw new UsageError('--profile requires a value')
-      profile = next
-      index += 1
       continue
     }
     if (value.startsWith('--profile=')) {
       profile = value.slice('--profile='.length)
       continue
     }
-    throw new UsageError('store accepts only --profile; put official CLI arguments after --')
+    if (value.startsWith('-')) continue
+    if (!sawAdd) {
+      sawAdd = value === 'add'
+      continue
+    }
+    if (target === null) target = value
   }
 
-  if (!PROFILE_PATTERN.test(profile)) {
-    throw new UsageError('profile must contain only letters, numbers, dot, underscore, or hyphen (1-64 characters)')
-  }
-
-  return {
-    command: 'add',
-    profile,
-    passthroughArgs,
-    pluginId: SELF_PLUGIN_ID,
-    requestedRef: null,
-    source: SELF_PACKAGE_NAME,
-    knownPackageNames: [SELF_PACKAGE_NAME],
-  }
+  return { profile, target, attribution: target === null ? null : attributeTarget(target) }
 }
 
-export function parseRepository(input) {
-  let value = input.startsWith('github:') ? input.slice('github:'.length) : input
+/**
+ * Map an official install target to a catalog plugin identity.
+ *
+ * Targets that cannot be identified are forwarded normally but not reported.
+ * Published npm package names other than this CLI's own package currently fall
+ * into that group: mapping a package name back to a catalog entry is not
+ * defined yet, so those installs run without being counted rather than being
+ * attributed to a guess.
+ *
+ * @returns null when the target cannot be identified as a catalog plugin.
+ */
+export function attributeTarget(target) {
+  if (typeof target !== 'string' || target.length === 0) return null
+  if (target === SELF_PACKAGE_NAME) {
+    return { pluginId: SELF_PLUGIN_ID, requestedRef: null, knownPackageNames: [SELF_PACKAGE_NAME] }
+  }
+  if (LOCATION_TARGET_PATTERN.test(target)) return null
+
+  let value = target.startsWith('github:') ? target.slice('github:'.length) : target
+  if (LOCATION_TARGET_PATTERN.test(value)) return null
+
   const hashIndex = value.indexOf('#')
   const requestedRef = hashIndex === -1 ? null : value.slice(hashIndex + 1)
   value = hashIndex === -1 ? value : value.slice(0, hashIndex)
   value = value.endsWith('.git') ? value.slice(0, -4) : value
 
   const parts = value.split('/')
-  if (parts.length !== 2 || !parts.every((part) => REPOSITORY_PART_PATTERN.test(part))) {
-    throw new UsageError('plugin must use the owner/repository form')
-  }
+  if (parts.length !== 2 || !parts.every((part) => REPOSITORY_PART_PATTERN.test(part))) return null
   if (requestedRef !== null && (!requestedRef || requestedRef.length > 200 || /[\s\x00-\x1f\x7f]/.test(requestedRef))) {
-    throw new UsageError('git ref must be 1-200 characters and contain no whitespace or control characters')
+    return null
   }
 
   return {
     pluginId: `${parts[0]}/${parts[1]}`.toLowerCase(),
     requestedRef,
-    source: `github:${parts[0]}/${parts[1]}${requestedRef ? `#${requestedRef}` : ''}`,
+    knownPackageNames: [],
   }
+}
+
+/** Profile used to verify and attribute an install when argv omits `--profile`. */
+export function telemetryProfile(profile) {
+  return profile ?? DEFAULT_PROFILE
 }

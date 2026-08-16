@@ -28,15 +28,14 @@ npm install -g dsh1024
 ## Install the in-app store
 
 ```sh
-npm install -g dsh1024 && dsh1024 store
+npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024
 ```
 
-This runs `npx @deepseek-ai/dsh plugin --profile web add dsh1024` through the
-official CLI and counts the install anonymously. Installing directly with the
-official CLI works the same way:
+Installing directly with the official CLI is the same command under a different
+name:
 
 ```sh
-npx @deepseek-ai/dsh plugin --profile web add dsh1024
+dsh plugin --profile web add dsh1024
 ```
 
 Restart DeepSeek Harness after installation.
@@ -54,52 +53,59 @@ restarting DeepSeek Harness.
 
 Node.js 22 or newer is required.
 
+`dsh1024 plugin ...` **is** `dsh plugin ...` under a different name. Everything
+from `plugin` onwards is forwarded to the official CLI exactly as written —
+nothing is added, removed, reordered, or defaulted:
+
 ```sh
-dsh1024 add omdsh-dev/dsh-deep-research --profile web
+dsh1024 plugin --profile web add github:omdsh-dev/dsh-deep-research
+dsh plugin      --profile web add github:omdsh-dev/dsh-deep-research
 ```
 
-The wrapper executes this command without a shell:
+The two lines above run the same official operation. The wrapper's only job is
+what happens around it: check the resulting profile and record one anonymous
+install event.
+
+Because nothing is defaulted, options behave exactly as the official CLI
+documents them. Omitting `--profile` is passed on as written rather than
+silently filled in, and `--`, refs, and every other official argument keep their
+official meaning:
 
 ```sh
-npx --yes @deepseek-ai/dsh plugin --profile web add github:omdsh-dev/dsh-deep-research
-```
-
-When an official `dsh` is already on PATH the wrapper runs that binary directly
-(`dsh plugin --profile web add …`) instead of going through npx, which removes
-npx's resolution step from every install. Pinning a version with
-`DSH1024_DSH_PACKAGE` always uses the npx form. Only the way the official CLI is
-located differs; arguments, ordering, exit codes, and stdio are unchanged.
-
-`web` is the default profile. A Git ref is optional:
-
-```sh
-dsh1024 add owner/repository#v1.2.0
-```
-
-### Official CLI argument pass-through
-
-The wrapper consumes only the tracked `owner/repository`, the shared
-`--profile`/`-p` option, and the first `--` separator. Every other argument is
-appended unchanged to the official plugin command. Put the tracked repository
-first, and use `--` when an official argument could otherwise look like a
-wrapper option:
-
-```sh
-dsh1024 add owner/repository --profile web -- \
+dsh1024 plugin --profile web add github:owner/repository#v1.2.0
+dsh1024 plugin --profile web add github:owner/repository -- \
   --ignore-scripts --reporter append-only --config.confirmModulesPurge=false
 ```
 
-This executes, without a shell:
+The wrapper executes the first example without a shell as:
 
 ```sh
-npx --yes @deepseek-ai/dsh plugin --profile web add \
-  github:owner/repository --ignore-scripts --reporter append-only \
-  --config.confirmModulesPurge=false
+npx --yes @deepseek-ai/dsh plugin --profile web add github:owner/repository#v1.2.0
 ```
 
-The separator itself is consumed; tokens after it are not parsed at all. To
-pass a literal `--`, write `-- --`. Pass-through arguments never enter the
-telemetry event or local receipt.
+When an official `dsh` is already on PATH the wrapper runs that binary directly
+instead of going through npx, which removes npx's resolution step from every
+install. Pinning a version with `DSH1024_DSH_PACKAGE` always uses the npx form.
+Only the way the official CLI is located differs; arguments, ordering, exit
+codes, and stdio are unchanged.
+
+Arguments never enter the telemetry event or the local receipt.
+
+### What gets counted
+
+The wrapper reads the install target to attribute the event; it never rewrites
+it. A target it cannot identify as a catalog plugin is installed exactly the
+same way but is not counted:
+
+| Target | Counted as |
+| --- | --- |
+| `github:owner/repository`, `owner/repository` (optionally `#ref`, `.git`) | `owner/repository` |
+| `dsh1024` | this catalog repository |
+| Local paths, `file:`, `link:`, URLs | never reported |
+| Other published package names | not counted yet |
+
+Local and `file:`/`link:` targets are a hard boundary: a filesystem path can
+never reach an install event.
 
 ## What is recorded
 

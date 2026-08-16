@@ -1,7 +1,7 @@
 import { CLI_VERSION } from './constants.js'
 import { parseArgs, UsageError } from './args.js'
 import { resolveDshHome, storePaths } from '../lib/shared/files.js'
-import { addPlugin } from './add.js'
+import { forwardPluginCommand } from './plugin.js'
 import {
   effectiveTelemetryEnabled,
   environmentDisablesTelemetry,
@@ -13,20 +13,19 @@ import {
 const HELP = `dsh1024 ${CLI_VERSION}
 
 Usage:
-  dsh1024 add <owner/repository> [--profile <name>] [official arguments...]
-  dsh1024 store [--profile <name>]  Install the 1024 Store plugin into DeepSeek Harness
+  dsh1024 plugin <official arguments...>
   dsh1024 telemetry [status|enable|disable|reset]
 
 Examples:
-  dsh1024 add omdsh-dev/dsh-deep-research
-  dsh1024 add owner/plugin#v1.2.0 --profile web
-  dsh1024 add owner/plugin --profile web -- --ignore-scripts --reporter append-only
+  dsh1024 plugin --profile web add github:omdsh-dev/dsh-deep-research
+  dsh1024 plugin --profile web add github:owner/plugin#v1.2.0
+  dsh1024 plugin --profile web add github:owner/plugin -- --ignore-scripts
 
-The add command delegates to the official @deepseek-ai/dsh CLI, verifies the
-resulting profile, and records a narrow anonymous install event. Only the
-repository, --profile, and the first -- separator are consumed; every other
-argument is passed unchanged to the official CLI. Pass-through arguments are
-never included in telemetry.`
+\`dsh1024 plugin ...\` is \`dsh plugin ...\` with a different name: every argument
+from \`plugin\` onwards is forwarded to the official @deepseek-ai/dsh CLI exactly
+as written, with nothing added, removed, or reordered. The wrapper's only job is
+to check the resulting profile afterwards and record a narrow anonymous install
+event. Arguments are never included in telemetry.`
 
 function defaultIo() {
   return {
@@ -64,7 +63,7 @@ export async function main(argv, overrides = {}) {
     return telemetryCommand(command.action, { ...overrides, dshHome, env, io })
   }
 
-  return addPlugin(command, {
+  return forwardPluginCommand(command, {
     ...overrides,
     dshHome,
     env,
@@ -110,7 +109,7 @@ async function pendingCount(dshHome) {
   }
 }
 
-export { parseArgs, parseRepository, UsageError } from './args.js'
+export { attributeTarget, parseArgs, scanPluginArgs, UsageError } from './args.js'
 export { inspectInstallation, readProfileState } from './profile.js'
 export {
   detectArch,
