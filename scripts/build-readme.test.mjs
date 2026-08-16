@@ -9,9 +9,11 @@ import { fileURLToPath } from 'node:url'
 import {
   adaptLegacyRegistry,
   buildReadmeFiles,
+  catalogRevision,
   groupPlugins,
   loadRegistry,
   normalizeRegistry,
+  screenshotBranch,
 } from './build-readme.mjs'
 
 const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'build-readme.mjs')
@@ -237,6 +239,48 @@ test('refuses to emit a projection GitHub would silently truncate', async () => 
     buildReadmeFiles(normalizeRegistry(huge), categories),
     /GitHub renders at most \d+ and silently drops everything past that offset/,
   )
+})
+
+test('leads both projections with the homepage screenshot from the assets branch', async () => {
+  const files = await buildReadmeFiles(normalizeRegistry(registryFixture), categories)
+  const revision = catalogRevision(normalizeRegistry(registryFixture))
+  const source = `https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/${screenshotBranch}/homepage.png?v=${revision}`
+
+  for (const [name, content] of Object.entries(files)) {
+    assert.ok(content.includes(source), `${name} must embed the versioned screenshot URL`)
+    // The hero links to the live site and sits above the fold, before the nav links.
+    assert.ok(content.indexOf(source) < content.indexOf('Submit a plugin') || name === 'README.md')
+    assert.match(content, /\]\(https:\/\/deepseek1024\.com\/\)/)
+  }
+  assert.match(files['README.md'], /\[!\[DSH 1024Store 插件市场首页\]/)
+  assert.match(files['catalog/README.md'], /\[!\[The DSH 1024Store plugin marketplace homepage\]/)
+})
+
+test('ties the screenshot URL to catalog contents, not to the clock', () => {
+  const base = normalizeRegistry(registryFixture)
+  // Same catalog → same URL, so an unchanged sync produces no README commit at all.
+  assert.equal(catalogRevision(base), catalogRevision(normalizeRegistry(registryFixture)))
+
+  // A new plugin changes the revision, so readers get a fresh screenshot past camo.
+  const grown = normalizeRegistry({
+    ...registryFixture,
+    plugins: [...registryFixture.plugins, {
+      ...registryFixture.plugins[0],
+      id: 'owner/brand-new',
+      url: 'https://github.com/owner/brand-new',
+      name: 'brand-new',
+    }],
+  })
+  assert.notEqual(catalogRevision(base), catalogRevision(grown))
+
+  // Recategorising an existing plugin also moves it in the list, so it counts too.
+  const recategorised = normalizeRegistry({
+    ...registryFixture,
+    plugins: registryFixture.plugins.map((plugin, index) => (index === 0 ? { ...plugin, category: 'ui' } : plugin)),
+  })
+  assert.notEqual(catalogRevision(base), catalogRevision(recategorised))
+
+  assert.match(catalogRevision(base), /^[0-9a-f]{12}$/)
 })
 
 test('adapts the legacy /plugins.json shape', () => {
