@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildCatalog, findPlugin, parseCatalogQuery, repositoryName } from '../worker/lib/catalog'
+import {
+  buildCatalog,
+  deriveCatalogResponse,
+  findPlugin,
+  parseCatalogQuery,
+  repositoryName,
+} from '../worker/lib/catalog'
 import { TEST_PLUGINS, TEST_REGISTRY, testCatalogResult } from './fixtures'
 
 describe('catalog queries', () => {
@@ -81,6 +87,28 @@ describe('catalog queries', () => {
 
     expect(result.packages[0]?.name).toBe('dsh-agent-teams')
     expect(result.packages.map((plugin) => plugin.name)).not.toContain('dsh-bash-terminal')
+  })
+
+  it('derives any filtered view from the unfiltered response exactly like the server', () => {
+    const snapshot = testCatalogResult()
+    const full = buildCatalog(snapshot, { q: '', category: '', sort: 'stars' })
+    const queries = [
+      { q: '', category: 'tools', sort: 'stars' },
+      { q: '终端', category: '', sort: 'newest' },
+      { q: 'harness', category: '', sort: 'active' },
+      { q: '', category: '', sort: 'growth24h' },
+      { q: '', category: 'tools', sort: 'installs24h' },
+    ] as const
+
+    for (const query of queries) {
+      const derived = deriveCatalogResponse(full, query)
+      const direct = buildCatalog(snapshot, query)
+      expect(derived.packages).toEqual(direct.packages)
+      expect(derived.meta.total).toBe(direct.meta.total)
+      expect(derived.rankings).toEqual(direct.rankings)
+      expect(derived.categories).toEqual(direct.categories)
+      expect(derived.meta.catalogTotal).toBe(direct.meta.catalogTotal)
+    }
   })
 
   it('finds owners and repositories case-insensitively', () => {

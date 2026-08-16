@@ -55,9 +55,10 @@ Compact full-catalog registry for the `dsh1024` in-DSH marketplace plugin, the R
 }
 ```
 
-`stars` is `null` when unknown. `install` carries the official DeepSeek Harness CLI
-command; the tracked alternative shown on the website is `npx dsh1024 add owner/repository`.
-The registry is projected from the same KV snapshot as the other read endpoints.
+`stars` is `null` when unknown. The registry is projected from the same KV snapshot as the
+other read endpoints. The `install` field always carries the official DeepSeek Harness CLI
+command; the tracked alternative shown on the website (`npx dsh1024 add owner/repository`)
+is derived at the presentation layer and never stored in the registry.
 
 ## POST /api/v1/install-events
 
@@ -92,9 +93,12 @@ Full-catalog reconciliation from GitHub CI — one of exactly two catalog write 
 other is the Worker's own cron topic scan).
 
 Authentication: `Authorization: Bearer <CATALOG_SYNC_TOKEN>` where the token is a Cloudflare
-Worker secret. Responses:
+Worker secret of at least 32 bytes. The endpoint is not a public submission API: anonymous and
+incorrectly authenticated callers cannot create or update catalog entries. Every accepted
+repository URL must be the canonical `https://github.com/<owner>/<repository>` URL matching the
+entry ID. Responses:
 
-- `503` when the secret is not configured on the Worker;
+- `503` when the secret is missing or too short on the Worker;
 - `401` when the token does not match (constant-time comparison);
 - `200 {"ok": true, "total": N, "removedSources": M}` on success.
 
@@ -126,4 +130,4 @@ Returns exactly `{"status":"ok"}`. No scan or database internals are exposed.
 
 ## Page redirects
 
-`/` serves the rankings page; `/packages*` returns `301` to the matching `/plugin*` page.
+`/` serves the rankings page without changing the browser URL. `/plugins*` is the canonical catalog path; singular `/plugin*` and legacy `/packages*` paths return `301` to the matching `/plugins*` page.

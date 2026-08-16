@@ -12,23 +12,27 @@ import { LoadingState } from '../components/LoadingState'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { PackageRow } from '../components/PackageRow'
 import { SelfInstallBanner } from '../components/SelfInstallBanner'
+import type { CatalogSort, Language, RankingMode } from '../lib/api'
 import {
-  getCatalog,
-  type CatalogResponse,
-  type CatalogSort,
-  type Language,
-  type RankingMode,
-} from '../lib/api'
+  deriveCatalogView,
+  getCachedCatalog,
+  isCatalogFresh,
+  loadCatalog,
+} from '../lib/catalog-cache'
+import { publicAsset } from '../lib/assets'
 import { formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { useLiveStats } from '../lib/useLiveStats'
 import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
+// Directory rows render incrementally so a filter click re-renders dozens of
+// rows instead of the full multi-thousand plugin list in one commit.
+const PAGE_SIZE = 60
+// growth7d / growth30d stay available in the API but are hidden here until
+// enough snapshot history accumulates to make those windows meaningful.
 const GITHUB_RANKING_MODES: RankingMode[] = [
   'growth24h',
-  'growth7d',
-  'growth30d',
   'stars',
   'newest',
   'active',
@@ -117,14 +121,16 @@ export function CatalogPage({ view }: CatalogPageProps) {
     ? requestedSort as CatalogSort
     : 'stars'
   const [draftQuery, setDraftQuery] = useState(query)
-  const [rankingMode, setRankingMode] = useState<RankingMode>('stars')
-  const [catalog, setCatalog] = useState<CatalogResponse | null>(null)
+  const [rankingMode, setRankingMode] = useState<RankingMode>('growth24h')
+  // The full unfiltered catalog; every filter/sort/search view derives from it
+  // synchronously, so selection feedback never waits on the network.
+  const [fullCatalog, setFullCatalog] = useState(() => getCachedCatalog())
   const [playIntro] = useState(() => !heroIntroPlayed)
   useEffect(() => {
     heroIntroPlayed = true
   }, [])
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [reload, setReload] = useState(0)
 
   useEffect(() => setDraftQuery(query), [query])
@@ -141,25 +147,42 @@ export function CatalogPage({ view }: CatalogPageProps) {
   }, [draftQuery, query, searchParams, setSearchParams])
 
   useEffect(() => {
-    const controller = new AbortController()
-    setLoading(true)
-    setError(null)
-    getCatalog(
-      view === 'catalog'
-        ? { q: query, category, sort }
-        : { q: query, sort: rankingMode },
-      controller.signal,
-    )
-      .then(setCatalog)
+    let cancelled = false
+    const force = reload > 0
+    if (force || !isCatalogFresh()) setRefreshing(true)
+    // The shared fetch is not aborted on unmount: letting it finish primes the
+    // module cache for the next mount (e.g. back from a detail page).
+    loadCatalog({ force })
+      .then((data) => {
+        if (cancelled) return
+        setFullCatalog(data)
+        setError(null)
+      })
       .catch((requestError: unknown) => {
-        if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+        // A failed background refresh keeps showing the last good catalog.
+        if (cancelled || getCachedCatalog()) return
         setError(requestError instanceof Error ? requestError.message : t('loadError'))
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
+        if (!cancelled) setRefreshing(false)
       })
-    return () => controller.abort()
-  }, [category, query, rankingMode, reload, sort, t, view])
+    return () => {
+      cancelled = true
+    }
+  }, [reload, t])
+
+  const catalog = useMemo(
+    () =>
+      fullCatalog
+        ? deriveCatalogView(
+            fullCatalog,
+            view === 'catalog'
+              ? { q: query, category, sort }
+              : { q: query, category: '', sort: rankingMode },
+          )
+        : null,
+    [category, fullCatalog, query, rankingMode, sort, view],
+  )
 
   useEffect(() => {
     const interval = window.setInterval(() => setReload((value) => value + 1), 5 * 60 * 1000)
@@ -177,6 +200,34 @@ export function CatalogPage({ view }: CatalogPageProps) {
     () => new Map(catalog?.categories.map((item) => [item.id, item]) ?? []),
     [catalog?.categories],
   )
+
+  // Incremental directory rendering; the visible count resets whenever the
+  // filter combination changes (key mismatch falls back to the first page).
+  const directoryKey = `${query}|${category}|${sort}`
+  const [directoryPage, setDirectoryPage] = useState({ key: directoryKey, count: PAGE_SIZE })
+  const visibleCount = directoryPage.key === directoryKey ? directoryPage.count : PAGE_SIZE
+  const visiblePackages = useMemo(
+    () => catalog?.packages.slice(0, visibleCount) ?? [],
+    [catalog, visibleCount],
+  )
+  const hasMorePackages = (catalog?.packages.length ?? 0) > visibleCount
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (view !== 'catalog' || !hasMorePackages) return
+    const node = loadMoreRef.current
+    if (!node) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setDirectoryPage({ key: directoryKey, count: visibleCount + PAGE_SIZE })
+        }
+      },
+      { rootMargin: '600px 0px' },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [directoryKey, hasMorePackages, view, visibleCount])
 
   function updateFilter(key: 'category' | 'sort', value: string) {
     const next = new URLSearchParams(searchParams)
@@ -199,9 +250,9 @@ export function CatalogPage({ view }: CatalogPageProps) {
   const isGrowthMode =
     rankingMode === 'growth24h' || rankingMode === 'growth7d' || rankingMode === 'growth30d'
   const isPendingRanking = !query && isGrowthMode
-  const catalogHref = query ? `/plugin?q=${encodeURIComponent(query)}` : '/plugin'
-  const rankingsHref = query ? `/rankings?q=${encodeURIComponent(query)}` : '/rankings'
-  const canonicalPath = view === 'catalog' ? '/plugin' : '/rankings'
+  const catalogHref = query ? `/plugins?q=${encodeURIComponent(query)}` : '/plugins'
+  const rankingsHref = query ? `/?q=${encodeURIComponent(query)}` : '/'
+  const canonicalPath = view === 'catalog' ? '/plugins' : '/'
   const seoTitle = t(view === 'catalog' ? 'catalogSeoTitle' : 'rankingsSeoTitle')
   const seoDescription = t(
     view === 'catalog' ? 'catalogSeoDescription' : 'rankingsSeoDescription',
@@ -250,7 +301,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 target="_blank"
                 rel="noreferrer"
               >
-                <img src="/github-mark.svg" alt="" aria-hidden="true" />
+                <img src={publicAsset('github-mark.svg')} alt="" aria-hidden="true" />
                 <span>GitHub</span>
                 <ArrowUpRight size={12} aria-hidden="true" />
               </a>
@@ -271,7 +322,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
             <div className="hero-heading">
               <div className="hero-lockup">
                 <span className="hero-lockup-mark" aria-hidden="true">
-                  <img src="/deepseek1024.png" alt="" />
+                  <img src={publicAsset('deepseek1024.png')} alt="" />
                 </span>
                 <div className="hero-lockup-copy">
                   <p className="hero-eyebrow">{t('heroEyebrow')}</p>
@@ -397,6 +448,9 @@ export function CatalogPage({ view }: CatalogPageProps) {
                   </div>
                 </div>
               </div>
+              {refreshing && catalog && (
+                <span className="refresh-note" role="status">{t('refreshing')}</span>
+              )}
             </div>
 
             {error ? (
@@ -430,7 +484,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 </button>
               </div>
             ) : catalog ? (
-              <div className={`package-list ranking-list${loading ? ' is-refreshing' : ''}`}>
+              <div className={`package-list ranking-list${refreshing ? ' is-refreshing' : ''}`}>
                 {ranking.map((plugin, index) => (
                   <PackageRow
                     key={`${rankingMode}-${plugin.owner}/${plugin.repository}`}
@@ -469,6 +523,9 @@ export function CatalogPage({ view }: CatalogPageProps) {
                   </button>
                 ))}
               </div>
+              {refreshing && catalog && (
+                <span className="refresh-note" role="status">{t('refreshing')}</span>
+              )}
             </div>
 
             {error ? (
@@ -480,9 +537,9 @@ export function CatalogPage({ view }: CatalogPageProps) {
                   {t('retry')}
                 </button>
               </div>
-            ) : !catalog && loading ? (
+            ) : !catalog ? (
               <LoadingState />
-            ) : catalog?.packages.length === 0 ? (
+            ) : catalog.packages.length === 0 ? (
               <div className="state-panel">
                 <Search size={27} aria-hidden="true" />
                 <h3>{t('emptyTitle')}</h3>
@@ -492,16 +549,35 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 </button>
               </div>
             ) : (
-              <div className={`package-list${loading ? ' is-refreshing' : ''}`} aria-live="polite">
-                {catalog?.packages.map((plugin, index) => (
-                  <PackageRow
-                    key={`${plugin.owner}/${plugin.repository}`}
-                    plugin={plugin}
-                    category={categoryMap.get(plugin.category)}
-                    index={index}
-                  />
-                ))}
-              </div>
+              <>
+                <div className={`package-list${refreshing ? ' is-refreshing' : ''}`} aria-live="polite">
+                  {visiblePackages.map((plugin, index) => (
+                    <PackageRow
+                      key={`${plugin.owner}/${plugin.repository}`}
+                      plugin={plugin}
+                      category={categoryMap.get(plugin.category)}
+                      index={index}
+                    />
+                  ))}
+                </div>
+                {hasMorePackages && (
+                  <div className="load-more-row" ref={loadMoreRef}>
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={() =>
+                        setDirectoryPage({ key: directoryKey, count: visibleCount + PAGE_SIZE })}
+                    >
+                      {t('loadMore')}
+                    </button>
+                    <span className="load-more-count">
+                      {formatNumber(visiblePackages.length, language)}
+                      {' / '}
+                      {formatNumber(catalog.meta.total, language)}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </section>
         )}

@@ -9,25 +9,26 @@ const FULL_DISCOVERY_CRON = '17 3 * * SUN'
 const app = createApp()
 
 function isWorkerRoute(pathname: string): boolean {
-  return pathname === '/' ||
-    pathname === '/robots.txt' ||
+  return pathname === '/robots.txt' ||
     pathname === '/sitemap.xml' ||
+    pathname === '/plugin' ||
+    pathname.startsWith('/plugin/') ||
     pathname === '/packages' ||
     pathname.startsWith('/packages/') ||
     pathname.startsWith('/api/')
 }
 
 function isFilteredCollection(url: URL): boolean {
-  if (url.pathname !== '/plugin' && url.pathname !== '/rankings') return false
+  if (url.pathname !== '/' && url.pathname !== '/plugins' && url.pathname !== '/rankings') return false
   return url.searchParams.has('q') ||
     url.searchParams.has('category') ||
     url.searchParams.has('sort')
 }
 
 function canonicalTrailingSlashRedirect(url: URL): Response | null {
-  const shouldRedirect = url.pathname === '/plugin/' ||
+  const shouldRedirect = url.pathname === '/plugins/' ||
     url.pathname === '/rankings/' ||
-    /^\/plugin\/[^/]+\/[^/]+\/$/.test(url.pathname)
+    /^\/plugins\/[^/]+\/[^/]+\/$/.test(url.pathname)
   if (!shouldRedirect) return null
   const canonical = new URL(url)
   canonical.pathname = canonical.pathname.slice(0, -1)

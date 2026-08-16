@@ -3,6 +3,7 @@ const SEARCH_RESULT_LIMIT = 1000
 const FIRST_GITHUB_INSTANT = '2008-01-01T00:00:00Z'
 const MAX_PACKAGE_MANIFESTS = 25
 const DEFAULT_EXCLUSIONS = new Set(['deepseek-ai/deepseek-harness'])
+export const DISCOVERY_STRATEGY_VERSION = 'created-pushed-v1'
 
 type JsonObject = Record<string, unknown>
 
@@ -159,21 +160,25 @@ function midpoint(start: string, end: string): string {
   return isoSecond(new Date(left + Math.floor((right - left) / 2_000) * 1_000))
 }
 
-function searchQuery(topic: string, qualifier: 'created' | 'updated', start: string, end: string): string {
+type SearchDateQualifier = 'created' | 'pushed'
+
+function searchQuery(topic: string, qualifier: SearchDateQualifier, start: string, end: string): string {
   return [`topic:${topic}`, 'fork:false', 'archived:false', `${qualifier}:${start}..${end}`].join(' ')
 }
 
 async function searchPage(
   client: GitHubClient,
   topic: string,
-  qualifier: 'created' | 'updated',
+  qualifier: SearchDateQualifier,
   start: string,
   end: string,
   page: number,
 ): Promise<SearchResponse> {
   const parameters = new URLSearchParams({
     q: searchQuery(topic, qualifier, start, end),
-    sort: qualifier,
+    // Repository Search only documents `updated` (plus stars/forks/help-wanted)
+    // as a sort key. The date qualifier still controls the created/pushed range.
+    sort: 'updated',
     order: 'desc',
     per_page: '100',
     page: String(page),
@@ -191,7 +196,7 @@ async function searchPage(
 async function collectRange(
   client: GitHubClient,
   topic: string,
-  qualifier: 'created' | 'updated',
+  qualifier: SearchDateQualifier,
   start: string,
   end: string,
 ): Promise<GitHubRepository[]> {
@@ -231,10 +236,30 @@ export async function discoverRepositories(
   start: string | null,
   end: string,
 ): Promise<GitHubRepository[]> {
-  const qualifier = mode === 'full' ? 'created' : 'updated'
   const rangeStart = mode === 'full' ? FIRST_GITHUB_INSTANT : start
   if (rangeStart === null) throw new Error('Incremental discovery requires a watermark')
-  return uniqueRepositories(await collectRange(client, topic, qualifier, rangeStart, end))
+  if (mode === 'full') {
+    return uniqueRepositories(await collectRange(client, topic, 'created', rangeStart, end))
+  }
+
+  // GitHub repository search does not support an `updated:` qualifier. Query
+  // both supported signals so newly-created repositories and existing plugins
+  // with fresh pushes are discovered, then deduplicate repositories present in
+  // both result sets. The weekly full scan remains the safety net for an old
+  // repository that only adds/removes the topic without a push.
+  const created = await collectRange(client, topic, 'created', rangeStart, end)
+  const pushed = await collectRange(client, topic, 'pushed', rangeStart, end)
+  return uniqueRepositories([...created, ...pushed])
+}
+
+export function selectDiscoveryMode(
+  requestedMode: 'incremental' | 'full' | undefined,
+  watermark: string | null,
+  strategyVersion: string | null,
+): 'incremental' | 'full' {
+  if (requestedMode === 'full' || watermark === null) return 'full'
+  if (requestedMode === 'incremental') return 'incremental'
+  return strategyVersion === DISCOVERY_STRATEGY_VERSION ? 'incremental' : 'full'
 }
 
 function decodeBlob(blob: GitBlobResponse, label: string): string {
@@ -394,4 +419,6 @@ export const discoveryInternals = {
   instantBefore,
   midpoint,
   searchQuery,
+  selectMode: selectDiscoveryMode,
+  strategyVersion: DISCOVERY_STRATEGY_VERSION,
 }

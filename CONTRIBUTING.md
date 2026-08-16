@@ -41,7 +41,7 @@ Repository owners must protect `main` in GitHub Rules or branch protection:
 
 1. Require changes to be made through a pull request, without requiring an approving review.
 2. Require only `Plugin submission review / static-review` before merging.
-3. Block force pushes and branch deletion, and leave the ruleset bypass list empty except for two explicit entries: an emergency maintainer account used for trusted maintenance changes, and the GitHub Actions app (an Integration-type bypass actor). The Actions bypass is required because the catalog-sync workflow commits the regenerated `README.md` / `catalog/README.md` directly to `main` as `github-actions[bot]`; without it the automated README refresh is rejected by the pull-request rule.
+3. Block force pushes and branch deletion, and leave the ruleset bypass list empty except for two explicit entries: an emergency maintainer account used for trusted maintenance changes, and deploy keys. The deploy-key bypass is required because the catalog-sync workflow pushes the regenerated `README.md` / `catalog/README.md` directly to `main` over SSH, authenticated by a write deploy key stored as the `CATALOG_DEPLOY_KEY` repository secret (personal-account rulesets cannot list the GitHub Actions app as a bypass actor); without it the automated README refresh is rejected by the pull-request rule.
 
 The workflow runs trusted code from the pull request's base revision and treats the submitted checkout only as data. The review job can read repository contents and update its pull request review comment. Only after that job succeeds, a separate merge job receives write permission and squash-merges the exact reviewed head SHA. A newer push makes the old run stale and prevents it from merging.
 

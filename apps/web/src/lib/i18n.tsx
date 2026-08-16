@@ -47,6 +47,8 @@ const messages = {
     emptyBody: 'Try a shorter search or clear the selected category.',
     retry: 'Try again',
     loadError: 'The package catalog could not be loaded.',
+    loadMore: 'Load more',
+    refreshing: 'Refreshing data…',
     rank: 'Rank',
     installRankings: 'Install activity',
     githubRankings: 'GitHub activity',
@@ -76,7 +78,7 @@ const messages = {
     installPendingBody: 'This ranking will populate as plugins are installed through the DSH 1024Store wrapper CLI.',
     neverInstalled: 'No reported installs yet',
     topStars: 'Top stars',
-    growth24h: '24h growth',
+    growth24h: 'Last 24h growth',
     growth7d: '7d growth',
     growth30d: '30d growth',
     starGrowth: 'Star growth',
@@ -163,6 +165,8 @@ const messages = {
     emptyBody: '可以缩短关键词，或清除当前分类。',
     retry: '重试',
     loadError: '插件目录加载失败。',
+    loadMore: '加载更多',
+    refreshing: '数据刷新中…',
     rank: '排名',
     installRankings: '安装活跃度',
     githubRankings: 'GitHub 活跃度',
@@ -192,7 +196,7 @@ const messages = {
     installPendingBody: '当用户通过 DSH 1024Store 包装 CLI 安装插件后，榜单会自动产生数据。',
     neverInstalled: '暂时没有上报安装',
     topStars: 'Star 榜',
-    growth24h: '24 小时增速',
+    growth24h: '近 24 小时增速',
     growth7d: '7 天增速',
     growth30d: '30 天增速',
     starGrowth: 'Star 增长',
@@ -246,8 +250,26 @@ interface I18nValue {
 
 const I18nContext = createContext<I18nValue | null>(null)
 
+// Storage access can throw outright (e.g. sandboxed iframes with third-party
+// storage blocked), so both accessors must stay non-fatal.
+function readStoredLanguage(): string | null {
+  try {
+    return window.localStorage.getItem('dsh-1024store-language')
+  } catch {
+    return null
+  }
+}
+
+function persistLanguage(language: Language) {
+  try {
+    window.localStorage.setItem('dsh-1024store-language', language)
+  } catch {
+    // The choice still applies for the current session.
+  }
+}
+
 function initialLanguage(): Language {
-  const stored = window.localStorage.getItem('dsh-1024store-language')
+  const stored = readStoredLanguage()
   if (stored === 'en' || stored === 'zh') return stored
   return window.navigator.language.toLocaleLowerCase().startsWith('zh') ? 'zh' : 'en'
 }
@@ -261,7 +283,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     () => ({
       language,
       setLanguage(nextLanguage) {
-        window.localStorage.setItem('dsh-1024store-language', nextLanguage)
+        persistLanguage(nextLanguage)
         updateLanguage(nextLanguage)
       },
       t: (key) => messages[language][key],

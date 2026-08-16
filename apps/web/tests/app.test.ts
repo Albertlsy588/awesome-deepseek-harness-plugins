@@ -117,18 +117,18 @@ function syncRequest(body: unknown, token: string | null = SYNC_TOKEN): RequestI
 }
 
 describe('market API', () => {
-  it('publishes crawl controls and redirects the root to the canonical rankings page', async () => {
+  it('publishes crawl controls without intercepting the asset-served site root', async () => {
     const app = testApp()
     const root = await app.request('https://store.example/')
     const robots = await app.request('https://store.example/robots.txt')
     const sitemap = await app.request('https://store.example/sitemap.xml')
 
-    expect(root.status).toBe(301)
-    expect(root.headers.get('Location')).toBe('https://store.example/rankings')
+    expect(root.status).toBe(404)
+    expect(root.headers.get('Location')).toBeNull()
     expect(await robots.text()).toContain('Sitemap: https://deepseek1024.com/sitemap.xml')
     expect(sitemap.headers.get('Content-Type')).toContain('application/xml')
     const sitemapBody = await sitemap.text()
-    expect(sitemapBody).toContain('<loc>https://deepseek1024.com/plugin</loc>')
+    expect(sitemapBody).toContain('<loc>https://deepseek1024.com/plugins</loc>')
     expect((sitemapBody.match(/<url>/g) ?? []).length).toBe(TEST_PLUGINS.length + 2)
   })
 
@@ -155,21 +155,45 @@ describe('market API', () => {
     }
   })
 
-  it('permanently redirects legacy package pages to canonical plugin paths', async () => {
+  it('permanently redirects singular and legacy package pages to canonical plugins paths', async () => {
     const app = testApp()
+    const singularCatalog = await app.request('https://store.example/plugin?q=terminal')
+    const singularDetail = await app.request(
+      'https://store.example/plugin/openma-ai/deepseek-harness-tui?source=singular',
+    )
+    const trailingSingularDetail = await app.request(
+      'https://store.example/plugin/openma-ai/deepseek-harness-tui/?source=singular-trailing',
+    )
     const catalog = await app.request('https://store.example/packages?q=terminal')
     const trailingCatalog = await app.request('https://store.example/packages/?q=terminal')
     const detail = await app.request(
       'https://store.example/packages/openma-ai/deepseek-harness-tui?source=legacy',
     )
+    const trailingDetail = await app.request(
+      'https://store.example/packages/openma-ai/deepseek-harness-tui/?source=legacy-trailing',
+    )
 
+    expect(singularCatalog.status).toBe(301)
+    expect(singularCatalog.headers.get('Location')).toBe('https://store.example/plugins?q=terminal')
+    expect(singularDetail.status).toBe(301)
+    expect(singularDetail.headers.get('Location')).toBe(
+      'https://store.example/plugins/openma-ai/deepseek-harness-tui?source=singular',
+    )
+    expect(trailingSingularDetail.status).toBe(301)
+    expect(trailingSingularDetail.headers.get('Location')).toBe(
+      'https://store.example/plugins/openma-ai/deepseek-harness-tui?source=singular-trailing',
+    )
     expect(catalog.status).toBe(301)
-    expect(catalog.headers.get('Location')).toBe('https://store.example/plugin?q=terminal')
+    expect(catalog.headers.get('Location')).toBe('https://store.example/plugins?q=terminal')
     expect(trailingCatalog.status).toBe(301)
-    expect(trailingCatalog.headers.get('Location')).toBe('https://store.example/plugin?q=terminal')
+    expect(trailingCatalog.headers.get('Location')).toBe('https://store.example/plugins?q=terminal')
     expect(detail.status).toBe(301)
     expect(detail.headers.get('Location')).toBe(
-      'https://store.example/plugin/openma-ai/deepseek-harness-tui?source=legacy',
+      'https://store.example/plugins/openma-ai/deepseek-harness-tui?source=legacy',
+    )
+    expect(trailingDetail.status).toBe(301)
+    expect(trailingDetail.headers.get('Location')).toBe(
+      'https://store.example/plugins/openma-ai/deepseek-harness-tui?source=legacy-trailing',
     )
   })
 
@@ -302,6 +326,21 @@ describe('market API', () => {
     expect(curatedSyncer).not.toHaveBeenCalled()
   })
 
+  it('fails closed when the configured catalog sync token is too short', async () => {
+    const { app, curatedSyncer } = syncApp()
+    const response = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({ source: 'github_ci', entries: [VALID_SYNC_ENTRY] }, 'short-token'),
+      {
+        CATALOG_DB: {},
+        CATALOG_SYNC_TOKEN: 'short-token',
+      } as unknown as Env,
+    )
+
+    expect(response.status).toBe(503)
+    expect(curatedSyncer).not.toHaveBeenCalled()
+  })
+
   it('validates the catalog sync payload', async () => {
     const { app, curatedSyncer } = syncApp()
 
@@ -338,6 +377,26 @@ describe('market API', () => {
       SYNC_ENV,
     )
     expect(extraField.status).toBe(400)
+
+    const nonGitHubRepository = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({
+        source: 'github_ci',
+        entries: [{ ...VALID_SYNC_ENTRY, repository: 'https://example.com/openma-ai/deepseek-harness-tui' }],
+      }),
+      SYNC_ENV,
+    )
+    expect(nonGitHubRepository.status).toBe(400)
+
+    const mismatchedRepository = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({
+        source: 'github_ci',
+        entries: [{ ...VALID_SYNC_ENTRY, repository: 'https://github.com/attacker/other-repository' }],
+      }),
+      SYNC_ENV,
+    )
+    expect(mismatchedRepository.status).toBe(400)
     expect(curatedSyncer).not.toHaveBeenCalled()
   })
 

@@ -27,6 +27,7 @@ import { InstallOptions } from '../components/InstallOptions'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
 import { getPackage, repositoryName, type PackageDetail } from '../lib/api'
+import { publicAsset } from '../lib/assets'
 import { formatDate, formatDateTime, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { fitSeoText, SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
@@ -53,7 +54,7 @@ export function PackagePage() {
 
   const canonicalOwner = detail?.owner ?? owner
   const canonicalRepository = detail ? repositoryName(detail) : name
-  const canonicalPath = `/plugin/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`
+  const canonicalPath = `/plugins/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`
   const canonicalUrl = `${SITE_ORIGIN}${canonicalPath}`
   const seoTitle = detail
     ? fitSeoText(
@@ -105,7 +106,7 @@ export function PackagePage() {
                 '@type': 'ListItem',
                 position: 1,
                 name: t('catalog'),
-                item: `${SITE_ORIGIN}/plugin`,
+                item: `${SITE_ORIGIN}/plugins`,
               },
               {
                 '@type': 'ListItem',
@@ -135,7 +136,7 @@ export function PackagePage() {
         <h1>{t('notFound')}</h1>
         <p>{error}</p>
         <div className="state-actions">
-          <Link className="button button-primary" to="/plugin">
+          <Link className="button button-primary" to="/plugins">
             <ArrowLeft size={16} aria-hidden="true" />
             {t('back')}
           </Link>
@@ -187,13 +188,13 @@ export function PackagePage() {
     <div className="page-container package-detail-page">
       <div className="detail-utility">
         <Link className="detail-brand" to="/" aria-label="DeepSeek Harness Store homepage">
-          <img className="brand-mark" src="/deepseek1024-icon.png" alt="" aria-hidden="true" />
+          <img className="brand-mark" src={publicAsset('deepseek1024-icon.png')} alt="" aria-hidden="true" />
           <span>DeepSeek Harness <strong>{t('market')}</strong></span>
         </Link>
         <LanguageSwitch />
       </div>
 
-      <Link className="back-link" to="/plugin">
+      <Link className="back-link" to="/plugins">
         <ArrowLeft size={16} aria-hidden="true" />
         {t('back')}
       </Link>
@@ -372,11 +373,29 @@ export function PackagePage() {
                   h1: ({ children }) => <h3>{children}</h3>,
                   h2: ({ children }) => <h3>{children}</h3>,
                   h3: ({ children }) => <h4>{children}</h4>,
-                  a: ({ href, children }) => (
-                    <a href={readmeLink(href)} target={href?.startsWith('#') ? undefined : '_blank'} rel="noreferrer">
-                      {children}
-                    </a>
-                  ),
+                  a: ({ href, children }) => {
+                    if (href?.startsWith('#')) {
+                      // Fragment links must never reach the router: under hash-based
+                      // routing the fragment is the route and would 404.
+                      return (
+                        <a
+                          href={href}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            const target = document.getElementById(decodeURIComponent(href.slice(1)))
+                            target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          }}
+                        >
+                          {children}
+                        </a>
+                      )
+                    }
+                    return (
+                      <a href={readmeLink(href)} target="_blank" rel="noreferrer">
+                        {children}
+                      </a>
+                    )
+                  },
                   img: ({ src, alt }) => <img src={readmeImage(src)} alt={alt ?? ''} loading="lazy" />,
                 }}
               >

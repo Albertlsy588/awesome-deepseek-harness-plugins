@@ -121,7 +121,10 @@ interface ErrorResponse {
   error?: string
 }
 
-async function requestJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+// Absolute origin for the plugin API; empty keeps same-origin requests for the default deployment.
+export const API_ORIGIN: string = (import.meta.env.VITE_API_ORIGIN ?? '').trim().replace(/\/+$/, '')
+
+export async function requestJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, {
     signal,
     headers: { Accept: 'application/json' },
@@ -133,29 +136,15 @@ async function requestJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T
 }
 
-export interface CatalogParams {
-  q?: string
-  category?: string
-  sort?: CatalogSort
-}
-
-export function getCatalog(params: CatalogParams, signal?: AbortSignal): Promise<CatalogResponse> {
-  const search = new URLSearchParams()
-  if (params.q) search.set('q', params.q)
-  if (params.category) search.set('category', params.category)
-  if (params.sort) search.set('sort', params.sort)
-  return requestJson<CatalogResponse>(`/api/v1/plugins?${search.toString()}`, signal)
-}
-
 export function getPackage(owner: string, name: string, signal?: AbortSignal): Promise<PackageDetail> {
   return requestJson<PackageDetail>(
-    `/api/v1/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+    `${API_ORIGIN}/api/v1/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
     signal,
   )
 }
 
 export function packagePath(plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>): string {
-  return `/plugin/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
+  return `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
 }
 
 export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): string {
@@ -183,7 +172,7 @@ export const SELF_TRACKED_COMMAND = 'npx dsh1024 store'
 export const SELF_OFFICIAL_COMMAND = 'dsh plugin --profile web add dsh1024'
 
 export async function getSelfInstallStats(signal?: AbortSignal): Promise<InstallMetrics | null> {
-  const response = await fetch('/api/v1/self/install-stats', {
+  const response = await fetch(`${API_ORIGIN}/api/v1/self/install-stats`, {
     signal,
     headers: { Accept: 'application/json' },
   })

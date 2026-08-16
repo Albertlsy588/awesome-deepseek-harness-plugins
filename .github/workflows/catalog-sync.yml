@@ -9,10 +9,11 @@
 #   The sync step retries for up to ~10 minutes, so a run racing a Worker deploy
 #   normally self-heals; a run started before the secrets exist must be re-run.
 #
-# Branch protection: the final step pushes README commits to main as
-# github-actions[bot]. The main ruleset's bypass list must therefore include the
-# GitHub Actions app (Integration bypass) in addition to the emergency
-# maintainer account — see CONTRIBUTING.md "Repository owners must protect main".
+# Branch protection: the final step pushes README commits to main over SSH,
+# authenticated by a write deploy key (repository secret CATALOG_DEPLOY_KEY).
+# Personal-account rulesets cannot list the GitHub Actions app as a bypass
+# actor, so the ruleset's bypass list must include "Deploy keys" instead —
+# see CONTRIBUTING.md "Repository owners must protect main".
 name: Catalog sync
 
 on:
@@ -47,7 +48,13 @@ jobs:
       github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     steps:
+      # With ssh-key set, checkout rewrites origin to the SSH URL, so the final
+      # git push authenticates as the write deploy key ("Deploy keys" is on the
+      # main ruleset's bypass list). When the secret is absent, checkout falls
+      # back to the default token and the README push step fails fast below.
       - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.CATALOG_DEPLOY_KEY }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -77,10 +84,16 @@ jobs:
       - name: Rebuild the README projections from the catalog API
         run: npm run readme:build
       - name: Commit refreshed README projections
+        env:
+          HAS_DEPLOY_KEY: ${{ secrets.CATALOG_DEPLOY_KEY != '' }}
         run: |
           if git diff --quiet -- README.md catalog/README.md; then
             echo "README projections are already current; nothing to commit."
             exit 0
+          fi
+          if [ "$HAS_DEPLOY_KEY" != "true" ]; then
+            echo "::error::README projections changed but the CATALOG_DEPLOY_KEY repository secret is not configured, so the push to main would be rejected by branch protection. Add a write deploy key and store its private key as CATALOG_DEPLOY_KEY."
+            exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

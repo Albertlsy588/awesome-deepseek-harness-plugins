@@ -54,6 +54,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     steps:
       - name: Check out trusted merger
         uses: actions/checkout@v4
@@ -72,3 +73,13 @@ jobs:
           PLUGIN_REVIEW_PULL_NUMBER: ${{ github.event.pull_request.number }}
           PLUGIN_REVIEW_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PLUGIN_REVIEW_EXPECTED_BASE_REF: main
+      # Pushes made with the default GITHUB_TOKEN never fire other workflows'
+      # push triggers (GitHub's recursion guard), so the squash merge above
+      # does NOT start catalog-sync by itself. workflow_dispatch is exempt from
+      # that guard — chain the sync explicitly so every auto-merged submission
+      # reaches D1 and the README without waiting for the daily cron.
+      - name: Chain catalog sync after the merge
+        run: gh workflow run catalog-sync.yml --repo "$GH_REPO"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

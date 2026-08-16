@@ -71,14 +71,18 @@ async function assertMinFontSize(page, label, selector, minimum) {
   if (size < minimum) throw new Error(`${label} uses ${size}px text; expected at least ${minimum}px`)
 }
 
-async function assertHorizontalTouchScroller(page, label, selector) {
+async function assertHorizontalTouchScroller(page, label, selector, { requireOverflow = true } = {}) {
   const result = await page.locator(selector).evaluate((node) => ({
     clientWidth: node.clientWidth,
     scrollWidth: node.scrollWidth,
     touchAction: getComputedStyle(node).touchAction,
   }))
   if (result.scrollWidth <= result.clientWidth) {
-    throw new Error(`${label} does not expose its overflowing controls through a local scroller`)
+    if (requireOverflow) {
+      throw new Error(`${label} does not expose its overflowing controls through a local scroller`)
+    }
+    // Content fits without scrolling; nothing to pan.
+    return
   }
   if (!result.touchAction.includes('pan-x')) {
     throw new Error(`${label} is missing horizontal touch panning`)
@@ -106,6 +110,21 @@ async function assertSeo(page, label, canonicalPath, robots = 'index,follow') {
   }
 }
 
+// The rankings view defaults to the 24h growth mode, which is legitimately
+// empty until enough star-history snapshots exist (e.g. a freshly seeded local
+// environment). Fall back to the stars mode so layout assertions can proceed.
+async function waitForRankingList(page) {
+  await page.locator('.ranking-section').waitFor()
+  await page
+    .locator('.ranking-section .package-list, .ranking-section .state-panel')
+    .first()
+    .waitFor()
+  if ((await page.locator('.ranking-section .package-list').count()) === 0) {
+    await page.locator('.ranking-section .segmented-control button').nth(1).click()
+    await page.locator('.ranking-section .package-list').waitFor()
+  }
+}
+
 async function assertLiveStats(page) {
   await page.waitForFunction(
     () => [...document.querySelectorAll('.hero-live-count')].every((node) => node.textContent !== '--'),
@@ -117,12 +136,19 @@ async function assertLiveStats(page) {
 try {
   const defaultView = await openPage({ width: 1440, height: 1000 }, '/')
   await defaultView.locator('.ranking-section').waitFor()
-  if (!defaultView.url().endsWith('/rankings')) {
-    throw new Error('root route did not default to rankings')
+  if (new URL(defaultView.url()).pathname !== '/') {
+    throw new Error('root route changed the visible URL while rendering rankings')
   }
+  await assertSeo(defaultView, 'default rankings', '/')
   await defaultView.close()
 
-  const desktop = await openPage({ width: 1440, height: 1000 }, '/plugin')
+  const legacyCatalog = await openPage({ width: 1440, height: 1000 }, '/plugin?q=crosstalk')
+  if (new URL(legacyCatalog.url()).pathname !== '/plugins' || new URL(legacyCatalog.url()).searchParams.get('q') !== 'crosstalk') {
+    throw new Error('singular plugin route did not preserve its query while redirecting to /plugins')
+  }
+  await legacyCatalog.close()
+
+  const desktop = await openPage({ width: 1440, height: 1000 }, '/plugins')
   await desktop.locator('.directory-section .package-list').waitFor()
   if ((await desktop.locator('.ranking-section').count()) !== 0) {
     throw new Error('desktop catalog unexpectedly renders rankings')
@@ -140,7 +166,7 @@ try {
     throw new Error('directory rows are missing the split install button')
   }
   await assertLiveStats(desktop)
-  await assertSeo(desktop, 'desktop catalog', '/plugin')
+  await assertSeo(desktop, 'desktop catalog', '/plugins')
   await assertNoHorizontalOverflow(desktop, 'desktop catalog')
   await desktop.close()
 
@@ -149,11 +175,11 @@ try {
   if ((await rankings.locator('.directory-section').count()) !== 0) {
     throw new Error('desktop rankings unexpectedly renders the directory')
   }
-  if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 6) {
-    throw new Error('rankings should only expose the six GitHub activity modes')
+  if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 4) {
+    throw new Error('rankings should only expose the four GitHub activity modes')
   }
-  if (await rankings.locator('.ranking-section .segmented-control button').nth(3).getAttribute('aria-pressed') !== 'true') {
-    throw new Error('rankings should default to stars')
+  if (await rankings.locator('.ranking-section .segmented-control button').first().getAttribute('aria-pressed') !== 'true') {
+    throw new Error('rankings should default to the 24h growth mode')
   }
   if ((await rankings.locator('header a[href="https://www.deepseek.com/harness/"]').count()) !== 0) {
     throw new Error('official Harness link should not be rendered in the header')
@@ -191,7 +217,7 @@ try {
   if (!(await rankings.locator('.self-install-banner').textContent())?.includes('npx dsh1024 store')) {
     throw new Error('rankings self install banner is missing the npx dsh1024 store command')
   }
-  await assertSeo(rankings, 'desktop rankings', '/rankings')
+  await assertSeo(rankings, 'desktop rankings', '/')
   await rankings.locator('.ranking-section .segmented-control button').last().click()
   await rankings.locator('.ranking-section .package-row').first().waitFor()
   if ((await rankings.locator('.ranking-section .package-row').count()) !== 100) {
@@ -213,14 +239,11 @@ try {
   if ((await rankings.locator('.split-install-menu').count()) !== 0) {
     throw new Error('split install menu did not close on Escape')
   }
-  if ((await rankings.locator('a[href^="/plugin/"]').count()) === 0) {
-    throw new Error('catalog cards do not use the canonical singular plugin path')
+  if ((await rankings.locator('a[href^="/plugins/"]').count()) === 0) {
+    throw new Error('catalog cards do not use the canonical plural plugins path')
   }
-  const rankingSearchResponse = rankings.waitForResponse(
-    (response) => response.url().includes('/api/v1/plugins?') && response.url().includes('q=crosstalk'),
-  )
+  // Search filters client-side from the cached catalog; no network round trip.
   await rankings.locator('input[type="search"]').fill('crosstalk')
-  await rankingSearchResponse
   await rankings.waitForFunction(
     () => document.querySelectorAll('.ranking-section .package-row').length === 1,
     undefined,
@@ -232,9 +255,39 @@ try {
   await assertNoHorizontalOverflow(rankings, 'desktop rankings')
   await rankings.close()
 
-  const mobile = await openPage({ width: 390, height: 844 }, '/plugin', { touch: true })
+  const mobile = await openPage({ width: 390, height: 844 }, '/plugins', { touch: true })
   await mobile.locator('.directory-section .package-list').waitFor()
   await assertLiveStats(mobile)
+
+  // Regression guards for instant filtering: the directory renders
+  // incrementally instead of mounting every plugin at once, and switching
+  // filters derives from the cached catalog without another network request.
+  let catalogRequests = 0
+  mobile.on('request', (request) => {
+    if (request.url().includes('/api/v1/plugins')) catalogRequests += 1
+  })
+  const initialRows = await mobile.locator('.directory-section .package-row').count()
+  if (initialRows > 60) {
+    throw new Error(`directory mounted ${initialRows} rows at once; expected incremental rendering`)
+  }
+  await mobile.locator('.load-more-row button').waitFor()
+  await mobile.locator('.load-more-row button').click()
+  await mobile.waitForFunction(
+    (before) => document.querySelectorAll('.directory-section .package-row').length > before,
+    initialRows,
+    { timeout: 5_000 },
+  )
+  await mobile.locator('.category-filter button').nth(2).click()
+  await mobile.waitForFunction(
+    () => document.querySelectorAll('.category-filter button')[2]?.classList.contains('selected'),
+    undefined,
+    { timeout: 5_000 },
+  )
+  if (catalogRequests > 0) {
+    throw new Error('filter interactions refetched the catalog; expected client-side derivation')
+  }
+  await mobile.locator('.category-filter button').first().click()
+  await mobile.waitForURL((url) => !url.searchParams.has('category'))
   await assertMobileEnvironment(mobile, 'mobile catalog')
   await assertNoHorizontalOverflow(mobile, 'mobile catalog')
   await assertMinTouchTargets(mobile, 'mobile catalog', [
@@ -248,6 +301,7 @@ try {
     '.package-row .split-install-main',
     '.package-row .split-install-toggle',
     '.package-row .row-open',
+    '.load-more-row .button',
   ])
   await assertMinFontSize(mobile, 'mobile search input', 'input[type="search"]', 16)
   await assertMinFontSize(mobile, 'mobile package title', '.row-title-line a', 14)
@@ -262,12 +316,14 @@ try {
   await mobile.locator('.category-filter button').first().click()
   await mobile.waitForURL((url) => !url.searchParams.has('category'))
 
-  const searchResponse = mobile.waitForResponse(
-    (response) => response.url().includes('/api/v1/plugins?') && response.url().includes('q=crosstalk'),
-  )
   await mobile.locator('input[type="search"]').fill('crosstalk')
-  await searchResponse
-  await assertSeo(mobile, 'filtered mobile catalog', '/plugin', 'noindex,follow')
+  await mobile.waitForURL((url) => url.searchParams.get('q') === 'crosstalk')
+  await mobile.waitForFunction(
+    () => document.querySelector('meta[name="robots"]')?.getAttribute('content') === 'noindex,follow',
+    undefined,
+    { timeout: 5_000 },
+  )
+  await assertSeo(mobile, 'filtered mobile catalog', '/plugins', 'noindex,follow')
   if ((await mobile.locator('.directory-section .package-row').count()) === 0) {
     throw new Error('search returned no package rows')
   }
@@ -292,7 +348,7 @@ try {
   await mobile.close()
 
   const mobileRankings = await openPage({ width: 390, height: 844 }, '/rankings', { touch: true })
-  await mobileRankings.locator('.ranking-section .package-list').waitFor()
+  await waitForRankingList(mobileRankings)
   await assertMobileEnvironment(mobileRankings, 'mobile rankings')
   await assertNoHorizontalOverflow(mobileRankings, 'mobile rankings')
   await assertMinTouchTargets(mobileRankings, 'mobile rankings', [
@@ -304,6 +360,8 @@ try {
     mobileRankings,
     'mobile GitHub ranking modes',
     '.ranking-mode-group:last-child .segmented-control',
+    // Four modes fit within 390px; the scroller only engages when they overflow.
+    { requireOverflow: false },
   )
   await mobileRankings.locator('.ranking-section .segmented-control button').last().click()
   if (await mobileRankings.locator('.ranking-section .segmented-control button').last().getAttribute('aria-pressed') !== 'true') {
@@ -311,7 +369,7 @@ try {
   }
   await mobileRankings.close()
 
-  const detail = await openPage({ width: 1440, height: 1000 }, '/plugin/openma-ai/deepseek-harness-tui')
+  const detail = await openPage({ width: 1440, height: 1000 }, '/plugins/openma-ai/deepseek-harness-tui')
   await detail.locator('.detail-header').waitFor()
   await detail.locator('.install-activity-section').waitFor()
   const detailInstallCommands = await detail.locator('.install-section .install-command code:visible').allTextContents()
@@ -324,14 +382,14 @@ try {
   if (detailInstallCommands.some((text) => text.includes('@dsh-1024store/cli'))) {
     throw new Error('detail page still renders the legacy @dsh-1024store/cli command')
   }
-  await assertSeo(detail, 'desktop detail', '/plugin/openma-ai/deepseek-harness-tui')
+  await assertSeo(detail, 'desktop detail', '/plugins/openma-ai/deepseek-harness-tui')
   await assertNoHorizontalOverflow(detail, 'desktop detail')
   await detail.locator('.detail-brand').click()
-  await detail.waitForURL('**/rankings')
+  await detail.waitForURL((url) => url.pathname === '/')
   await detail.locator('.ranking-section').waitFor()
   await detail.close()
 
-  const scoped = await openPage({ width: 390, height: 844 }, '/plugin/zhaoolee/notes', { touch: true })
+  const scoped = await openPage({ width: 390, height: 844 }, '/plugins/zhaoolee/notes', { touch: true })
   await scoped.locator('.detail-header').waitFor()
   await assertMobileEnvironment(scoped, 'mobile package detail')
   await assertNoHorizontalOverflow(scoped, 'scoped package detail')
@@ -371,12 +429,12 @@ try {
   await scoped.locator('.install-command-prominent .icon-button').click()
   await scoped.locator('.install-command-prominent .icon-button[aria-label="已复制"]').waitFor()
   await scoped.locator('.detail-brand').click()
-  await scoped.waitForURL('**/rankings')
+  await scoped.waitForURL((url) => url.pathname === '/')
   await scoped.locator('.ranking-section').waitFor()
   await scoped.close()
 
   const compactMobile = await openPage({ width: 320, height: 568 }, '/rankings', { touch: true })
-  await compactMobile.locator('.ranking-section .package-list').waitFor()
+  await waitForRankingList(compactMobile)
   await assertNoHorizontalOverflow(compactMobile, 'compact mobile rankings')
   if (await compactMobile.locator('.catalog-hero .hero-language').isVisible()) {
     throw new Error('compact mobile header did not hide the secondary language control')
