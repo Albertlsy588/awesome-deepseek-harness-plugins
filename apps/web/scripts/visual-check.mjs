@@ -593,6 +593,25 @@ try {
   if (detailInstallCommands.some((text) => text.includes('@dsh-1024store/cli'))) {
     throw new Error('detail page still renders the legacy @dsh-1024store/cli command')
   }
+  // main ships the verification badges without any assertion; pin their shape
+  // and the three states' copy so a wording change cannot silently drop them.
+  const methodCount = await detail.locator('.install-section .install-method').count()
+  if (methodCount > 0) {
+    const badges = await detail.locator('.install-section .install-method .install-badge').allTextContents()
+    if (badges.length === 0) throw new Error('install methods render without a verification badge')
+    const known = ['已验证', '未验证', '检查中', '需授权构建']
+    const unknownBadge = badges.find((text) => !known.includes(text.trim()))
+    if (unknownBadge !== undefined) {
+      throw new Error(`unexpected install verification badge: ${JSON.stringify(unknownBadge)}`)
+    }
+    // Every method carries both ways to run it, not just the official one.
+    for (const selector of ['.install-option-recommended', '.install-option-official']) {
+      const rows = await detail.locator(`.install-section .install-method ${selector}`).count()
+      if (rows !== methodCount) {
+        throw new Error(`each install method needs one ${selector}; saw ${rows} for ${methodCount} methods`)
+      }
+    }
+  }
   await assertInstallCommandsReadable(detail, 'desktop detail', '.install-options')
   await assertSeo(detail, 'desktop detail', '/plugins/openma-ai/deepseek-harness-tui')
   await assertNoHorizontalOverflow(detail, 'desktop detail')

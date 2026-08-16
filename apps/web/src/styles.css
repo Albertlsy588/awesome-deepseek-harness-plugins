@@ -4240,7 +4240,7 @@ main {
   .kanban-girl-bubble-dot {
     display: none;
   }
-
+}
 
 /* Install methods: one block per way to install, each stating what the catalog
    verified. Stacks on narrow screens; the badges stay on one line with the
@@ -4248,7 +4248,19 @@ main {
 .install-methods {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
+}
+
+/* Each method is a group: what gets installed on the head row, the two ways to
+   run it indented underneath. */
+.install-method {
+  min-width: 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+}
+
+.install-method .install-options {
+  gap: 10px;
 }
 
 .install-method-head {

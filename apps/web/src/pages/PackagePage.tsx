@@ -23,6 +23,7 @@ import ReactMarkdown from 'react-markdown'
 import { Link, useParams } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
 import { CategoryTag } from '../components/CategoryTag'
+import { InstallMethods } from '../components/InstallMethods'
 import { InstallOptions } from '../components/InstallOptions'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
@@ -262,7 +263,11 @@ export function PackagePage() {
         <div className="detail-primary">
           <section className="detail-section install-section" aria-labelledby="install-heading">
             <h2 id="install-heading">{t('install')}</h2>
-            <InstallOptions plugin={detail} />
+            {/* Verified methods when the crawler has reached this plugin; the
+                plain two-option form until then. */}
+            {detail.installMethods && detail.installMethods.length > 0
+              ? <InstallMethods methods={detail.installMethods} pluginId={detail.id} />
+              : <InstallOptions plugin={detail} />}
           </section>
 
           <section className="detail-section install-activity-section" aria-labelledby="install-activity-heading">
