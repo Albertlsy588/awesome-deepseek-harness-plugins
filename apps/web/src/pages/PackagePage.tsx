@@ -26,7 +26,7 @@ import { CategoryTag } from '../components/CategoryTag'
 import { InstallCommand } from '../components/InstallCommand'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
-import { pluginDetailPath } from '../../worker/lib/plugin-id'
+import { pluginDetailPath, pluginSourceUrl } from '../../worker/lib/plugin-id'
 import { getPackage, repositoryName, type PackageDetail } from '../lib/api'
 import { publicAsset } from '../lib/assets'
 import { formatDate, formatDateTime, formatNumber } from '../lib/format'
@@ -96,7 +96,7 @@ export function PackagePage() {
             '@id': `${canonicalUrl}#software`,
             name: detail.name,
             description: detail.description[language],
-            codeRepository: detail.url,
+            codeRepository: pluginSourceUrl(detail.id, detail.url, detail.github?.defaultBranch ?? 'HEAD'),
             runtimePlatform: 'DeepSeek Harness',
             dateCreated: detail.added,
             license: detail.manifest?.license ?? detail.github?.license ?? undefined,
@@ -171,8 +171,11 @@ export function PackagePage() {
         .map(([engine, version]) => `${engine} ${version}`)
         .join(', ')
     : null
+  // Issues are tracked per repository, so the report link stays at the root
+  // even for a subpackage; only the source link points into the subdirectory.
   const reportUrl = `${detail.url}/issues/new?title=${encodeURIComponent(`[DSH 1024Store] ${detail.name}`)}`
   const branch = github?.defaultBranch ?? 'main'
+  const sourceUrl = pluginSourceUrl(detail.id, detail.url, branch)
   const detailOwner = detail.owner
   const detailRepository = repositoryName(detail)
   // Relative links resolve against the directory the README actually came
@@ -223,7 +226,7 @@ export function PackagePage() {
           <p className="detail-description">{detail.description[language]}</p>
         </div>
         <div className="detail-actions">
-          <a className="button button-primary" href={detail.url} target="_blank" rel="noreferrer">
+          <a className="button button-primary" href={sourceUrl} target="_blank" rel="noreferrer">
             <Code2 size={16} aria-hidden="true" />
             {t('source')}
           </a>

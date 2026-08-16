@@ -83,3 +83,19 @@ export function pluginInstallCommand(id: string): string {
 export function pluginDetailPath(id: string): string {
   return `/plugins/${id.split('/').map(encodeURIComponent).join('/')}`
 }
+
+/**
+ * Where a plugin's source actually lives: the repository for a
+ * repository-level plugin, the subdirectory tree for a monorepo subpackage.
+ *
+ * Issue trackers and releases stay repository-level, so only source links use
+ * this. `HEAD` resolves to the default branch when the caller has not fetched
+ * the repository's branch name.
+ */
+export function pluginSourceUrl(id: string, repositoryUrl: string, branch = 'HEAD'): string {
+  const path = parsePluginId(id)?.path ?? ''
+  if (path.length === 0) return repositoryUrl
+  const base = repositoryUrl.replace(/\/+$/, '')
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/')
+  return `${base}/tree/${encodeURIComponent(branch)}/${encodedPath}`
+}
