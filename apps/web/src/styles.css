@@ -1801,7 +1801,10 @@ main {
   top: calc(100% - 6px);
   right: 12px;
   display: flex;
-  width: min(340px, calc(100vw - 24px));
+  /* Wide enough that install commands stay fully readable; long commands wrap
+     instead of truncating, and the viewport clamp keeps 320px screens clean. */
+  width: max-content;
+  max-width: min(92vw, 480px);
   flex-direction: column;
   padding: 5px;
   border: 1px solid var(--line-strong);
@@ -1832,12 +1835,12 @@ main {
 .split-install-menu code {
   min-width: 0;
   flex: 1;
-  overflow: hidden;
   color: #263245;
   font-family: var(--font-mono);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .split-install-menu [role='menuitem'] svg {

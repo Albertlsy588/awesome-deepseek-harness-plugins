@@ -281,6 +281,15 @@ try {
   if (!splitMenuText?.includes('npx dsh1024 ') || !splitMenuText.includes('npx @deepseek-ai/dsh plugin --profile web add')) {
     throw new Error('split install menu is missing the tracked or official install command')
   }
+  // Commands must be fully readable: wide menu, wrapping instead of clipping.
+  const clippedMenuCommands = await rankings
+    .locator('.split-install-menu code')
+    .evaluateAll((nodes) => nodes
+      .filter((node) => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1)
+      .map((node) => node.textContent ?? ''))
+  if (clippedMenuCommands.length > 0) {
+    throw new Error(`split install menu clips its commands: ${JSON.stringify(clippedMenuCommands)}`)
+  }
   await rankings.keyboard.press('Escape')
   if ((await rankings.locator('.split-install-menu').count()) !== 0) {
     throw new Error('split install menu did not close on Escape')
