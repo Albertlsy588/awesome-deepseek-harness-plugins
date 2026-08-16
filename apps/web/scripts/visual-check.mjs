@@ -372,9 +372,10 @@ try {
     { timeout: 5_000 },
   )
   await assertSeo(mobile, 'filtered mobile catalog', null, 'noindex,follow')
-  if ((await mobile.locator('.directory-section .package-row').count()) === 0) {
-    throw new Error('search returned no package rows')
-  }
+  // The URL and the robots meta flip a render before the filtered list does, so
+  // counting rows immediately races the re-render rather than testing the search.
+  await mobile.locator('.directory-section .package-row').first().waitFor({ timeout: 10_000 })
+    .catch(() => { throw new Error('search returned no package rows') })
   await mobile.locator('.directory-section .package-row .icon-button').first().click()
   await mobile.locator('.directory-section .package-row .icon-button[aria-label="已复制"]').waitFor()
   await mobile.locator('.catalog-hero .language-switch button').last().click()
