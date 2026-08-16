@@ -389,6 +389,19 @@ try {
   await detail.locator('.ranking-section').waitFor()
   await detail.close()
 
+  // The store's own catalog entry must show the dedicated dsh1024 commands,
+  // never a generic "install the whole monorepo" command.
+  const selfDetail = await openPage({ width: 1440, height: 1000 }, '/plugins/imsai-sh/awesome-deepseek-harness-plugins')
+  await selfDetail.locator('.detail-header').waitFor()
+  const selfInstallCommands = await selfDetail.locator('.install-section .install-command code:visible').allTextContents()
+  if (!selfInstallCommands.some((text) => text.includes('npx dsh1024 store'))) {
+    throw new Error('self entry detail page is missing the npx dsh1024 store command')
+  }
+  if (selfInstallCommands.some((text) => text.includes('add imsai-sh/awesome-deepseek-harness-plugins') || text.includes('add github:imsai-sh/awesome-deepseek-harness-plugins'))) {
+    throw new Error('self entry detail page renders a generic monorepo install command')
+  }
+  await selfDetail.close()
+
   const scoped = await openPage({ width: 390, height: 844 }, '/plugins/zhaoolee/notes', { touch: true })
   await scoped.locator('.detail-header').waitFor()
   await assertMobileEnvironment(scoped, 'mobile package detail')

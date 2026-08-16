@@ -1,7 +1,7 @@
 {
   "$schema": "../schema/plugin.schema.json",
   "id": "imsai-sh/awesome-deepseek-harness-plugins",
-  "name": "dsh-1024store",
+  "name": "dsh1024",
   "repository": "https://github.com/imsai-sh/awesome-deepseek-harness-plugins",
   "category": "tools",
   "description": {

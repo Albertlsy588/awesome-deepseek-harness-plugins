@@ -156,20 +156,29 @@ export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): st
   }
 }
 
+export const SELF_TRACKED_COMMAND = 'npx dsh1024 store'
+export const SELF_OFFICIAL_COMMAND = 'dsh plugin --profile web add dsh1024'
+
+// The catalog lists this monorepo itself as the store client plugin; generic
+// `owner/repository` command templates would produce a broken "install the
+// whole monorepo" command for it, so it gets the dedicated dsh1024 commands.
+function isSelfPlugin(plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>): boolean {
+  return plugin.owner === 'imsai-sh' && repositoryName(plugin) === 'awesome-deepseek-harness-plugins'
+}
+
 export function trackedInstallCommand(
   plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
 ): string {
+  if (isSelfPlugin(plugin)) return SELF_TRACKED_COMMAND
   return `npx dsh1024 add ${plugin.owner}/${repositoryName(plugin)}`
 }
 
 export function officialInstallCommand(
   plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
 ): string {
+  if (isSelfPlugin(plugin)) return SELF_OFFICIAL_COMMAND
   return `dsh plugin --profile web add github:${plugin.owner}/${repositoryName(plugin)}`
 }
-
-export const SELF_TRACKED_COMMAND = 'npx dsh1024 store'
-export const SELF_OFFICIAL_COMMAND = 'dsh plugin --profile web add dsh1024'
 
 export async function getSelfInstallStats(signal?: AbortSignal): Promise<InstallMetrics | null> {
   const response = await fetch(`${API_ORIGIN}/api/v1/self/install-stats`, {
