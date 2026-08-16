@@ -130,3 +130,75 @@ test('invalid API data cannot extend the installation allowlist', () => {
   )
   assert.throws(() => validateRegistry({ ...registry, plugins: [] }), /plugins are empty/)
 })
+
+test('revalidation goes to the network even when the cache is still fresh', async () => {
+  clearRegistryCache()
+  const requested = []
+  const fetcher = async (url) => {
+    requested.push(String(url))
+    return new Response(JSON.stringify(registry), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  try {
+    await loadRegistry('https://store.example/api/v1/registry', fetcher)
+    // Cache-first path: no second request.
+    await loadRegistry('https://store.example/api/v1/registry', fetcher)
+    assert.equal(requested.length, 1)
+
+    const revalidated = await loadRegistry('https://store.example/api/v1/registry', fetcher, { revalidate: true })
+    assert.equal(revalidated.source, 'api')
+    assert.equal(requested.length, 2)
+    // The refresh must not be answerable by a stale edge copy.
+    assert.match(requested[1], /[?&]t=\d+/)
+    assert.doesNotMatch(requested[0], /[?&]t=/)
+  } finally {
+    clearRegistryCache()
+  }
+})
+
+test('concurrent revalidations collapse onto one request', async () => {
+  clearRegistryCache()
+  let calls = 0
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const fetcher = async () => {
+    calls += 1
+    await gate
+    return new Response(JSON.stringify(registry), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  try {
+    const all = Promise.all([
+      loadRegistry('https://store.example/api/v1/registry', fetcher, { revalidate: true }),
+      loadRegistry('https://store.example/api/v1/registry', fetcher, { revalidate: true }),
+      loadRegistry('https://store.example/api/v1/registry', fetcher, { revalidate: true }),
+    ])
+    release()
+    const results = await all
+    assert.equal(calls, 1)
+    for (const result of results) assert.equal(result.source, 'api')
+  } finally {
+    clearRegistryCache()
+  }
+})
+
+test('a failed revalidation silently keeps the catalog already on screen', async () => {
+  clearRegistryCache()
+  const successfulFetcher = async () => new Response(JSON.stringify(registry), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })
+  try {
+    const first = await loadRegistry('https://store.example/api/v1/registry', successfulFetcher)
+    const failedFetcher = async () => { throw new Error('offline') }
+    const fallback = await loadRegistry('https://store.example/api/v1/registry', failedFetcher, { revalidate: true })
+    assert.equal(fallback.source, 'cache')
+    assert.deepEqual(fallback.registry, first.registry)
+  } finally {
+    clearRegistryCache()
+  }
+})

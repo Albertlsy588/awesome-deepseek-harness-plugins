@@ -49,6 +49,12 @@ executing the registry's display command. Mutating routes require same-origin
 POST requests and serialize plugin operations. Plugin changes take effect after
 restarting DeepSeek Harness.
 
+The catalog renders from the last response immediately, then silently
+revalidates in the background every time the panel opens or the window becomes
+visible again, so a newly listed plugin appears without any refresh button and
+without a loading state. Concurrent refreshes collapse onto one request, and a
+failed one leaves the visible catalog untouched.
+
 ## CLI usage
 
 Node.js 22 or newer is required.

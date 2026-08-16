@@ -221,7 +221,10 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
       handler: async (request, response) => {
         if (!requireMethod(request, response, 'GET')) return
         try {
-          const result = await loadRegistry(config.registryUrl)
+          // `?revalidate=1` is the panel asking for the current catalog behind
+          // the copy it already rendered; everything else stays cache-first.
+          const revalidate = /[?&]revalidate=1(?:&|$)/.test(request.url ?? '')
+          const result = await loadRegistry(config.registryUrl, fetch, { revalidate })
           sendJson(response, 200, result)
         } catch (error) {
           sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })

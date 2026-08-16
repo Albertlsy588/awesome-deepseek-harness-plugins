@@ -4,7 +4,7 @@ var module = { exports: {} }; var exports = module.exports;
 
 const React = require('react')
 const h = React.createElement
-const { useCallback, useEffect, useMemo, useState } = React
+const { useCallback, useEffect, useMemo, useRef, useState } = React
 const NS = 'dsh1024'
 const SITE_URL = 'https://deepseek1024.com/'
 
@@ -185,7 +185,41 @@ function MarketTab({ locale }) {
     })
   }, [refreshInstalled])
 
-  useEffect(() => { injectStyles(); load() }, [load])
+  // Stale-while-revalidate, silent half: the panel already rendered whatever the
+  // process had cached, so this asks for the current catalog behind it and swaps
+  // the list in only when it actually moved. No spinner, no toast, no error —
+  // a failed refresh just leaves the visible catalog alone.
+  const revalidating = useRef(false)
+  const revalidate = useCallback(() => {
+    if (revalidating.current) return Promise.resolve()
+    revalidating.current = true
+    return fetch('/dsh1024/registry?revalidate=1', { cache: 'no-store' })
+      .then(responseJson)
+      .then(({ status, body }) => {
+        if (status !== 200 || !body.registry) return
+        setRegistry(previous => {
+          if (previous !== null
+            && previous.updated === body.registry.updated
+            && previous.count === body.registry.count) return previous
+          return body.registry
+        })
+        setRegistrySource(body.source || null)
+        publishCatalogCount(body.registry.count)
+      })
+      .catch(() => {})
+      .finally(() => { revalidating.current = false })
+  }, [])
+
+  useEffect(() => { injectStyles(); load().then(revalidate) }, [load, revalidate])
+
+  // Coming back to a panel that has been sitting open for hours should not show
+  // an hours-old catalog either.
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined
+    const onVisible = () => { if (document.visibilityState === 'visible') revalidate() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [revalidate])
 
   useEffect(() => {
     if (busy === null) { setProgress(''); return undefined }

@@ -2,7 +2,13 @@
 export const DEFAULT_REGISTRY_URL = 'https://deepseek1024.com/api/v1/registry';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8_000;
+// Revalidation URLs carry a coarse timestamp so a stale CDN copy cannot answer
+// them, while a whole minute of revalidations still collapses onto one URL.
+const REVALIDATE_WINDOW_MS = 60_000;
 let cache = null;
+// One network refresh at a time: opening the panel twice, or opening it while a
+// visibility-triggered refresh is still running, must not stack up requests.
+let inFlight = null;
 function isStringMap(value) {
     if (value === null || typeof value !== 'object' || Array.isArray(value))
         return false;
@@ -105,35 +111,58 @@ export function installTarget(plugin) {
 /** Clear process-local registry state for deterministic tests. */
 export function clearRegistryCache() {
     cache = null;
+    inFlight = null;
+}
+async function fetchRegistry(registryUrl, fetcher, bustEdgeCache) {
+    const url = new URL(registryUrl);
+    if (url.protocol !== 'https:')
+        throw new Error('registry API URL must use HTTPS');
+    if (bustEdgeCache)
+        url.searchParams.set('t', String(Math.floor(Date.now() / REVALIDATE_WINDOW_MS)));
+    const response = await fetcher(url, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!response.ok)
+        throw new Error(`registry API HTTP ${response.status}`);
+    const registry = validateRegistry(await response.json());
+    cache = { url: registryUrl, at: Date.now(), registry };
+    return registry;
+}
+function refresh(registryUrl, fetcher, bustEdgeCache) {
+    if (inFlight !== null && inFlight.url === registryUrl)
+        return inFlight.promise;
+    const promise = fetchRegistry(registryUrl, fetcher, bustEdgeCache).finally(() => {
+        if (inFlight?.promise === promise)
+            inFlight = null;
+    });
+    inFlight = { url: registryUrl, promise };
+    return promise;
 }
 /**
  * Load the registry from the configured HTTPS API, with a last-good response cache.
+ *
+ * The default path stays cache-first so rendering the panel never waits on the
+ * network. `revalidate` is the stale-while-revalidate half: the caller already
+ * has something on screen and wants the current catalog behind it.
  * @param registryUrl - public 1024 Store registry API endpoint.
  * @param fetcher - injectable fetch implementation for deterministic tests.
+ * @param options - set `revalidate` to force a network read.
  * @returns the registry and whether it is fresh API data or a stale fallback cache.
  */
-export async function loadRegistry(registryUrl = DEFAULT_REGISTRY_URL, fetcher = fetch) {
-    if (cache !== null && cache.url === registryUrl && Date.now() - cache.at < CACHE_TTL_MS) {
-        return { registry: cache.registry, source: 'api' };
+export async function loadRegistry(registryUrl = DEFAULT_REGISTRY_URL, fetcher = fetch, options = {}) {
+    const cached = cache !== null && cache.url === registryUrl ? cache : null;
+    if (options.revalidate !== true && cached !== null && Date.now() - cached.at < CACHE_TTL_MS) {
+        return { registry: cached.registry, source: 'api' };
     }
     try {
-        const url = new URL(registryUrl);
-        if (url.protocol !== 'https:')
-            throw new Error('registry API URL must use HTTPS');
-        const response = await fetcher(url, {
-            headers: { accept: 'application/json' },
-            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        });
-        if (!response.ok)
-            throw new Error(`registry API HTTP ${response.status}`);
-        const registry = validateRegistry(await response.json());
-        cache = { url: registryUrl, at: Date.now(), registry };
+        const registry = await refresh(registryUrl, fetcher, options.revalidate === true);
         return { registry, source: 'api' };
     }
     catch (error) {
-        if (cache !== null && cache.url === registryUrl) {
-            return { registry: cache.registry, source: 'cache' };
-        }
+        // Last-good fallback: an offline machine keeps browsing what it already has.
+        if (cached !== null)
+            return { registry: cached.registry, source: 'cache' };
         const detail = error instanceof Error ? error.message : String(error);
         throw new Error(`registry API unavailable: ${detail}`);
     }

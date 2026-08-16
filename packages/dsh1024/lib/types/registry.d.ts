@@ -53,13 +53,26 @@ export declare function pluginSubPath(id: string, repository: string): string;
 export declare function installTarget(plugin: RegistryPlugin): string;
 /** Clear process-local registry state for deterministic tests. */
 export declare function clearRegistryCache(): void;
+export interface LoadRegistryOptions {
+    /**
+     * Go to the network even when the process cache is still fresh, and answer
+     * with what comes back. Used when the store panel opens or becomes visible
+     * again, so a newly listed plugin shows up without waiting out any TTL.
+     */
+    revalidate?: boolean;
+}
 /**
  * Load the registry from the configured HTTPS API, with a last-good response cache.
+ *
+ * The default path stays cache-first so rendering the panel never waits on the
+ * network. `revalidate` is the stale-while-revalidate half: the caller already
+ * has something on screen and wants the current catalog behind it.
  * @param registryUrl - public 1024 Store registry API endpoint.
  * @param fetcher - injectable fetch implementation for deterministic tests.
+ * @param options - set `revalidate` to force a network read.
  * @returns the registry and whether it is fresh API data or a stale fallback cache.
  */
-export declare function loadRegistry(registryUrl?: string, fetcher?: typeof fetch): Promise<{
+export declare function loadRegistry(registryUrl?: string, fetcher?: typeof fetch, options?: LoadRegistryOptions): Promise<{
     registry: Registry;
     source: RegistrySource;
 }>;
