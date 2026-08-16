@@ -104,7 +104,7 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   assert.match(zh, /# DSH 1024Store/)
   assert.match(zh, /共收录 \*\*4\*\* 个插件/)
   assert.match(zh, /2026-08-15/)
-  assert.match(zh, /npx dsh1024 add <owner>\/<repository>/)
+  assert.match(zh, /dsh1024 add <owner>\/<repository>/)
   assert.doesNotMatch(zh, /@dsh-1024store\/cli/)
   assert.match(zh, /自动合并/)
   assert.match(zh, /自动同步/)

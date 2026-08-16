@@ -14,10 +14,21 @@ provides two entry points:
   the selected DSH profile really contains it, and submits an anonymous
   installation outcome to the DSH 1024Store statistics API.
 
+## Install the CLI
+
+Install it once, globally, and `dsh1024` is then available the same way the
+official `dsh` command is:
+
+```sh
+npm install -g dsh1024
+```
+
+`npx dsh1024 …` keeps working if you would rather not install anything.
+
 ## Install the in-app store
 
 ```sh
-npx dsh1024 store
+npm install -g dsh1024 && dsh1024 store
 ```
 
 This runs `npx @deepseek-ai/dsh plugin --profile web add dsh1024` through the
@@ -44,7 +55,7 @@ restarting DeepSeek Harness.
 Node.js 22 or newer is required.
 
 ```sh
-npx dsh1024 add omdsh-dev/dsh-deep-research --profile web
+dsh1024 add omdsh-dev/dsh-deep-research --profile web
 ```
 
 The wrapper executes this command without a shell:
@@ -62,7 +73,7 @@ located differs; arguments, ordering, exit codes, and stdio are unchanged.
 `web` is the default profile. A Git ref is optional:
 
 ```sh
-npx dsh1024 add owner/repository#v1.2.0
+dsh1024 add owner/repository#v1.2.0
 ```
 
 ### Official CLI argument pass-through
@@ -74,7 +85,7 @@ first, and use `--` when an official argument could otherwise look like a
 wrapper option:
 
 ```sh
-npx dsh1024 add owner/repository --profile web -- \
+dsh1024 add owner/repository --profile web -- \
   --ignore-scripts --reporter append-only --config.confirmModulesPurge=false
 ```
 

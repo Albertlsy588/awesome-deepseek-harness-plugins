@@ -11,10 +11,20 @@
   它安装目录插件，校验所选 DSH profile 确实包含该插件，并向 DSH 1024Store
   统计 API 上报一条匿名安装结果。
 
+## 安装 CLI
+
+一次性全局安装后，`dsh1024` 就能像官方 `dsh` 命令一样直接使用：
+
+```sh
+npm install -g dsh1024
+```
+
+不想安装也可以继续用 `npx dsh1024 …`。
+
 ## 安装店内插件
 
 ```sh
-npx dsh1024 store
+npm install -g dsh1024 && dsh1024 store
 ```
 
 该命令通过官方 CLI 执行 `npx @deepseek-ai/dsh plugin --profile web add dsh1024`，
@@ -37,7 +47,7 @@ POST，并且同一时间只允许一个插件操作。插件变更会在重启 
 需要 Node.js 22 或更高版本。
 
 ```sh
-npx dsh1024 add omdsh-dev/dsh-deep-research --profile web
+dsh1024 add omdsh-dev/dsh-deep-research --profile web
 ```
 
 包装器会在不经过 shell 的情况下执行：
@@ -54,7 +64,7 @@ npx --yes @deepseek-ai/dsh plugin --profile web add github:omdsh-dev/dsh-deep-re
 `web` 是默认 profile。Git ref 可选：
 
 ```sh
-npx dsh1024 add owner/repository#v1.2.0
+dsh1024 add owner/repository#v1.2.0
 ```
 
 包装器只消费被追踪的 `owner/repository`、共享的 `--profile`/`-p` 选项和第一个

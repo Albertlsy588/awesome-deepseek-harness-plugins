@@ -10,6 +10,7 @@ export function InstallOptions({ plugin }: { plugin: Pick<RegistryPlugin, 'owner
         <span className="install-option-badge">{t('recommendedInstall')}</span>
         <InstallCommand command={trackedInstallCommand(plugin)} prominent />
         <p className="install-benefits">{t('installBenefitsLine')}</p>
+        <p className="install-first-run">{t('installFirstRunHint')}</p>
       </div>
       <div className="install-option install-option-official">
         <span className="install-option-label">{t('officialCliCommand')}</span>

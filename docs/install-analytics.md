@@ -13,7 +13,7 @@ The wrapper CLI delegates package management to the official DeepSeek Harness
 CLI and only reports an event after checking the profile state on disk.
 
 ```text
-npx dsh1024 add owner/repository
+dsh1024 add owner/repository
         |
         +-- official @deepseek-ai/dsh plugin command
         +-- before/after profile verification
@@ -110,9 +110,9 @@ clear unsent events without changing the enabled/disabled preference.
 Persistently disabling telemetry also clears unsent events. Resetting does not
 rewrite historical aggregate data.
 
-## Self-install events (`npx dsh1024 store`)
+## Self-install events (`dsh1024 store`)
 
-`npx dsh1024 store` installs the 1024 Store marketplace plugin itself into a
+`dsh1024 store` installs the 1024 Store marketplace plugin itself into a
 DeepSeek Harness profile (default `web`, override with `--profile`). It uses
 the same event schema and channel (`sourceChannel: "dsh-1024store-cli"`) as a
 regular `add`, with a fixed identity:

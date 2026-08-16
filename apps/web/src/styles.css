@@ -1631,6 +1631,15 @@ main {
   line-height: 1.55;
 }
 
+/* Weaker than the benefits line: a one-off prerequisite, not a selling point. */
+.install-first-run {
+  margin: 4px 2px 0;
+  color: var(--subtle);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .install-option-label {
   display: block;
   margin-bottom: 7px;

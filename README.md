@@ -2,11 +2,11 @@
 
 <!-- 本文件由 scripts/build-readme.mjs 从 deepseek1024.com 目录 API 自动生成，请勿手工编辑。 -->
 
-面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **3157** 个插件（含 PR 收录与 GitHub `dsh-plugin` topic 自动发现），目录数据更新于 2026-08-16。
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **3179** 个插件（含 PR 收录与 GitHub `dsh-plugin` topic 自动发现），目录数据更新于 2026-08-16。
 
 **但这个仓库不只是一份 awesome list。** 维护这份目录所需要的全部基建都在这里开源：一个在线插件市场、一个把市场装进 `dsh` 本体的插件、一条定时自动收集并做格式校验的目录流水线，以及一套免费的公开查询 API。代码采用 MIT 协议，fork 之后就能部署成你自己的插件市场。
 
-[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.png?v=7d7e496e2c5d)](https://deepseek1024.com/)
+[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.png?v=8d8fdfb3de5e)](https://deepseek1024.com/)
 
 [在线网站](https://deepseek1024.com/) · [API 文档](docs/api.md) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md)
 
@@ -64,10 +64,10 @@ curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'
 网站优先提供开源包装 CLI；它会调用官方 DeepSeek Harness 插件命令、校验 profile 的真实安装结果，并把匿名安装结果可靠地上报到排行榜：
 
 ```bash
-npx dsh1024 add <owner>/<repository>
+dsh1024 add <owner>/<repository>
 ```
 
-默认安装到 `web` profile，可用 `--profile <name>` 指定；仓库标识和 `--profile` 之外的参数会原样传给官方 CLI；参数可能与包装器冲突时可放到 `--` 后，例如 `... -- --ignore-scripts --reporter append-only`。透传参数不会写入遥测或本地 receipt。
+首次使用先一次性全局安装：`npm install -g dsh1024`，之后即可像官方 `dsh` 一样直接用 `dsh1024` 命令。默认安装到 `web` profile，可用 `--profile <name>` 指定；仓库标识和 `--profile` 之外的参数会原样传给官方 CLI；参数可能与包装器冲突时可放到 `--` 后，例如 `... -- --ignore-scripts --reporter append-only`。透传参数不会写入遥测或本地 receipt。
 
 统计身份是保存在 `$DSH_HOME/.dsh-1024store/` 的随机安装实例 ID，不是实名用户或账号。CLI 不上传命令输出、路径、用户名、环境变量、会话内容或原始错误；可用 `npx dsh1024 telemetry disable`、`DO_NOT_TRACK=1` 或 `DSH1024_TELEMETRY=0`（旧变量名 `DSH_1024STORE_TELEMETRY` 仍兼容）关闭。直接使用官方 `dsh plugin` 命令仍然可用，但不会计入 DSH 1024Store 安装统计。详细字段、口径、存储和部署方式见 [安装统计设计](docs/install-analytics.md)，CLI 源码见 [`packages/dsh1024`](packages/dsh1024)。
 
@@ -93,7 +93,7 @@ npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plug
 
 欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置，通过后自动合并，并由 CI 自动同步到网站与本 README。需要修正或下架既有条目时也可以发 PR，静态审查照常运行，但这类 PR 由维护者人工审核后合并。
 
-安装命令：`npx dsh1024 add <owner>/<repository>`。
+安装命令：`dsh1024 add <owner>/<repository>`（首次使用先 `npm install -g dsh1024`）。
 
 ## 项目定位
 
@@ -163,7 +163,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [模型与账号接入](#model) (7)
 - [开发与运行时](#dev) (45)
 - [娱乐](#fun) (17)
-- [待分类](#unclassified) (2884)
+- [待分类](#unclassified) (2906)
 
 <a id="ui"></a>
 
@@ -529,7 +529,7 @@ npx wrangler deploy --secrets-file .dev.vars
 <a id="unclassified"></a>
 
 <details>
-<summary><strong>待分类</strong> · 显示 500 / 共 2884 个</summary>
+<summary><strong>待分类</strong> · 显示 500 / 共 2906 个</summary>
 
 - [-](https://github.com/chen731215-dev/-) — 一些微不足道的小创意
 - [7d7d](https://github.com/omdsh-dev/7d7d) — omdsh-dev/7d7d discovered from GitHub.
@@ -781,6 +781,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-any-attachment](https://github.com/Zenjibad/dsh-any-attachment) — dsh bundle: attach any file type in the DeepSeek Harness Web UI — text-likes inline, binaries as workspace path references, rasters via the built-in pipeline
 - [dsh-any-background](https://github.com/Tkingxiao/dsh-any-background) — 一个自定义主题插件，包括背景图（大小和位置），主界面和设置界面（透明度，色轮全色主题色）插件
 - [dsh-APEX_Plugin](https://github.com/GTC2080/dsh-APEX_Plugin) — Experimental APEX plugin for DeepSeek Harness: Minimal-anchored bootstrap with on-demand Standard tools. Current baseline: Minimal Max v0.2.
+- [dsh-apex-standard](https://github.com/rinDBeans/dsh-apex-standard) — DeepSeek V4 Pro/Flash unified anchored agent preset for DeepSeek Harness (official API & opencode-go): two-stage RL-aligned bootstrap, model-aware path routing, epoch-aware long-session stability
 - [dsh-api-balance](https://github.com/02Muller25/dsh-api-balance) — 安装在deepseek的插件，能够实时显示当前api的余额，30秒自动刷新一次
 - [dsh-api-balance](https://github.com/9Epuuuu/dsh-api-balance) — DeepSeek account balance readout for DSH Web (dsh-plugin)
 - [dsh-api-balance](https://github.com/GPIOX/dsh-api-balance) — DeepSeek Harness 动态 Cordis 插件：可拖动、可缩放、亚克力质感的 API 余额悬浮徽章
@@ -961,7 +962,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-captain](https://github.com/KanoNoUta/dsh-captain) — Captain plugin for DeepSeek Harness: GPT planning, DeepSeek workers, independent review, adaptive multi-agent orchestration
 - [dsh-case](https://github.com/ZhijiangTang/dsh-case) — DSH plugin: naming case converter (camelCase/snake_case/kebab-case/PascalCase/...)
 - [dsh-catgirl-plugin](https://github.com/Freakz2z/dsh-catgirl-plugin) — A token-efficient persona runtime for DeepSeek Harness. 把人格留在界面，把智能留给模型。Measured: -67% input tokens, -66% cache reads, 0-token catgirl rendering.
-- [dsh-catppuccin](https://github.com/NoNameLeGo/dsh-catppuccin) — DeepSeek Harness Web GUI 的 Catppuccin 主题插件：Latte / Frappé / Macchiato / Mocha 四种主题一键切换
+- [dsh-catppuccin](https://github.com/NoNameLeGo/dsh-catppuccin) — DeepSeek Harness Web GUI 的 Catppuccin 主题插件：Latte / Frappé / Macchiato / Mocha 四种主题一键切换，内置可开关的玻璃质感（Glassmorphism）
 - [dsh-cc-ecosystem](https://github.com/Bcy2020/dsh-cc-ecosystem) — 让 DeepSeek Harness 用上 Claude Code 全家桶:技能、命令、规则、权限、子代理、hooks—— .claude/ 资产原样加载,正在逐步做到全兼容。
 - [dsh-cc-haha-memory](https://github.com/yihefeikong-rgb/dsh-cc-haha-memory) — CC-HAHA-inspired persistent memory plugin for DeepSeek Harness (DSH)
 - [dsh-cc-import](https://github.com/Mreate/dsh-cc-import) — Import high-quality conversations into Claude Code and provide CLAUDE.md recognition, add basic features like the "/init" command, and help speed up migration progress | 高质量导入Claude Code中的对话，并提供CLAUDE.md识别，添加"/init"命令等基础功能，帮助快速迁移进度
@@ -1030,8 +1031,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-clawrouter](https://github.com/BlockRunAI/dsh-clawrouter) — A safety gate for DeepSeek Harness: a stronger model reviews dangerous tool calls before they run. Plus vision and 67 models from one wallet, paid per request over x402.
 - [dsh-clawshell](https://github.com/jorinyang/dsh-clawshell) — ClawShell vision as DeepSeek Harness plugins: self-perception, closed-loop self-adaptation, trust/niche swarm, insight mining, knowledge genome
 - [dsh-client-deep-sneak](https://github.com/Rain-Shuoyu/dsh-client-deep-sneak) — DeepSneak（深度摸鱼）是专门为 DeepSeek Harness 设计的插件，在 agent 工作时播放 B 站视频，并在 agent 需要操作时暂停并提醒用户，方便摸鱼的同时避免因为没有发现 agent 被阻塞而影响效率
-- [dsh-client-masquerade](https://github.com/ymh0000123/dsh-client-masquerade) — DeepSeek Harness 插件：让自定义 llm-pi-ai provider 伪装成 Claude Code / Codex 客户端（伪造客户端身份请求头）。A DeepSeek Harness plugin: masquerade a custom llm-pi-ai provider as Claude Code / Codex clients (spoofed client identity headers).
-- *其余 2384 个待分类插件未在此列出，可在[在线网站](https://deepseek1024.com/)搜索或浏览完整目录。*
+- *其余 2406 个待分类插件未在此列出，可在[在线网站](https://deepseek1024.com/)搜索或浏览完整目录。*
 
 </details>
 
