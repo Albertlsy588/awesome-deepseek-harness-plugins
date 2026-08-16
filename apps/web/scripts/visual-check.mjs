@@ -123,6 +123,47 @@ async function assertHeroCommandsAligned(page, label) {
   }
 }
 
+// The menu is portaled to document.body, so nothing in the list should be able
+// to paint over it. Hit-test its four corners and confirm the topmost element
+// at each point still belongs to the menu, and that it fits inside the viewport.
+async function assertMenuOnTop(page, label) {
+  const result = await page.locator('.split-install-menu').evaluate((menu) => {
+    const box = menu.getBoundingClientRect()
+    const inset = 3
+    const corners = [
+      ['top-left', box.left + inset, box.top + inset],
+      ['top-right', box.right - inset, box.top + inset],
+      ['bottom-left', box.left + inset, box.bottom - inset],
+      ['bottom-right', box.right - inset, box.bottom - inset],
+    ]
+    return {
+      box: {
+        bottom: Math.round(box.bottom),
+        left: Math.round(box.left),
+        right: Math.round(box.right),
+        top: Math.round(box.top),
+      },
+      covered: corners
+        .filter(([, x, y]) => {
+          const hit = document.elementFromPoint(x, y)
+          return !(hit && (menu === hit || menu.contains(hit)))
+        })
+        .map(([corner, x, y]) => {
+          const hit = document.elementFromPoint(x, y)
+          return `${corner}: ${hit ? `${hit.tagName.toLowerCase()}.${hit.className}` : 'null'}`
+        }),
+      viewport: { height: window.innerHeight, width: window.innerWidth },
+    }
+  })
+  if (result.covered.length > 0) {
+    throw new Error(`${label} is covered by other elements at ${JSON.stringify(result.covered)}`)
+  }
+  const { box, viewport } = result
+  if (box.left < 0 || box.top < 0 || box.right > viewport.width || box.bottom > viewport.height) {
+    throw new Error(`${label} does not fit inside the viewport: ${JSON.stringify({ box, viewport })}`)
+  }
+}
+
 async function assertSeo(page, label, canonicalPath, robots = 'index,follow') {
   const result = await page.evaluate(() => ({
     canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
@@ -316,8 +357,12 @@ try {
   if ((await rankings.locator('.ranking-section .package-row .split-install-main').count()) === 0) {
     throw new Error('ranking rows are missing the split install button')
   }
-  await rankings.locator('.ranking-section .package-row .split-install-toggle').first().click()
+  // A middle row is the interesting case: rows below it used to paint over the
+  // menu back when it was anchored inside the row's stacking context.
+  await rankings.locator('.ranking-section .package-row .split-install-toggle').nth(4).click()
   await rankings.locator('.split-install-menu').waitFor()
+  await assertMenuOnTop(rankings, 'desktop rankings split install menu')
+  await assertNoHorizontalOverflow(rankings, 'desktop rankings with the install menu open')
   if ((await rankings.locator('.split-install-menu [role="menuitem"]').count()) !== 3) {
     throw new Error('split install menu does not expose exactly three command options')
   }
@@ -442,8 +487,11 @@ try {
   }
   await mobile.locator('.directory-section .package-row .split-install-main').first().click()
   await mobile.locator('.directory-section .package-row .split-install-main[aria-label="已复制"]').waitFor()
+  // The filtered list is short, so this is the first row; the portal assertion
+  // below still proves nothing paints over the menu.
   await mobile.locator('.directory-section .package-row .split-install-toggle').first().click()
   await mobile.locator('.split-install-menu').waitFor()
+  await assertMenuOnTop(mobile, 'mobile split install menu')
   if ((await mobile.locator('.split-install-menu [role="menuitem"]').count()) !== 3) {
     throw new Error('mobile split install menu does not expose exactly two command options')
   }
@@ -596,8 +644,9 @@ try {
   ])
   await assertHeroCommandsAligned(compactMobile, 'compact mobile hero')
   await assertInstallCommandsReadable(compactMobile, 'compact mobile hero', '.catalog-hero')
-  await compactMobile.locator('.ranking-section .package-row .split-install-toggle').first().click()
+  await compactMobile.locator('.ranking-section .package-row .split-install-toggle').nth(3).click()
   await compactMobile.locator('.split-install-menu').waitFor()
+  await assertMenuOnTop(compactMobile, 'compact split install menu')
   if ((await compactMobile.locator('.split-install-menu [role="menuitem"]').count()) !== 3) {
     throw new Error('compact split install menu does not expose exactly three command options')
   }
