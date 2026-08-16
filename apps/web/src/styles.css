@@ -69,17 +69,19 @@ body {
   align-self: start;
   align-items: center;
   justify-self: end;
-  gap: 7px;
+  gap: 6px;
   grid-area: actions;
 }
 
 .hero-action-link {
   display: inline-flex;
   min-height: 36px;
+  flex: none;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 0 12px;
+  padding: 0 10px;
+  white-space: nowrap;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-translucent);
@@ -141,12 +143,12 @@ body {
    tally sits below the actions. List controls live in the content area. */
 .hero-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 310px;
+  grid-template-columns: minmax(0, 1fr) minmax(310px, max-content);
   grid-template-rows: auto 1fr;
   grid-template-areas:
     "heading actions"
     "heading tally";
-  column-gap: 56px;
+  column-gap: clamp(24px, 4vw, 56px);
   row-gap: 14px;
 }
 
@@ -534,7 +536,12 @@ body {
     padding: 0;
   }
 
-  .hero-action-link span,
+  .hero-api {
+    width: auto;
+    padding: 0 10px;
+  }
+
+  .hero-action-link:not(.hero-api) span,
   .hero-action-link svg:last-child {
     display: none;
   }
@@ -3172,6 +3179,11 @@ main {
   .hero-action-link {
     width: 44px;
     min-height: 44px;
+  }
+
+  .hero-api {
+    width: auto;
+    padding: 0 12px;
   }
 
   .hero-language button {

@@ -314,7 +314,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
           <header className="hero-stage">
             <div className="hero-actions" aria-label={t('siteActions')}>
               <Link
-                className="hero-action-link"
+                className="hero-action-link hero-api"
                 to="/docs/api"
                 aria-label={collectionCopy('apiDocs', language).heading}
               >
