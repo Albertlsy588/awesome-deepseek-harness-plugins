@@ -1242,7 +1242,7 @@ main {
   position: relative;
   display: grid;
   min-height: 76px;
-  grid-template-columns: 38px 36px minmax(240px, 1fr) minmax(120px, auto) minmax(230px, auto) 32px 30px;
+  grid-template-columns: 38px 36px minmax(240px, 1fr) 120px 244px 32px 30px;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
@@ -1272,7 +1272,7 @@ main {
 }
 
 .ranking-row {
-  grid-template-columns: 38px 36px minmax(270px, 1fr) minmax(120px, auto) minmax(230px, auto) 30px;
+  grid-template-columns: 38px 36px minmax(270px, 1fr) 120px 244px 30px;
 }
 
 .ranking-list {
@@ -1417,6 +1417,13 @@ main {
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 分类缺失时的占位格：只占住网格列，不画任何东西 */
+.category-tag.is-placeholder {
+  min-height: 0;
+  border-color: transparent;
+  background: none;
 }
 
 .category-dot {
@@ -2289,11 +2296,11 @@ main {
   }
 
   .package-row {
-    grid-template-columns: 30px 36px minmax(190px, 1fr) minmax(180px, auto) 32px 30px;
+    grid-template-columns: 30px 36px minmax(190px, 1fr) 180px 32px 30px;
   }
 
   .ranking-row {
-    grid-template-columns: 30px 36px minmax(190px, 1fr) minmax(180px, auto) 30px;
+    grid-template-columns: 30px 36px minmax(190px, 1fr) 180px 30px;
   }
 
   .package-row .category-tag,
@@ -2918,13 +2925,13 @@ main {
 
   .package-row {
     min-height: 84px;
-    grid-template-columns: 42px 42px minmax(320px, 1fr) minmax(130px, auto) minmax(250px, auto) 36px 34px;
+    grid-template-columns: 42px 42px minmax(320px, 1fr) 130px 272px 36px 34px;
     gap: 14px;
     padding: 12px 18px;
   }
 
   .ranking-row {
-    grid-template-columns: 42px 42px minmax(360px, 1fr) minmax(130px, auto) minmax(250px, auto) 34px;
+    grid-template-columns: 42px 42px minmax(360px, 1fr) 130px 272px 34px;
   }
 
   .ranking-list .ranking-row:nth-child(-n + 3) .row-index {
