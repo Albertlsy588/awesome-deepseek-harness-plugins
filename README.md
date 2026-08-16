@@ -2,11 +2,11 @@
 
 <!-- 本文件由 scripts/build-readme.mjs 从 deepseek1024.com 目录 API 自动生成，请勿手工编辑。 -->
 
-面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **3106** 个插件（含 PR 收录与 GitHub `dsh-plugin` topic 自动发现），目录数据更新于 2026-08-16。
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **3128** 个插件（含 PR 收录与 GitHub `dsh-plugin` topic 自动发现），目录数据更新于 2026-08-16。
 
 **但这个仓库不只是一份 awesome list。** 维护这份目录所需要的全部基建都在这里开源：一个在线插件市场、一个把市场装进 `dsh` 本体的插件、一条定时自动收集并做格式校验的目录流水线，以及一套免费的公开查询 API。代码采用 MIT 协议，fork 之后就能部署成你自己的插件市场。
 
-[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.png?v=6256880f6622)](https://deepseek1024.com/)
+[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.png?v=3b3395662178)](https://deepseek1024.com/)
 
 [在线网站](https://deepseek1024.com/) · [API 文档](docs/api.md) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md)
 
@@ -164,7 +164,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [模型与账号接入](#model) (7)
 - [开发与运行时](#dev) (45)
 - [娱乐](#fun) (17)
-- [待分类](#unclassified) (2833)
+- [待分类](#unclassified) (2855)
 
 <a id="ui"></a>
 
@@ -530,7 +530,7 @@ npx wrangler deploy --secrets-file .dev.vars
 <a id="unclassified"></a>
 
 <details>
-<summary><strong>待分类</strong> · 显示 500 / 共 2833 个</summary>
+<summary><strong>待分类</strong> · 显示 500 / 共 2855 个</summary>
 
 - [-](https://github.com/chen731215-dev/-) — 一些微不足道的小创意
 - [7d7d](https://github.com/omdsh-dev/7d7d) — omdsh-dev/7d7d discovered from GitHub.
@@ -551,6 +551,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [ai_skills](https://github.com/Stone623/ai_skills) — A playful Codex skill that lets the agent briefly zone out, recap state, and continue.
 - [ai4scholar-plugin-dsh](https://github.com/literaf/ai4scholar-plugin-dsh) — AI4Scholar for DeepSeek Harness (dsh): 37 native academic tools — Semantic Scholar, PubMed, Google Scholar, arXiv, bioRxiv/medRxiv, DOI, full text, auto-cite, figures. Powered by ai4scholar.net
 - [aifp-mcp](https://github.com/wjabanjj/aifp-mcp) — AiFP 记忆感知系统｜MCP 服务，一套记忆全 AI 共享。面向中文的 Agent 感知记忆，支持叙事链、语义纠错、感知链图扩散。兼容 DeepSeek‑Harness、Claude Code、Cursor、Codex等全部 MCP 客户端，数据完全本地存储。
+- [aitoearn-dsh-plugin](https://github.com/lussey820/aitoearn-dsh-plugin) — AiToEarn 内容创作套件 —— DeepSeek Harness 插件（创意指导/脚本/图文/视频生成 + 抖音发布）
 - [allinluna](https://github.com/zenx0x/allinluna) — Resource-aware multi-agent orchestration for Codex and DeepSeek Harness (All in Flash DSH plugin)
 - [amber-protocol](https://github.com/Bandersnatch0x/amber-protocol) — Amber Protocol: repository-local governance for coding agents, including a DeepSeek Harness (dsh) patch overlay.
 - [anan-thermal-monitor](https://github.com/AmeKrance/anan-thermal-monitor) — 紫白桌宠温度监控：CPU/内存/GPU/NVMe 实时温度 + 硬件信息 · DeepSeek Harness (DSH) 插件，支持 dsh plugin add 一键安装
@@ -1005,6 +1006,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-ci-co-pilot](https://github.com/temotee2103/dsh-ci-co-pilot) — GitHub CI co-pilot for DeepSeek Harness: PR review, CI failure fixing, issue triage and release notes. Everything is a plugin.
 - [dsh-ci-context](https://github.com/lucas-ward/dsh-ci-context) — Privacy-focused CI execution context for DeepSeek Harness agents
 - [dsh-ci-doctor](https://github.com/jkrandom-sudo/dsh-ci-doctor) — CI failure, diagnosed before you open the logs — DeepSeek Harness plugin that watches GitHub Actions for new failures and turns raw logs into structured diagnosis cards · CI 失败，打开日志前就完成诊断 —— DSH 插件：监视 GitHub Actions 新失败，原始日志转结构化诊断卡，签名账本识别复发问题
+- [dsh-claude-antidote](https://github.com/FolioTemp/dsh-claude-antidote) — DSH compatibility antidote: keep dsh-claude-ux visibly enabled while neutralizing its actual debuffs.
 - [dsh-claude-cli](https://github.com/katsos/dsh-claude-cli) — DeepSeek Harness LLM provider that runs your installed Claude Code CLI as the model backend — no API key.
 - [dsh-claude-code-templates](https://github.com/GongYuanCaiJi/dsh-claude-code-templates) — Claude Code 技能模板库（claude-code-templates 移植，897 个 SKILL.md）
 - [dsh-claude-import](https://github.com/TimeCraker/dsh-claude-import) — Import Claude Code config (skills/rules/CLAUDE.md/AGENTS.md) into DeepSeek Harness, with destination preview, conflict strategies, and idempotent re-imports.
@@ -1030,9 +1032,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-client-ui-mobile-adapt](https://github.com/Hotsteel2901/dsh-client-ui-mobile-adapt) — Your DeepSeek Harness web UI, rebuilt for the phone in your hand. Built for developers who code in Termux on Android: single-column layout, sidebar drawer, one-line composer, fullscreen scrollable settings & trajectory details, tap-to-open session stats. Desktop untouched.
 - [dsh-client-ui-pet](https://github.com/LucasleeCN/dsh-client-ui-pet) — LucasleeCN/dsh-client-ui-pet discovered from GitHub.
 - [dsh-client-ui-skin-claude](https://github.com/PAKIKNOWLEDGE/dsh-client-ui-skin-claude) — Claude-style skin for DeepSeek Harness (dsh) Web GUI — warm-black canvas, Anthropic clay accent, serif UI
-- [dsh-client-ui-skins](https://github.com/caoyiwei850/dsh-client-ui-skins) — DSH Web skin plugin with built-in themes and custom image skins
-- [dsh-client-ui-theme-xp](https://github.com/SamizuHM/dsh-client-ui-theme-xp) — Windows XP Luna desktop theme for the DeepSeek Harness web GUI: multi-window desktop, XP chrome, taskbar, Bliss wallpaper.
-- *其余 2333 个待分类插件未在此列出，可在[在线网站](https://deepseek1024.com/)搜索或浏览完整目录。*
+- *其余 2355 个待分类插件未在此列出，可在[在线网站](https://deepseek1024.com/)搜索或浏览完整目录。*
 
 </details>
 
