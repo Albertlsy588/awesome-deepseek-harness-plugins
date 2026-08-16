@@ -392,17 +392,14 @@ export function buildRobotsTxt(): string {
   ].join('\n')
 }
 
-/** robots.txt for the API-only host, which has no indexable surface at all. */
+/**
+ * The API host serves external API clients, never the website, and has no page
+ * on it worth indexing. robots.txt governs crawling, not API calls: a developer
+ * or an agent hitting the documented endpoint is a client, not a crawler, so
+ * closing the host to crawlers costs that audience nothing.
+ */
 export function buildApiHostRobotsTxt(): string {
-  return [
-    'User-agent: *',
-    // The two endpoints llms.txt and /docs/api document; the responses carry
-    // X-Robots-Tag: noindex so they are usable without being indexable.
-    'Allow: /v1/plugins/search',
-    'Allow: /v1/health',
-    'Disallow: /',
-    '',
-  ].join('\n')
+  return ['User-agent: *', 'Disallow: /', ''].join('\n')
 }
 
 /**

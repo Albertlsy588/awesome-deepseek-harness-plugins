@@ -2,7 +2,7 @@ import { createApp } from './app'
 import { cleanupExpiredAuthRows } from './lib/auth'
 import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
 import { runPluginDiscoveryTask } from './lib/plugin-discovery-task'
-import { isPublicApiHost, publicApiNotFound, rewritePublicApiUrl } from './public-api'
+import { isPublicApiHost, publicApiNotFound, rewritePublicApiUrl, wwwRedirect } from './public-api'
 import { collectionQueryKind, metadataForPath, rewriteHtmlResponse, seoCatalog } from './seo'
 
 const STATS_OBJECT_NAME = 'global'
@@ -46,6 +46,8 @@ async function handleLiveStats(request: Request, env: Env): Promise<Response> {
 const worker = {
   fetch(request, env, ctx) {
     const url = new URL(request.url)
+    const canonicalHostRedirect = wwwRedirect(url)
+    if (canonicalHostRedirect) return canonicalHostRedirect
     if (isPublicApiHost(url)) {
       const rewritten = rewritePublicApiUrl(url)
       if (!rewritten) return publicApiNotFound(url.pathname)

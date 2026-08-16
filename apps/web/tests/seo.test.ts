@@ -284,11 +284,10 @@ describe('crawler directives', () => {
     }
   })
 
-  it('exposes only the documented endpoints on the API-only host', () => {
-    const robots = buildApiHostRobotsTxt()
-    expect(robots).toContain('Allow: /v1/plugins/search')
-    expect(robots).toContain('Allow: /v1/health')
-    expect(robots).toContain('Disallow: /')
+  it('keeps the API-only host out of the index entirely', () => {
+    // Nothing on that host is a page, and its clients call it directly rather
+    // than crawling it, so there is nothing to open up.
+    expect(buildApiHostRobotsTxt()).toBe('User-agent: *\nDisallow: /\n')
   })
 
   it('publishes the whole catalog as plain text for answer engines', () => {

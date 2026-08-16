@@ -16,8 +16,9 @@ This is an independent community project. It is not affiliated with or endorsed 
 
 ## API
 
-- [Public search API](https://api.deepseek1024.com/v1/plugins/search?q=theme): free, no key required for light use
 - [API reference](https://deepseek1024.com/docs/api): rate limits, error codes, and GitHub-login API keys
+- Public search endpoint, free and no key required for light use, called directly rather than crawled:
+  `GET https://api.deepseek1024.com/v1/plugins/search?q=theme`
 
 ## Source
 

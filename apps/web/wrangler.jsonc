@@ -10,6 +10,10 @@
       "custom_domain": true
     },
     {
+      "pattern": "www.deepseek1024.com",
+      "custom_domain": true
+    },
+    {
       "pattern": "api.deepseek1024.com",
       "custom_domain": true
     }

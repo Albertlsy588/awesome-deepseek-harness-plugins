@@ -9,6 +9,40 @@
 - Page titles, descriptions, JSON-LD and the crawlable pre-hydration shell all come from `apps/web/worker/seo-templates.ts` and `apps/web/worker/seo-content.ts`. Both the Worker and the React app import them; never fork the copy into a page component or a translation file.
 - When replacing an already-published route, keep a permanent redirect from the old path to the canonical path.
 
+## Bound hostnames and the public API surface
+
+The Worker answers on three custom domains, all declared in `apps/web/wrangler.jsonc`
+under `routes`, and each host has a deliberately different surface. `apps/web/worker/public-api.ts`
+is the single place that decides which is which; `apps/web/tests/public-api.test.ts` guards it.
+
+- `deepseek1024.com` — the website and the full `/api/...` surface, including sign-in and API-key
+  management. This is the only host that serves the site.
+- `www.deepseek1024.com` — a bound custom domain that exists solely to `301` to the apex host
+  (`wwwRedirect`). It is not an alias you can serve content from.
+- `api.deepseek1024.com` — the public developer API. It exposes an **allow-list of two paths**,
+  `PUBLIC_API_PATHS` in `public-api.ts`, rewritten onto the internal routes:
+  `/v1/plugins/search` → `/api/v1/plugins/search`, and `/v1/health` → `/api/v1/health`.
+
+Three ways this gets broken, in rough order of likelihood:
+
+1. **Assuming a 404 on `api.deepseek1024.com` is a bug.** Every path outside the allow-list returns
+   `404 {"code":"NOT_FOUND"}` on purpose, and `/` returns `302` to `/docs/api`. So
+   `api.deepseek1024.com/v1/registry` and `.../api/v1/registry` both 404 while
+   `deepseek1024.com/api/v1/registry` works — that is the design, not a routing fault. Verify the
+   host is healthy with `/v1/health`, which returns `{"status":"ok"}`.
+2. **Expecting a new internal endpoint to appear on the API host.** Adding `/api/v1/<thing>` to the
+   Worker does *not* publish it at `api.deepseek1024.com/v1/<thing>`. Publishing is a separate,
+   deliberate act: add the mapping to `PUBLIC_API_PATHS`. Keep sign-in, key management, and anything
+   session- or cookie-bearing off this host.
+3. **Editing `routes` without listing every domain.** That array is the authoritative binding list,
+   not a patch. Deploying with a custom domain missing unbinds it, and requests to the dropped
+   hostname start failing with `522`. Always keep all three entries; only ever add.
+
+Deploys run on pushes to `main` that touch `apps/web/**`, `packages/dsh-1024store/**`, or
+`catalog/categories.json` (see `.github/workflows/deploy.yml`), so a change to any of the files
+above ships as soon as it lands. Extend `apps/web/tests/public-api.test.ts` whenever you change
+which host serves what.
+
 ## Responsive web support
 
 - The website supports both desktop and mobile devices. Treat both layouts as first-class release requirements.

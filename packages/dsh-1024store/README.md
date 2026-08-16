@@ -2,7 +2,7 @@
 
 [中文](README.zh.md) | English
 
-The in-app 1024 Store browser and installer for [the DSH 1024Store plugin hub for DeepSeek Harness](https://deepseek1024.com/). It appears both as a dedicated **1024 Store** entry in Settings and as a **1024 Store (count)** tab under **Settings → Plugins**.
+The in-app 1024 Store browser and installer for the curated [1024 catalog](https://deepseek1024.com/). It appears both as a dedicated **1024 Store** entry in Settings and as a **1024 Store (count)** tab under **Settings → Plugins**.
 
 The plugin queries the live `/api/v1/registry` catalog, checks its own version automatically, and supports catalog search, category filters, installed-state detection, confirmed installs, uninstall, and operation progress. Plugin changes take effect after restarting DeepSeek Harness.
 

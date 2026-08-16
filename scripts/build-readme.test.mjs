@@ -99,10 +99,8 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   const zh = files['README.md']
   const en = files['catalog/README.md']
 
-  assert.match(zh, /^# Awesome DeepSeek Harness Plugins · DSH 1024Store$/m)
-  assert.match(zh, /DeepSeek Harness 插件市场 \/ 插件商店 \/ 插件目录/)
-  assert.match(zh, /共收录 \*\*4\*\* 个 dsh 插件，分为 2 个分类/)
-  assert.match(zh, /## 如何安装 DeepSeek Harness 插件 \/ How to install a DeepSeek Harness plugin/)
+  assert.match(zh, /# DSH 1024Store/)
+  assert.match(zh, /共收录 \*\*4\*\* 个插件/)
   assert.match(zh, /2026-08-15/)
   assert.match(zh, /npx @dsh-1024store\/cli add <owner>\/<repository> --profile web/)
   assert.match(zh, /自动合并/)
@@ -111,71 +109,133 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   assert.match(zh, /- \[alpha-tool\]\(https:\/\/github\.com\/owner\/alpha\) — Alpha tool\./)
   // multi-line descriptions collapse into a single line.
   assert.match(zh, /- \[ui-thing\]\(https:\/\/github\.com\/owner\/ui-thing\) — 界面 增强。/)
-  assert.match(zh, /## 待分类/)
-  assert.match(zh, /还有 \*\*1\*\* 个插件等待分类/)
+  assert.match(zh, /<summary><strong>待分类<\/strong> · 1 个插件<\/summary>/)
   assert.doesNotMatch(zh, /stars?:? \d/i)
 
-  assert.match(en, /^# Awesome DeepSeek Harness Plugins — the DSH plugin store$/m)
-  assert.match(en, /plugin store, marketplace and hub for \[DeepSeek Harness\]/)
-  assert.match(en, /\*\*4\*\* dsh plugins across 2 categories, updated 2026-08-15/)
-  assert.match(en, /https:\/\/api\.deepseek1024\.com\/v1\/plugins\/search\?q=theme/)
-  assert.match(en, /\[中文目录\]\(\.\.\/README\.md\)/)
-  assert.match(en, /## How to install a DeepSeek Harness plugin/)
+  assert.match(en, /DSH 1024Store/)
+  assert.match(en, /\*\*4\*\* plugins, updated 2026-08-15/)
   assert.match(en, /- \[Zeta-Tool\]\(https:\/\/github\.com\/owner\/zeta\) — Zeta tool\./)
   // en line falls back to Chinese when the English description is missing.
   assert.match(en, /- \[ui-thing\]\(https:\/\/github\.com\/owner\/ui-thing\) — 界面 增强。/)
-  assert.match(en, /## Unclassified/)
-  assert.match(en, /1 plugins are still awaiting classification — \[browse them on deepseek1024\.com\]\(https:\/\/deepseek1024\.com\/plugins\) or \[help classify them\]\(\.\.\/CONTRIBUTING\.md\)\./)
+  assert.match(en, /<summary><strong>Unclassified<\/strong> · 1 plugins<\/summary>/)
   assert.match(en, /merged submissions are synced/i)
-  // The unclassified bucket is 91% of the live catalog; it must never be inlined again.
-  assert.doesNotMatch(en, /- \[scanned-plugin\]/)
-  assert.doesNotMatch(zh, /- \[scanned-plugin\]/)
-
-  // Categories below the row cap carry no tail line.
-  assert.doesNotMatch(en, /- … and \d+ more/)
-  assert.doesNotMatch(zh, /- … 还有/)
 
   // Category index order and counts.
   const zhIndex = zh.slice(zh.indexOf('## 插件分类'))
   assert.match(zhIndex, /- \[UI 增强\]\(#ui\) \(1\)\n- \[工具与能力\]\(#tools\) \(2\)\n- \[待分类\]\(#unclassified\) \(1\)/)
 })
 
-function bulkRegistry(count, description = 'A tool.') {
-  const plugins = Array.from({ length: count }, (unused, index) => {
-    const slug = `tool-${String(index).padStart(4, '0')}`
-    return {
-      id: `owner/${slug}`,
-      name: slug,
-      owner: 'owner',
-      url: `https://github.com/owner/${slug}`,
-      category: 'tools',
-      description: { en: description, zh: description },
-      install: `dsh plugin --profile web add github:owner/${slug}`,
-      added: '2026-08-01',
-      stars: 1,
-    }
-  })
-  return { ...registryFixture, count, plugins }
-}
+test('collapses every category into a default-closed details block', async () => {
+  const files = await buildReadmeFiles(normalizeRegistry(registryFixture), categories)
 
-test('caps each category at 40 rows and links the tail to the website', async () => {
-  const files = await buildReadmeFiles(normalizeRegistry(bulkRegistry(72)), categories)
+  for (const [name, content] of Object.entries(files)) {
+    // Default-collapsed: an `open` attribute would defeat the whole point.
+    assert.doesNotMatch(content, /<details[^>]/, `${name} must not open any group by default`)
+    assert.equal((content.match(/<details>/g) ?? []).length, 3, `${name} must wrap all three groups`)
+    assert.equal((content.match(/<\/details>/g) ?? []).length, 3, `${name} must close all three groups`)
+    // GitHub only renders Markdown inside <details> when the summary is followed by a
+    // blank line and the block is not indented.
+    assert.doesNotMatch(content, /^[ \t]+<(details|summary|\/details)/m, `${name} must not indent the HTML`)
+    assert.match(content, /<\/summary>\n\n- \[/, `${name} needs a blank line before the list`)
+    assert.match(content, /\n\n<\/details>/, `${name} needs a blank line before the closing tag`)
+    // The anchor stays outside so the category index can still jump to a closed group.
+    assert.match(content, /<a id="ui"><\/a>\n\n<details>/, `${name} must keep anchors outside the block`)
+  }
+
+  // Category labels contain "&", which must be escaped inside the raw HTML summary.
+  assert.match(files['catalog/README.md'], /<summary><strong>Tools &amp; Capabilities<\/strong> · 2 plugins<\/summary>/)
+  for (const summary of files['catalog/README.md'].match(/<summary>.*<\/summary>/g) ?? []) {
+    assert.doesNotMatch(summary, /&(?!amp;|lt;|gt;)/, `unescaped & in ${summary}`)
+  }
+  assert.match(files['README.md'], /<summary><strong>工具与能力<\/strong> · 2 个插件<\/summary>/)
+})
+
+test('leads with the marketplace, in-app plugin, scheduled validation, API and contribution calls', async () => {
+  const files = await buildReadmeFiles(normalizeRegistry(registryFixture), categories)
   const zh = files['README.md']
   const en = files['catalog/README.md']
 
-  assert.equal(en.split('\n').filter(line => line.startsWith('- [tool-')).length, 40)
-  assert.equal(zh.split('\n').filter(line => line.startsWith('- [tool-')).length, 40)
-  assert.match(en, /- … and 32 more — \[browse the full Tools & Capabilities list on deepseek1024\.com\]\(https:\/\/deepseek1024\.com\/plugins\?category=tools\)/)
-  assert.match(zh, /- … 还有 32 个插件 — \[在 DSH 1024Store 浏览完整的「工具与能力」插件列表\]\(https:\/\/deepseek1024\.com\/plugins\?category=tools\)/)
-  // The index keeps reporting the true size even though the list is truncated.
-  assert.match(en, /- \[Tools & Capabilities\]\(#tools\) \(72\)/)
+  // The four things this repository ships beyond the list itself.
+  assert.match(zh, /deepseek1024\.com/)
+  assert.match(zh, /CLOUDFLARE_API_TOKEN/)
+  assert.match(zh, /dsh plugin --profile web add dsh-1024store/)
+  assert.match(zh, /定时收集/)
+  assert.match(zh, /格式校验/)
+  assert.match(zh, /绝不执行仓库代码/)
+  assert.match(zh, /api\.deepseek1024\.com\/v1\/plugins\/search/)
+
+  // Star / issue / PR / fork calls to action.
+  assert.match(zh, /\/stargazers\)/)
+  assert.match(zh, /\/issues\/new\)/)
+  assert.match(zh, /\/pulls\)/)
+  assert.match(zh, /\/fork\)/)
+
+  assert.match(en, /CLOUDFLARE_API_TOKEN/)
+  assert.match(en, /dsh plugin --profile web add dsh-1024store/)
+  assert.match(en, /never installing dependencies or executing repository code/)
+  assert.match(en, /api\.deepseek1024\.com\/v1\/plugins\/search/)
+  for (const suffix of ['/stargazers)', '/issues/new)', '/pulls)', '/fork)']) {
+    assert.ok(en.includes(suffix), `English README is missing the ${suffix} call to action`)
+  }
+  // The review gate has three verdicts; the README must not promise that every
+  // passing pull request merges itself. Kept in sync with CONTRIBUTING.md,
+  // the PR template, SKILL.md and submission-reference.md.
+  assert.match(zh, /维护者人工审核/)
+  assert.match(en, /waits for maintainer approval/)
+
+  // Links in catalog/README.md resolve one directory up.
+  assert.match(en, /\]\(\.\.\/CONTRIBUTING\.md\)/)
+  assert.match(en, /\]\(\.\.\/docs\/api\.md\)/)
 })
 
-test('refuses to emit a projection GitHub would truncate', async () => {
-  const oversized = normalizeRegistry(bulkRegistry(40, 'x'.repeat(20000)))
+test('caps only the unclassified bucket and keeps the projection renderable', async () => {
+  // 3 unclassified entries with a limit of 500 stay uncapped; build a bucket big
+  // enough to trip the cap without depending on the production catalog.
+  const many = Array.from({ length: 620 }, (_, index) => ({
+    id: `scanner/plugin-${String(index).padStart(4, '0')}`,
+    name: `scanned-${String(index).padStart(4, '0')}`,
+    owner: 'scanner',
+    url: `https://github.com/scanner/plugin-${String(index).padStart(4, '0')}`,
+    category: 'unclassified',
+    description: { en: 'Discovered by the topic scan.', zh: '由 topic 扫描发现。' },
+    added: '2026-08-15',
+    stars: null,
+  }))
+  const big = { ...registryFixture, plugins: [...registryFixture.plugins, ...many] }
+  const files = await buildReadmeFiles(normalizeRegistry(big), categories)
+  const zh = files['README.md']
+  const en = files['catalog/README.md']
+
+  // Curated categories keep every entry.
+  assert.match(zh, /<summary><strong>工具与能力<\/strong> · 2 个插件<\/summary>/)
+  assert.match(en, /<summary><strong>Tools &amp; Capabilities<\/strong> · 2 plugins<\/summary>/)
+
+  // The unclassified bucket is capped, and says so instead of pretending to be whole.
+  assert.match(zh, /<summary><strong>待分类<\/strong> · 显示 500 \/ 共 621 个<\/summary>/)
+  assert.match(en, /<summary><strong>Unclassified<\/strong> · showing 500 of 621<\/summary>/)
+  assert.match(zh, /其余 121 个待分类插件未在此列出/)
+  assert.match(en, /The remaining 121 unclassified plugins are not listed here/)
+
+  // The category index still reports the true total, not the truncated one.
+  assert.match(zh, /- \[待分类\]\(#unclassified\) \(621\)/)
+
+  const listed = (zh.match(/^- \[scanned-\d{4}\]/gm) ?? []).length
+  assert.equal(listed, 500, 'exactly the cap should be listed')
+})
+
+test('refuses to emit a projection GitHub would silently truncate', async () => {
+  // One entry whose description alone blows the 500 KiB budget: the guard must throw
+  // rather than ship a file whose tail is invisible on GitHub.
+  const huge = {
+    ...registryFixture,
+    plugins: [{
+      ...registryFixture.plugins[0],
+      description: { en: 'x'.repeat(600 * 1024), zh: 'x'.repeat(600 * 1024) },
+    }],
+  }
   await assert.rejects(
-    buildReadmeFiles(oversized, categories),
-    /^Error: README\.md is \d+\.\d KiB; GitHub stops rendering markdown past 512 KiB, so generated files must stay under 480 KiB\.$/,
+    buildReadmeFiles(normalizeRegistry(huge), categories),
+    /GitHub renders at most \d+ and silently drops everything past that offset/,
   )
 })
 
