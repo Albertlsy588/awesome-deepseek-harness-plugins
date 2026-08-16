@@ -188,17 +188,6 @@ function isTransientCreationError(error) {
   return error?.code === 'EEXIST' || isLockRaceError(error)
 }
 
-// The mirror image on the acquisition side. POSIX reports a contended lock
-// directory as EEXIST, but Windows reports EPERM/EBUSY when the create races
-// another process — most often when the name is still in a pending-delete state
-// because the previous owner just released it. Those are contention, not
-// failure, so they wait like EEXIST rather than crashing the caller. A genuine
-// permission problem still surfaces: it exhausts the wait and the timeout
-// message carries the underlying code.
-function isTransientCreationError(error) {
-  return error?.code === 'EEXIST' || error?.code === 'EPERM' || error?.code === 'EBUSY'
-}
-
 async function ownerIsStale(ownerPath) {
   let metadata
   let owner
