@@ -94,6 +94,35 @@ async function assertHorizontalTouchScroller(page, label, selector, { requireOve
   }
 }
 
+// Install commands must stay fully readable: they wrap onto a second line
+// instead of hiding their tail behind an inner horizontal scrollbar.
+async function assertInstallCommandsReadable(page, label, scope) {
+  const clipped = await page.locator(`${scope} .install-command code`).evaluateAll((nodes) => nodes
+    .filter((node) => node.scrollWidth > node.clientWidth + 1)
+    .map((node) => node.textContent ?? ''))
+  if (clipped.length > 0) {
+    throw new Error(`${label} clips its install commands: ${JSON.stringify(clipped)}`)
+  }
+}
+
+// The hero labels sit in one shared column, so all three command boxes have to
+// start and end on the same pixel regardless of label width or language.
+async function assertHeroCommandsAligned(page, label) {
+  const edges = await page.locator('.catalog-hero .self-install-banner .install-command').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const box = node.getBoundingClientRect()
+      return { left: Math.round(box.left), right: Math.round(box.right) }
+    }))
+  if (edges.length !== 3) {
+    throw new Error(`${label} should render three install commands, saw ${edges.length}`)
+  }
+  const lefts = new Set(edges.map((edge) => edge.left))
+  const rights = new Set(edges.map((edge) => edge.right))
+  if (lefts.size !== 1 || rights.size !== 1) {
+    throw new Error(`${label} install commands are misaligned: ${JSON.stringify(edges)}`)
+  }
+}
+
 async function assertSeo(page, label, canonicalPath, robots = 'index,follow') {
   const result = await page.evaluate(() => ({
     canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
@@ -174,6 +203,8 @@ try {
       throw new Error(`directory self install banner is missing the command: ${command}`)
     }
   }
+  await assertHeroCommandsAligned(desktop, 'desktop directory hero')
+  await assertInstallCommandsReadable(desktop, 'desktop directory hero', '.catalog-hero')
   if ((await desktop.locator('.directory-section .package-row .split-install-main').count()) === 0) {
     throw new Error('directory rows are missing the split install button')
   }
@@ -274,6 +305,8 @@ try {
       throw new Error(`rankings self install banner is missing the command: ${command}`)
     }
   }
+  await assertHeroCommandsAligned(rankings, 'desktop rankings hero')
+  await assertInstallCommandsReadable(rankings, 'desktop rankings hero', '.catalog-hero')
   await assertSeo(rankings, 'desktop rankings', '/')
   await rankings.locator('.ranking-section .segmented-control button').last().click()
   await rankings.locator('.ranking-section .package-row').first().waitFor()
@@ -381,6 +414,8 @@ try {
     '.package-row .row-link',
     '.load-more-row .button',
   ])
+  await assertHeroCommandsAligned(mobile, 'mobile catalog hero')
+  await assertInstallCommandsReadable(mobile, 'mobile catalog hero', '.catalog-hero')
   await assertMinFontSize(mobile, 'mobile search input', 'input[type="search"]', 16)
   await assertMinFontSize(mobile, 'mobile package title', '.row-title', 14)
   await assertMinFontSize(mobile, 'mobile package description', '.row-identity p', 12)
@@ -478,6 +513,7 @@ try {
   if (detailInstallCommands.some((text) => text.includes('@dsh-1024store/cli'))) {
     throw new Error('detail page still renders the legacy @dsh-1024store/cli command')
   }
+  await assertInstallCommandsReadable(detail, 'desktop detail', '.install-options')
   await assertSeo(detail, 'desktop detail', '/plugins/openma-ai/deepseek-harness-tui')
   await assertNoHorizontalOverflow(detail, 'desktop detail')
   await detail.locator('.detail-brand').click()
@@ -535,6 +571,7 @@ try {
   ) {
     throw new Error(`mobile detail content priority is incorrect: ${JSON.stringify(detailOrder)}`)
   }
+  await assertInstallCommandsReadable(scoped, 'mobile package detail', '.install-options')
   await scoped.locator('.install-command-prominent .icon-button').click()
   await scoped.locator('.install-command-prominent .icon-button[aria-label="已复制"]').waitFor()
   await scoped.locator('.detail-brand').click()
@@ -557,6 +594,8 @@ try {
     '.package-row .split-install-toggle',
     '.package-row .row-link',
   ])
+  await assertHeroCommandsAligned(compactMobile, 'compact mobile hero')
+  await assertInstallCommandsReadable(compactMobile, 'compact mobile hero', '.catalog-hero')
   await compactMobile.locator('.ranking-section .package-row .split-install-toggle').first().click()
   await compactMobile.locator('.split-install-menu').waitFor()
   if ((await compactMobile.locator('.split-install-menu [role="menuitem"]').count()) !== 3) {

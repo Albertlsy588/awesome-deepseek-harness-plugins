@@ -1532,13 +1532,15 @@ main {
 }
 
 .install-command code {
+  /* Commands wrap onto a second line rather than hiding their tail behind an
+     inner scrollbar; the whole command has to stay readable at every width. */
   min-width: 0;
-  overflow-x: auto;
   padding: 11px 13px;
   color: #263245;
   font-family: var(--font-mono);
   font-size: 12px;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .install-command .icon-button {
@@ -1682,30 +1684,31 @@ main {
   font-weight: 640;
 }
 
+/* One shared grid for all three rows (the row wrappers collapse via
+   display: contents) so the label column is as wide as the widest label in the
+   active language and every command box starts and ends on the same pixel. */
 .self-install-commands {
-  display: flex;
+  display: grid;
   min-width: 0;
-  flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  gap: 5px 8px;
+  grid-template-columns: max-content minmax(0, 1fr);
 }
 
 .self-install-recommended,
 .self-install-official {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
+  display: contents;
 }
 
 .self-install-banner .install-option-badge,
 .self-install-banner .install-option-label {
-  flex: none;
   margin: 0;
+  align-self: center;
+  justify-self: start;
 }
 
 .self-install-banner .install-command {
   min-width: 0;
-  flex: 1;
   grid-template-columns: auto minmax(0, 1fr) 34px;
   border-color: var(--line);
   background: rgba(255, 253, 248, 0.88);
@@ -1730,16 +1733,14 @@ main {
     justify-content: space-between;
   }
 
-  .self-install-recommended,
-  .self-install-official {
-    display: grid;
+  .self-install-commands {
+    align-items: stretch;
+    gap: 4px;
     grid-template-columns: minmax(0, 1fr);
-    justify-items: start;
   }
 
-  .self-install-banner .install-option-badge,
   .self-install-banner .install-option-label {
-    margin-bottom: 4px;
+    margin-top: 5px;
   }
 
   .self-install-banner .install-command {
