@@ -506,6 +506,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       ? await dependencies.installStatsLoader(db, SELF_PLUGIN_ID, dependencies.clock())
       : emptyInstallMetrics()
     context.header('Cache-Control', CACHE_HEADER)
+    context.header('X-Robots-Tag', 'noindex')
     return context.json(metrics)
   })
 

@@ -95,15 +95,16 @@ npx --yes @deepseek-ai/dsh plugin --profile web add github:owner/repository#v1.2
 | 目标 | 归因为 | id 来源 |
 | --- | --- | --- |
 | `github:owner/repository`、`owner/repository`（可带 `#ref`、`.git`） | `owner/repository` | 参数本身 |
+| `github:owner/repository#path:sub/dir`、`owner/repository/sub/dir` | `owner/repository/sub/dir` | 参数本身 |
 | `dsh1024`、`dsh1024@<版本>` | 本目录仓库 | 固定 |
 | 已发布的包名（可带版本 / tag / 范围） | 安装后清单里的仓库 | 安装成功后读 `node_modules/<包名>/package.json` 的 `repository` 字段 |
 | 本地路径、`file:`、`link:`、`portal:`、URL、盘符、`~` | 一律不上报 | — |
 | `gitlab:`、`bitbucket:`、`gist:`、`jsr:`、`workspace:`、`catalog:`、npm alias、完整 git URL | 不计入 | — |
 
 包名反查只读一个本地文件——已安装包自己的 `repository` 字段，支持 npm 的字符串
-与对象两种写法，且只接受 github.com 主机。monorepo 的 `directory` 会被忽略，
-仓库根就是目录使用的身份。字段缺失、指向非 GitHub，或安装失败无从读取时，
-该次安装不计入。
+与对象两种写法，且只接受 github.com 主机。monorepo 的 `directory` 会成为标识里的
+子目录，同仓库的兄弟包各自独立计数。字段缺失、指向非 GitHub、声明的目录越出仓库，
+或安装失败无从读取时，该次安装不计入。
 
 本地路径与 `file:`/`link:`/`portal:` 是硬边界：文件系统路径永远不会进入安装
 事件、本地 receipt 或重试队列。

@@ -39,6 +39,7 @@ than attributed to a guess.
 | Target | Counted as | Where the id comes from |
 | --- | --- | --- |
 | `github:owner/repository`, `owner/repository` (optionally `#ref`, `.git`) | `owner/repository` | the argument itself |
+| `github:owner/repository#path:sub/dir`, `owner/repository/sub/dir` (optionally `#ref&path:…`) | `owner/repository/sub/dir` | the argument itself |
 | `dsh1024`, `dsh1024@<version>` | this catalog repository | fixed |
 | Published package names, scoped or not, with or without a version/tag/range | the repository in the installed manifest | `repository` field of `node_modules/<name>/package.json` after a successful install |
 | Local paths, `file:`, `link:`, `portal:`, URLs, drive letters, `~` | never reported | — |
@@ -48,10 +49,11 @@ The published-package lookup reads one local file and nothing else: the
 installed package's own `repository` field, accepted in npm's string and object
 spellings (`github:owner/repo`, `https://github.com/owner/repo(.git)`,
 `git+https://…`, `git@github.com:owner/repo.git`, `{type, url, directory}`) and
-only for github.com hosts. A monorepo `directory` is ignored — the repository
-root is the identity the catalog is keyed by. If the field is missing, points
-elsewhere, or the install failed so there is nothing to read, the install is not
-counted.
+only for github.com hosts. A monorepo `directory` is part of the identity — it
+becomes the id's path, so sibling packages in one repository never share a
+counter. If the field is missing, points elsewhere, declares a directory that
+escapes the repository, or the install failed so there is nothing to read, the
+install is not counted.
 
 Local, `file:`, `link:` and `portal:` targets are a hard boundary: a filesystem
 path can never reach an install event, a local receipt, or the retry queue.

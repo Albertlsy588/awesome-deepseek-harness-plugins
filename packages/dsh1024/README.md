@@ -113,6 +113,7 @@ attributed to a guess.
 | Target | Counted as | Where the id comes from |
 | --- | --- | --- |
 | `github:owner/repository`, `owner/repository` (optionally `#ref`, `.git`) | `owner/repository` | the argument itself |
+| `github:owner/repository#path:sub/dir`, `owner/repository/sub/dir` | `owner/repository/sub/dir` | the argument itself |
 | `dsh1024`, `dsh1024@<version>` | this catalog repository | fixed |
 | Published package names, with or without a version/tag/range | the repository in the installed manifest | `repository` field of `node_modules/<name>/package.json`, read after a successful install |
 | Local paths, `file:`, `link:`, `portal:`, URLs, drive letters, `~` | never reported | — |
@@ -120,9 +121,10 @@ attributed to a guess.
 
 The published-package lookup reads one local file — the installed package's own
 `repository` field — and accepts npm's string and object spellings for
-github.com hosts only. A monorepo `directory` is ignored; the repository root is
-the identity the catalog uses. A missing or non-GitHub field, or a failed
-install with nothing to read, means the install is not counted.
+github.com hosts only. A monorepo `directory` becomes the id's path, so sibling
+packages in one repository are counted separately. A missing or non-GitHub
+field, a directory that escapes the repository, or a failed install with nothing
+to read, means the install is not counted.
 
 Local, `file:`, `link:` and `portal:` targets are a hard boundary: a filesystem
 path can never reach an install event, a local receipt, or the retry queue.

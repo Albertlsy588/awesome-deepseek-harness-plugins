@@ -741,6 +741,9 @@ describe('market API', () => {
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual(emptyInstallMetrics())
     expect(installStatsLoader).not.toHaveBeenCalled()
+    // Every other read endpoint is noindex; this one must not be the exception
+    // that ends up as the only indexable JSON on the domain.
+    expect(response.headers.get('X-Robots-Tag')).toBe('noindex')
   })
 
   it('merges aggregate installation metrics into package details', async () => {
