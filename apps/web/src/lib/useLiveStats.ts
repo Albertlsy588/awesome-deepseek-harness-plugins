@@ -6,10 +6,34 @@ interface LiveStatsState {
   connected: boolean
 }
 
+const VISIT_STORAGE_KEY = 'dsh.visit-id'
+const VISIT_ID = /^[A-Za-z0-9-]{16,80}$/
+
 let pageVisitId: string | undefined
 
+/**
+ * Kept in localStorage so a reload or a second tab is the same visitor: the
+ * worker dedupes both the hourly view counter and the live headcount by this id.
+ */
 function visitId(): string {
-  pageVisitId ??= crypto.randomUUID()
+  if (pageVisitId) return pageVisitId
+
+  try {
+    const stored = window.localStorage.getItem(VISIT_STORAGE_KEY)
+    if (stored && VISIT_ID.test(stored)) {
+      pageVisitId = stored
+      return pageVisitId
+    }
+  } catch {
+    // Storage can be denied in private browsing; fall back to a per-page identity.
+  }
+
+  pageVisitId = crypto.randomUUID()
+  try {
+    window.localStorage.setItem(VISIT_STORAGE_KEY, pageVisitId)
+  } catch {
+    // Ignore: the identifier still works for the lifetime of this page.
+  }
   return pageVisitId
 }
 
@@ -46,8 +70,10 @@ export function useLiveStats(): LiveStatsState {
         }, 25_000)
       })
       socket.addEventListener('message', (event) => {
+        const data = String(event.data)
+        if (data === 'pong') return
         try {
-          const payload: unknown = JSON.parse(String(event.data))
+          const payload: unknown = JSON.parse(data)
           if (isLiveStats(payload)) setState({ stats: payload, connected: true })
         } catch {
           // Ignore malformed frames and retain the last valid snapshot.
@@ -65,9 +91,17 @@ export function useLiveStats(): LiveStatsState {
       socket.addEventListener('error', () => socket?.close())
     }
 
+    // Leaving the page closes the socket immediately instead of waiting for the
+    // worker to time the heartbeat out.
+    function handlePageHide() {
+      socket?.close(1000, 'Page hidden')
+    }
+
     connect()
+    window.addEventListener('pagehide', handlePageHide)
     return () => {
       stopped = true
+      window.removeEventListener('pagehide', handlePageHide)
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer)
       if (heartbeatTimer !== undefined) window.clearInterval(heartbeatTimer)
       socket?.close(1000, 'Page closed')
