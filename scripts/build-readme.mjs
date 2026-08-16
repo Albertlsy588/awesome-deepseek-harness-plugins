@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -134,6 +135,28 @@ function pluginLine(plugin, locale) {
     : `- [${plugin.name}](${plugin.url})`
 }
 
+// The homepage screenshot lives on a dedicated orphan `assets` branch that CI
+// force-pushes to a single commit, so republishing it never grows the repository.
+// GitHub proxies README images through camo and keys that cache on the URL, so a
+// stable URL would leave readers looking at a stale screenshot. The cache-buster is
+// derived from the catalog contents rather than the clock: the image URL changes
+// exactly when the plugin list changes, which keeps the screenshot in step with the
+// list without producing a README commit on every no-op sync.
+export const screenshotBranch = 'assets'
+export const screenshotPath = 'homepage.png'
+const screenshotRepository = 'imsai-sh/awesome-deepseek-harness-plugins'
+
+export function catalogRevision(registry) {
+  const material = registry.plugins.map(plugin => `${plugin.id}\u0000${plugin.category}`).join('\n')
+  return createHash('sha256').update(`${registry.updated}\n${material}`).digest('hex').slice(0, 12)
+}
+
+function heroImage(registry, locale) {
+  const alt = locale === 'zh' ? 'DSH 1024Store 插件市场首页' : 'The DSH 1024Store plugin marketplace homepage'
+  const source = `https://raw.githubusercontent.com/${screenshotRepository}/${screenshotBranch}/${screenshotPath}?v=${catalogRevision(registry)}`
+  return `[![${alt}](${source})](https://deepseek1024.com/)`
+}
+
 // GitHub stops rendering Markdown at 500 KiB and gives no truncation notice: every
 // entry past that byte offset simply does not exist for readers. Measured against the
 // live catalog on 2026-08-16, an uncapped projection was 594 KB and silently dropped
@@ -213,6 +236,8 @@ ${generatedNotice.zh}
 面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（\`dsh\`）生态的社区插件目录，共收录 **${total}** 个插件（含 PR 收录与 GitHub \`dsh-plugin\` topic 自动发现），目录数据更新于 ${registry.updated}。
 
 **但这个仓库不只是一份 awesome list。** 维护这份目录所需要的全部基建都在这里开源：一个在线插件市场、一个把市场装进 \`dsh\` 本体的插件、一条定时自动收集并做格式校验的目录流水线，以及一套免费的公开查询 API。代码采用 MIT 协议，fork 之后就能部署成你自己的插件市场。
+
+${heroImage(registry, 'zh')}
 
 [在线网站](https://deepseek1024.com/) · [API 文档](docs/api.md) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md)
 
@@ -388,6 +413,8 @@ ${generatedNotice.en}
 The **DSH 1024Store** community catalog for [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) plugins: **${total}** plugins, updated ${registry.updated}.
 
 **This repository is more than an awesome list.** Everything needed to run the catalog is open source here: a hosted plugin marketplace, a plugin that puts that marketplace inside \`dsh\` itself, a scheduled discovery pipeline that validates every entry, and a free public query API. The code is MIT licensed, so you can fork it and run your own marketplace.
+
+${heroImage(registry, 'en')}
 
 [Live website](https://deepseek1024.com/) · [API reference](../docs/api.md) · [中文目录](../README.md) · [Submit a plugin](../CONTRIBUTING.md)
 
