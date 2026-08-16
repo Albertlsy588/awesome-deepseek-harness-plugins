@@ -3974,4 +3974,63 @@ main {
   .kanban-girl-bubble-dot {
     display: none;
   }
+
+
+/* Install methods: one block per way to install, each stating what the catalog
+   verified. Stacks on narrow screens; the badges stay on one line with the
+   method name so the command below them keeps full width. */
+.install-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.install-method-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.install-method-kind {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.install-badge {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+.install-badge-verified {
+  background: color-mix(in srgb, var(--success, #16a34a) 12%, transparent);
+  border-color: color-mix(in srgb, var(--success, #16a34a) 32%, transparent);
+  color: var(--success, #16a34a);
+}
+
+.install-badge-unverified {
+  background: color-mix(in srgb, var(--warning, #b45309) 12%, transparent);
+  border-color: color-mix(in srgb, var(--warning, #b45309) 32%, transparent);
+  color: var(--warning, #b45309);
+}
+
+.install-badge-unknown {
+  background: var(--surface-muted, rgba(127, 137, 150, 0.12));
+  border-color: var(--border, rgba(127, 137, 150, 0.28));
+  color: var(--text-secondary);
+}
+
+.install-badge-allowance {
+  background: var(--surface-muted, rgba(127, 137, 150, 0.12));
+  border-color: var(--border, rgba(127, 137, 150, 0.28));
+  color: var(--text-secondary);
+  font-weight: 500;
 }

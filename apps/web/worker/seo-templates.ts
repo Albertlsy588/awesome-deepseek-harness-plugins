@@ -1,4 +1,4 @@
-import { repositoryName } from './lib/catalog'
+import { pluginDetailPath } from './lib/plugin-id'
 import type { CatalogPlugin, Language, RegistryPlugin } from './types'
 
 /**
@@ -35,8 +35,11 @@ export function absoluteUrl(path: string): string {
   return new URL(path, SITE_ORIGIN).toString()
 }
 
-export function pluginPath(plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>): string {
-  return `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
+export function pluginPath(plugin: Pick<RegistryPlugin, 'id'>): string {
+  // Built from the id, not owner + repository name: a monorepo subpackage's
+  // page lives at owner/repository/sub/dir, and encoding the separators away
+  // would point every SEO surface at a URL that does not exist.
+  return pluginDetailPath(plugin.id)
 }
 
 /**
@@ -301,7 +304,7 @@ export function collectionPageNode(
  * lists must be sorted here or the "top plugins" list ships alphabetically.
  */
 export function itemListNode(
-  plugins: Pick<CatalogPlugin, 'name' | 'owner' | 'url'>[],
+  plugins: Pick<CatalogPlugin, 'id' | 'name' | 'owner' | 'url'>[],
   path: string,
   name: string,
   total: number,
@@ -334,6 +337,11 @@ export interface PluginNodeInput {
   updatedAt?: string | null
   license?: string | null
   repository: string
+  /**
+   * Where the plugin's source actually lives. A monorepo subpackage points at
+   * its subdirectory; omit it and the repository URL is used.
+   */
+  sourceUrl?: string
 }
 
 export function pluginNodes(
@@ -371,7 +379,7 @@ export function pluginNodes(
       operatingSystem: 'Cross-platform',
       runtimePlatform: 'DeepSeek Harness',
       softwareRequirements: 'DeepSeek Harness (dsh) CLI',
-      codeRepository: plugin.url,
+      codeRepository: plugin.sourceUrl ?? plugin.url,
       author: {
         '@type': 'Person',
         name: plugin.owner,

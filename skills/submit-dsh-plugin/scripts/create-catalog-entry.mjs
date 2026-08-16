@@ -18,13 +18,16 @@ function usage() {
   return `用法：
   node create-catalog-entry.mjs \\
     --catalog-root <path> \\
-    --id <owner/repository> \\
+    --id <owner/repository[/sub/dir]> \\
     --category <category-id> \\
     --description-en <text> \\
     --description-zh <text> \\
     [--name <display-name>] \\
     [--added <YYYY-MM-DD>] \\
-    [--dry-run]`
+    [--dry-run]
+
+monorepo 子包在 --id 中追加仓库内路径段（例如 owner/repository/packages/foo），
+安装规格由目录推导为 github:owner/repository#path:sub/dir。`
 }
 
 function fail(message) {
@@ -66,9 +69,23 @@ function slugPart(value) {
     .replace(/^-+|-+$/g, '')
 }
 
+// 文件名覆盖完整 ID：每个 `/` 分隔的段转小写并把连续非字母数字字符替换成
+// `-`，再用 `--` 连接（与目录仓库 scripts/lib/catalog-entry.mjs 的
+// pluginFileName 保持一致），因此同一仓库的不同子目录条目得到不同文件名。
 function pluginFileName(id) {
-  const [owner, repository] = id.split('/')
-  return `${slugPart(owner)}--${slugPart(repository)}.json`
+  return `${id.split('/').map(slugPart).join('--')}.json`
+}
+
+// 插件 ID 为 owner/repository，可追加仓库内路径段（monorepo 子包）。路径段
+// 会进入 pnpm 的 `github:owner/repository#path:` 安装规格，因此 `.` 与 `..`
+// 段一律拒绝；201 字符上限与目录仓库的可信审查保持一致。
+const idSegmentPattern = /^[A-Za-z0-9_.-]+$/
+
+function isValidPluginId(id) {
+  if (id.length > 201) return false
+  const segments = id.split('/')
+  return segments.length >= 2
+    && segments.every(segment => idSegmentPattern.test(segment) && segment !== '.' && segment !== '..')
 }
 
 function isIsoDate(value) {
@@ -102,11 +119,13 @@ async function main() {
 
   const root = path.resolve(required(values, 'catalog-root'))
   const id = required(values, 'id')
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(id)) {
-    fail('--id 必须使用 owner/repository 格式')
+  if (!isValidPluginId(id)) {
+    fail('--id 必须使用 owner/repository[/sub/dir] 格式（各段仅限 A-Za-z0-9_.-，路径段不能是 . 或 ..，总长不超过 201 字符）')
   }
-  const [, repositoryName] = id.split('/')
-  const name = (values.get('name') ?? repositoryName).trim()
+  const idSegments = id.split('/')
+  const [owner, repositoryName] = idSegments
+  // 默认展示名称取 ID 的最后一段：两段 ID 即仓库名，子目录 ID 即子包目录名。
+  const name = (values.get('name') ?? idSegments.at(-1)).trim()
   if (name.length === 0 || name.length > 120) fail('--name 长度必须为 1–120 个字符')
 
   const categoriesFile = path.join(root, 'catalog/categories.json')
@@ -125,7 +144,8 @@ async function main() {
     $schema: '../schema/plugin.schema.json',
     id,
     name,
-    repository: `https://github.com/${id}`,
+    // repository 始终是由 ID 前两段推导的仓库根 URL；子目录路径只存在于 id 中。
+    repository: `https://github.com/${owner}/${repositoryName}`,
     category,
     description: {
       en: validateDescription(required(values, 'description-en'), '英文'),
@@ -140,13 +160,12 @@ async function main() {
   } catch (error) {
     fail(`无法读取 ${pluginsDirectory}：${error instanceof Error ? error.message : String(error)}`)
   }
+  // 唯一性按完整 ID（不区分大小写）判断：同一仓库允许以不同子目录路径
+  // 出现在多个条目中，因此不做仓库级别的重复拦截。
   for (const file of existingFiles) {
     const existing = await readJson(path.join(pluginsDirectory, file))
     if (existing?.id?.toLocaleLowerCase('en-US') === id.toLocaleLowerCase('en-US')) {
       fail(`插件 ID 已存在于 catalog/plugins/${file}`)
-    }
-    if (existing?.repository?.toLocaleLowerCase('en-US') === entry.repository.toLocaleLowerCase('en-US')) {
-      fail(`插件仓库已存在于 catalog/plugins/${file}`)
     }
   }
 

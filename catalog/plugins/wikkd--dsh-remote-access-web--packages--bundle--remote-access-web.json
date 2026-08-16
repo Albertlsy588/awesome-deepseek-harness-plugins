@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "wikkd/dsh-remote-access-web/packages/bundle/remote-access-web",
+  "name": "remote-access-web",
+  "repository": "https://github.com/wikkd/dsh-remote-access-web",
+  "category": "dev",
+  "description": {
+    "en": "Reverse tunnel for the DSH Web GUI: exposes a `dsh --profile web` deployment at a public frp URL and switches the directory picker to the in-app browser, so a phone or remote machine can open and manage the workspace.",
+    "zh": "DSH Web GUI 反向隧道：把 `dsh --profile web` 部署暴露为公网 frp URL，并将目录选择器切换为应用内浏览器，手机或远程机器即可打开并管理工作区。"
+  },
+  "added": "2026-08-16"
+}

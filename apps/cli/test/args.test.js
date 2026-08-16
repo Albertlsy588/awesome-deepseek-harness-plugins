@@ -21,6 +21,31 @@ test('parses add commands, default profile, and refs', () => {
   })
 })
 
+test('parses monorepo subdirectory plugin ids into pnpm path specs', () => {
+  // The documented id form.
+  assert.deepEqual(parseRepository('Owner/Monorepo/packages/foo'), {
+    pluginId: 'owner/monorepo/packages/foo',
+    requestedRef: null,
+    source: 'github:Owner/Monorepo#path:packages/foo',
+  })
+  // The raw pnpm spec reports the same plugin id, so telemetry agrees.
+  assert.deepEqual(parseRepository('github:Owner/Monorepo#path:packages/foo'), {
+    pluginId: 'owner/monorepo/packages/foo',
+    requestedRef: null,
+    source: 'github:Owner/Monorepo#path:packages/foo',
+  })
+  // A pinned commit combines with the subdirectory.
+  assert.deepEqual(parseRepository('Owner/Monorepo/packages/foo#v1.2.0'), {
+    pluginId: 'owner/monorepo/packages/foo',
+    requestedRef: 'v1.2.0',
+    source: 'github:Owner/Monorepo#v1.2.0&path:packages/foo',
+  })
+  // Traversal and contradictory subdirectories are rejected.
+  assert.throws(() => parseRepository('owner/monorepo/../secret'), UsageError)
+  assert.throws(() => parseRepository('owner/monorepo/./foo'), UsageError)
+  assert.throws(() => parseRepository('owner/monorepo/packages/foo#path:packages/bar'), UsageError)
+})
+
 test('rejects ambiguous repositories and unsafe profiles', () => {
   assert.throws(() => parseRepository('https://github.com/owner/plugin'), UsageError)
   assert.throws(() => parseArgs(['add', 'owner/plugin', '--profile', '../secret']), UsageError)

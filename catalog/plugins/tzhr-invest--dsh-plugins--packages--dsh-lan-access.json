@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "TZHR-invest/dsh-plugins/packages/dsh-lan-access",
+  "name": "dsh-lan-access",
+  "repository": "https://github.com/TZHR-invest/dsh-plugins",
+  "category": "ui",
+  "description": {
+    "en": "Complete LAN/remote access for the Web UI: 0.0.0.0 binding, crypto.randomUUID polyfill, token gate (401 login page + WebSocket interception, loopback exempt), privileged-fence and settings-persistence exemptions, and an idempotent installer with upgrade recovery.",
+    "zh": "Web UI 完整局域网/远程访问：0.0.0.0 绑定、crypto.randomUUID polyfill、token 门禁（401 登录页 + WebSocket 拦截，环回地址豁免）、特权栅栏与设置持久化豁免，以及可幂等升级恢复的安装器。"
+  },
+  "added": "2026-08-16"
+}

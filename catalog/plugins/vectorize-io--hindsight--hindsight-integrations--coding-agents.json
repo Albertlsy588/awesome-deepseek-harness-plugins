@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "vectorize-io/hindsight/hindsight-integrations/coding-agents",
+  "name": "coding-agents",
+  "repository": "https://github.com/vectorize-io/hindsight",
+  "category": "memory",
+  "description": {
+    "en": "Hindsight, agent memory that learns: long-term project memory with auto recall and retain, knowledge pages, deep reflection, and per-repo memory banks.",
+    "zh": "Hindsight 可学习的 Agent 记忆：自动召回与沉淀的长期项目记忆、知识页、深度反思与按仓库隔离的记忆库。"
+  },
+  "added": "2026-08-16"
+}

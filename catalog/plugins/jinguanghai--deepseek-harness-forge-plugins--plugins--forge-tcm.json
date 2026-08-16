@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "jinguanghai/deepseek-harness-forge-plugins/plugins/forge-tcm",
+  "name": "forge-tcm",
+  "repository": "https://github.com/jinguanghai/deepseek-harness-forge-plugins",
+  "category": "tools",
+  "description": {
+    "en": "Traditional Chinese Medicine toolkit: eight-axes diagnosis and herb-pair lookup.",
+    "zh": "中医工具集：八纲辨证与药对查询。"
+  },
+  "added": "2026-08-16"
+}

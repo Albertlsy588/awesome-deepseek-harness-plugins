@@ -38,8 +38,16 @@ export async function readProfileState(dshHome, profile) {
 
 function dependencyMatchesPlugin(spec, pluginId) {
   const normalized = spec.toLowerCase().replaceAll('\\', '/')
-  const id = pluginId.toLowerCase()
-  return normalized.includes(id) || normalized.includes(`github.com/${id}`)
+  const segments = pluginId.toLowerCase().split('/')
+  const repository = segments.slice(0, 2).join('/')
+  if (!normalized.includes(repository) && !normalized.includes(`github.com/${repository}`)) {
+    return false
+  }
+  // Monorepo siblings share a repository, so the spec's `path:` fragment is
+  // what tells them apart. A repository-root plugin (no path) must likewise not
+  // match a dependency installed from one of its subdirectories.
+  const specPath = (/[#&]path:\/*([^&]*)/.exec(normalized)?.[1] ?? '').replace(/\/+$/, '')
+  return specPath === segments.slice(2).join('/')
 }
 
 function receiptNamesPresent(state, receipt) {

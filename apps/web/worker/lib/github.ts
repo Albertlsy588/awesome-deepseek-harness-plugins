@@ -6,6 +6,7 @@ import type {
 } from '../types'
 import { repositoryName } from './catalog'
 import { emptyInstallMetrics } from './install-metrics'
+import { parsePluginId } from './plugin-id'
 
 type JsonObject = Record<string, unknown>
 
@@ -137,10 +138,21 @@ export async function fetchPackageDetail(
 
   const branch = github?.defaultBranch ?? 'main'
   const rawBase = `https://raw.githubusercontent.com/${plugin.owner}/${repository}/${encodeURIComponent(branch)}`
-  const [manifestText, readme] = await Promise.all([
-    boundedText(fetcher, `${rawBase}/package.json`, 128 * 1024),
-    boundedText(fetcher, `${rawBase}/README.md`, 256 * 1024),
+  // A monorepo subpackage's manifest and README live in its own directory;
+  // reading the repository root would report the wrong bundle declaration.
+  const pluginPath = parsePluginId(plugin.id)?.path ?? ''
+  const prefix = pluginPath.length === 0
+    ? ''
+    : `/${pluginPath.split('/').map(encodeURIComponent).join('/')}`
+  const [manifestText, subdirectoryReadme] = await Promise.all([
+    boundedText(fetcher, `${rawBase}${prefix}/package.json`, 128 * 1024),
+    boundedText(fetcher, `${rawBase}${prefix}/README.md`, 256 * 1024),
   ])
+  const rootReadme = subdirectoryReadme !== null || prefix === ''
+    ? null
+    : await boundedText(fetcher, `${rawBase}/README.md`, 256 * 1024)
+  const readme = subdirectoryReadme ?? rootReadme
+  const readmeBasePath = subdirectoryReadme === null ? '' : pluginPath
 
   let manifest: PackageManifestSummary | null = null
   if (manifestText) {
@@ -157,6 +169,7 @@ export async function fetchPackageDetail(
     github,
     manifest,
     readme,
+    readmeBasePath,
     verification: {
       repositoryReachable: github !== null,
       bundleDeclared: manifest?.bundlePatch !== null && manifest?.bundlePatch !== undefined,

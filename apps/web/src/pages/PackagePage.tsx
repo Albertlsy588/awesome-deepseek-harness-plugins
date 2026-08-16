@@ -24,8 +24,10 @@ import { Link, useParams } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
 import { CategoryTag } from '../components/CategoryTag'
 import { InstallCommand } from '../components/InstallCommand'
+import { InstallMethods } from '../components/InstallMethods'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
+import { pluginDetailPath, pluginSourceUrl } from '../../worker/lib/plugin-id'
 import { ApiError, getPackage, repositoryName, type PackageDetail } from '../lib/api'
 import { publicAsset } from '../lib/assets'
 import { formatDate, formatDateTime, formatNumber } from '../lib/format'
@@ -40,7 +42,10 @@ import {
 import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 export function PackagePage() {
-  const { owner = '', name = '' } = useParams()
+  // Splat route: the id is owner plus every remaining segment, which is how a
+  // monorepo subpackage (owner/repo/packages/foo) addresses its detail page.
+  const { owner = '', '*': rest = '' } = useParams()
+  const requestedId = [owner, ...rest.split('/')].filter(Boolean).join('/')
   const { language, t } = useI18n()
   const [detail, setDetail] = useState<PackageDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -52,7 +57,7 @@ export function PackagePage() {
     setDetail(null)
     setError(null)
     setMissing(false)
-    getPackage(owner, name, controller.signal)
+    getPackage(requestedId, controller.signal)
       .then(setDetail)
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === 'AbortError') return
@@ -62,11 +67,15 @@ export function PackagePage() {
         setError(requestError instanceof Error ? requestError.message : t('notFoundBody'))
       })
     return () => controller.abort()
-  }, [name, owner, reload, t])
+  }, [requestedId, reload, t])
 
-  const canonicalOwner = detail?.owner ?? owner
-  const canonicalRepository = detail ? repositoryName(detail) : name
-  const canonicalPath = `/plugins/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`
+  const canonicalPath = pluginDetailPath(detail?.id ?? requestedId)
+  // The splat route carries one id, so the pieces upstream took from separate
+  // route params come from it: the owner is the first segment and the display
+  // name the last (the subpackage directory for a monorepo plugin).
+  const requestedSegments = requestedId.split('/')
+  const name = detail ? repositoryName(detail) : (requestedSegments.at(-1) ?? '')
+  const canonicalRepository = name
   const canonicalUrl = `${SITE_ORIGIN}${canonicalPath}`
   const categoryLabel = detail?.category?.label[language] ?? ''
   const seoTitle = detail
@@ -99,6 +108,7 @@ export function PackagePage() {
             updatedAt: detail.github?.updatedAt ?? null,
             license: detail.manifest?.license ?? detail.github?.license ?? null,
             repository: canonicalRepository,
+            sourceUrl: pluginSourceUrl(detail.id, detail.url, detail.github?.defaultBranch ?? 'HEAD'),
           },
           canonicalUrl,
           seoTitle,
@@ -162,19 +172,27 @@ export function PackagePage() {
         .map(([engine, version]) => `${engine} ${version}`)
         .join(', ')
     : null
+  // Issues are tracked per repository, so the report link stays at the root
+  // even for a subpackage; only the source link points into the subdirectory.
   const reportUrl = `${detail.url}/issues/new?title=${encodeURIComponent(`[DSH 1024Store] ${detail.name}`)}`
   const branch = github?.defaultBranch ?? 'main'
+  const sourceUrl = pluginSourceUrl(detail.id, detail.url, branch)
   const detailOwner = detail.owner
   const detailRepository = repositoryName(detail)
+  // Relative links resolve against the directory the README actually came
+  // from: a subpackage without its own README falls back to the root one, and
+  // rebasing that onto the subdirectory would break every link in it.
+  const readmeBasePath = detail.readmeBasePath ?? ''
+  const readmePrefix = readmeBasePath.length === 0 ? '' : `${readmeBasePath}/`
 
   function readmeLink(href?: string): string | undefined {
     if (!href || /^(https?:|mailto:|#)/.test(href)) return href
-    return `https://github.com/${detailOwner}/${detailRepository}/blob/${branch}/${href.replace(/^\.\//, '')}`
+    return `https://github.com/${detailOwner}/${detailRepository}/blob/${branch}/${readmePrefix}${href.replace(/^\.\//, '')}`
   }
 
   function readmeImage(src?: string): string | undefined {
     if (!src || /^https?:/.test(src)) return src
-    return `https://raw.githubusercontent.com/${detailOwner}/${detailRepository}/${branch}/${src.replace(/^\.\//, '')}`
+    return `https://raw.githubusercontent.com/${detailOwner}/${detailRepository}/${branch}/${readmePrefix}${src.replace(/^\.\//, '')}`
   }
 
   return (
@@ -209,7 +227,7 @@ export function PackagePage() {
           <p className="detail-description">{detail.description[language]}</p>
         </div>
         <div className="detail-actions">
-          <a className="button button-primary" href={detail.url} target="_blank" rel="noreferrer">
+          <a className="button button-primary" href={sourceUrl} target="_blank" rel="noreferrer">
             <Code2 size={16} aria-hidden="true" />
             {t('source')}
           </a>
@@ -245,7 +263,9 @@ export function PackagePage() {
         <div className="detail-primary">
           <section className="detail-section install-section" aria-labelledby="install-heading">
             <h2 id="install-heading">{t('install')}</h2>
-            <InstallCommand command={detail.install} prominent />
+            {detail.installMethods && detail.installMethods.length > 0
+              ? <InstallMethods methods={detail.installMethods} />
+              : <InstallCommand command={detail.install} prominent />}
           </section>
 
           <section className="detail-section install-activity-section" aria-labelledby="install-activity-heading">

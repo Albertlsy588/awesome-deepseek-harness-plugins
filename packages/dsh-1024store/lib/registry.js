@@ -68,6 +68,28 @@ export function parseGitHubSource(url) {
     const match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/?$/.exec(url);
     return match?.[1] ?? null;
 }
+const ID_SEGMENT = /^[A-Za-z0-9_.-]+$/;
+/**
+ * The plugin's in-repo directory, taken from its id and cross-checked against
+ * the repository URL. A monorepo subpackage's id extends its repository with
+ * the directory the plugin lives in.
+ * @param id - curated plugin id.
+ * @param repository - owner/repository parsed from the plugin's URL.
+ * @returns the subdirectory, or `''` for a repository-level plugin.
+ */
+export function pluginSubPath(id, repository) {
+    const segments = id.split('/');
+    if (segments.length < 2)
+        throw new Error('unsupported plugin id');
+    if (segments.slice(0, 2).join('/').toLowerCase() !== repository.toLowerCase()) {
+        throw new Error('plugin id does not match its repository URL');
+    }
+    const rest = segments.slice(2);
+    if (!rest.every(segment => ID_SEGMENT.test(segment) && segment !== '.' && segment !== '..')) {
+        throw new Error('unsupported plugin subdirectory');
+    }
+    return rest.join('/');
+}
 /**
  * Derive a pnpm package spec without trusting the registry's display command.
  * @param plugin - validated curated plugin.
@@ -77,7 +99,8 @@ export function installTarget(plugin) {
     const repository = parseGitHubSource(plugin.url);
     if (repository === null)
         throw new Error('unsupported plugin repository URL');
-    return `github:${repository}`;
+    const subPath = pluginSubPath(plugin.id, repository);
+    return subPath === '' ? `github:${repository}` : `github:${repository}#path:${subPath}`;
 }
 /** Clear process-local registry state for deterministic tests. */
 export function clearRegistryCache() {

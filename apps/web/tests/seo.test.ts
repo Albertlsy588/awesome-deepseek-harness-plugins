@@ -4,6 +4,7 @@ import {
   buildLlmsFullTxt,
   buildRobotsTxt,
   buildSitemap,
+  detailRedirectForPath,
   metadataForPath,
   seoCatalog,
   type SeoCatalog,
@@ -70,6 +71,9 @@ describe('SEO metadata', () => {
     const plugin = TEST_PLUGINS[0]!
     const twin = {
       ...plugin,
+      // Identity is the id now, so the twin needs its own — sharing one would
+      // make both URLs resolve to the same plugin.
+      id: `other-owner/${plugin.repository}`,
       owner: 'other-owner',
       url: `https://github.com/other-owner/${plugin.repository}`,
     }
@@ -247,10 +251,14 @@ describe('crawler directives', () => {
     expect(sitemap).toContain('<loc>https://deepseek1024.com/docs/api</loc>')
     expect(sitemap).not.toContain('<loc>https://deepseek1024.com/rankings</loc>')
     for (const plugin of TEST_PLUGINS) {
-      expect(sitemap).toContain(`/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(plugin.repository)}</loc>`)
+      // Subdirectory ids keep their path segments; each is encoded separately.
+      const path = plugin.id.split('/').map(encodeURIComponent).join('/')
+      expect(sitemap).toContain(`/plugins/${path}</loc>`)
     }
     expect(sitemap).not.toContain('<loc>https://deepseek1024.com/plugin</loc>')
-    expect(sitemap).not.toContain('/packages/')
+    // The legacy detail route, not the literal segment: a monorepo plugin id
+    // legitimately contains a `packages/` directory.
+    expect(sitemap).not.toContain('https://deepseek1024.com/packages/')
 
     // Repository activity, not the catalog-entry date, is what actually changes
     // a detail page; a plugin with no push data falls back to `added`. Assert
@@ -261,7 +269,7 @@ describe('crawler directives', () => {
       )?.[1]
 
     for (const plugin of TEST_PLUGINS) {
-      const path = `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(plugin.repository)}`
+      const path = `/plugins/${plugin.id.split('/').map(encodeURIComponent).join('/')}`
       expect(lastmodFor(path), `lastmod for ${path}`)
         .toBe((plugin.pushedAt ?? plugin.updatedAt ?? plugin.added).slice(0, 10))
     }
@@ -299,5 +307,30 @@ describe('crawler directives', () => {
     }
     expect(llms).toContain('dsh plugin --profile web add github:')
     expect(llms).not.toContain('npx @dsh-1024store/')
+  })
+  it('redirects a repository address to the subpackage that succeeded it', () => {
+    const catalog = testSeoCatalog()
+
+    // omdsh-dev/dsh-suite is not itself a plugin; two subpackages live under
+    // it, so the address cannot pick a winner and lands on the filtered catalog.
+    expect(detailRedirectForPath('/plugins/omdsh-dev/dsh-suite', catalog))
+      .toBe('/plugins?q=omdsh-dev%2Fdsh-suite')
+
+    // With a single successor the old address redirects straight to it.
+    const single: SeoCatalog = {
+      ...catalog,
+      plugins: catalog.plugins.filter((plugin) => plugin.id !== 'omdsh-dev/dsh-suite/packages/dsh-timeline'),
+    }
+    expect(detailRedirectForPath('/plugins/omdsh-dev/dsh-suite', single))
+      .toBe('/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector')
+    expect(detailRedirectForPath('/plugins/omdsh-dev/dsh-suite/', single))
+      .toBe('/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector')
+
+    // An address that resolves to a real plugin is never redirected, and one
+    // with no successors keeps its 404.
+    expect(detailRedirectForPath('/plugins/omdsh-dev/dsh-gomoku', catalog)).toBeNull()
+    expect(detailRedirectForPath('/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector', catalog)).toBeNull()
+    expect(detailRedirectForPath('/plugins/nobody/nothing', catalog)).toBeNull()
+    expect(detailRedirectForPath('/plugins', catalog)).toBeNull()
   })
 })

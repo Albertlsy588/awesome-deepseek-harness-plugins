@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Ceelog/dsh-plugins/src/plugins/dsh-plugin-scheduled-tasks",
+  "name": "dsh-plugin-scheduled-tasks",
+  "repository": "https://github.com/Ceelog/dsh-plugins",
+  "category": "workflow",
+  "description": {
+    "en": "Per-project scheduled prompts run as fresh headless agent sessions, with one-time, interval, and cron schedules plus durable run history.",
+    "zh": "按项目的定时 Prompt，以全新 headless Agent 会话运行：支持一次性、间隔与 cron 调度，并持久保存运行历史。"
+  },
+  "added": "2026-08-16"
+}

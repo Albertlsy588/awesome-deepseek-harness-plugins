@@ -1,4 +1,5 @@
-import { comparePlugins, findPlugin, hasGrowthForSort, repositoryName } from './lib/catalog'
+import { comparePlugins, findPluginById, findPluginsUnder, hasGrowthForSort, repositoryName } from './lib/catalog'
+import { pluginDetailPath, pluginSourceUrl } from './lib/plugin-id'
 import {
   renderCollectionShell,
   renderNotFoundShell,
@@ -141,6 +142,32 @@ function collectionMetadata(
   }
 }
 
+/**
+ * Where a `/plugins/...` address should redirect when it names no plugin but
+ * names something plugins live under.
+ *
+ * A repository whose bundle sits in a subdirectory is catalogued at the
+ * subpackage's id, so its previously published repository-level URL would
+ * otherwise 404 and be deindexed. One successor redirects to it; several
+ * (a monorepo publishing many plugins) cannot pick a winner, so the catalog
+ * lists them instead.
+ *
+ * @returns the target path, or null when the address needs no redirect.
+ */
+export function detailRedirectForPath(pathname: string, catalog: SeoCatalog): string | null {
+  const match = pathname.match(/^\/plugins\/([^/]+(?:\/[^/]+)+)\/?$/)
+  if (!match) return null
+  const segments = (match[1] ?? '').split('/').map(safeDecode)
+  if (!segments.every((segment) => segment !== null && segment.length > 0)) return null
+  const requestedId = segments.join('/')
+  if (findPluginById(catalog.plugins, requestedId)) return null
+
+  const successors = findPluginsUnder(catalog.plugins, requestedId)
+  if (successors.length === 1) return pluginDetailPath(successors[0]!.id)
+  if (successors.length > 1) return `/plugins?q=${encodeURIComponent(requestedId)}`
+  return null
+}
+
 export function metadataForPath(
   pathname: string,
   catalog: SeoCatalog,
@@ -183,16 +210,21 @@ export function metadataForPath(
     }
   }
 
-  const match = pathname.match(/^\/plugins\/([^/]+)\/([^/]+)\/?$/)
+  // Any depth: a monorepo plugin's detail path carries its in-repo directory.
+  // Without this the page would be served as a 404 + noindex shell.
+  const match = pathname.match(/^\/plugins\/([^/]+(?:\/[^/]+)+)\/?$/)
   if (match) {
-    const owner = safeDecode(match[1] ?? '')
-    const repository = safeDecode(match[2] ?? '')
-    const plugin = owner && repository ? findPlugin(catalog.plugins, owner, repository) : undefined
+    // match[1] is the whole tail, so a monorepo subpackage keeps its path.
+    const segments = (match[1] ?? '').split('/').map(safeDecode)
+    const requestedId = segments.every((segment) => segment !== null && segment.length > 0)
+      ? segments.join('/')
+      : ''
+    const plugin = requestedId ? findPluginById(catalog.plugins, requestedId) : undefined
     if (plugin) return pluginMetadata(plugin, catalog, language)
-    if (catalog.degraded && owner && repository) {
+    if (catalog.degraded && requestedId) {
       // A cold or failed catalog must not deindex the whole corpus: serve a
       // 200 built from the URL itself and let the client fill in the detail.
-      return degradedPluginMetadata(sanitizeSegment(owner), sanitizeSegment(repository), language)
+      return degradedPluginMetadata(segments.map((segment) => sanitizeSegment(segment!)).join('/'), language)
     }
   }
 
@@ -258,6 +290,7 @@ function pluginMetadata(
           pushedAt: plugin.pushedAt,
           updatedAt: plugin.updatedAt,
           repository: repositoryName(plugin),
+          sourceUrl: pluginSourceUrl(plugin.id, plugin.url),
         },
         canonical,
         title,
@@ -274,14 +307,20 @@ function pluginMetadata(
   }
 }
 
-function degradedPluginMetadata(
-  owner: string,
-  repository: string,
-  language: Language,
-): PageMetadata {
-  const canonical = absoluteUrl(`/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`)
-  const title = pluginTitle(repository, owner, language)
-  const description = pluginDescription(repository, owner, '', '', language)
+/**
+ * @param id - the full plugin id from the URL, `owner/repository[/sub/dir]`.
+ *   Encoding it segment-wise keeps a monorepo subpackage's canonical pointing
+ *   at its real page; percent-encoding the separators would invent a URL.
+ */
+function degradedPluginMetadata(id: string, language: Language): PageMetadata {
+  const segments = id.split('/')
+  const owner = segments[0] ?? id
+  // The last segment names the plugin: the repository for a plain id, the
+  // subpackage directory for a monorepo one.
+  const displayName = segments.at(-1) ?? id
+  const canonical = absoluteUrl(pluginDetailPath(id))
+  const title = pluginTitle(displayName, owner, language)
+  const description = pluginDescription(displayName, owner, '', '', language)
   return {
     title,
     description,

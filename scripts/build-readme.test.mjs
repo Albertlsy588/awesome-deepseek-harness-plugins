@@ -28,7 +28,7 @@ const categories = [
 const registryFixture = {
   name: 'dsh-1024store-catalog',
   updated: '2026-08-15T04:05:06.000Z',
-  count: 4,
+  count: 5,
   categories: categories.map(category => ({ ...category })),
   plugins: [
     {
@@ -75,6 +75,17 @@ const registryFixture = {
       added: '2026-08-03',
       stars: 0,
     },
+    {
+      id: 'owner/monorepo/packages/nested',
+      name: 'nested-plugin',
+      owner: 'owner',
+      url: 'https://github.com/owner/monorepo',
+      category: 'tools',
+      description: { en: 'A monorepo subpackage plugin.', zh: 'monorepo 子包插件。' },
+      install: 'dsh plugin --profile web add github:owner/monorepo#path:packages/nested',
+      added: '2026-08-16',
+      stars: 1,
+    },
   ],
 }
 
@@ -93,7 +104,7 @@ async function fixtureRoot() {
 test('groups by category order with unclassified last and stable name sorting', () => {
   const groups = groupPlugins(normalizeRegistry(registryFixture), categories)
   assert.deepEqual(groups.map(group => group.id), ['ui', 'tools', 'unclassified'])
-  assert.deepEqual(groups[1].plugins.map(plugin => plugin.name), ['alpha-tool', 'Zeta-Tool'])
+  assert.deepEqual(groups[1].plugins.map(plugin => plugin.name), ['alpha-tool', 'nested-plugin', 'Zeta-Tool'])
   assert.deepEqual(groups.at(-1).label, { en: 'Unclassified', zh: '待分类' })
 })
 
@@ -103,9 +114,11 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   const en = files['catalog/README.md']
 
   assert.match(zh, /# DSH 1024Store/)
-  assert.match(zh, /共收录 \*\*4\*\* 个插件/)
+  assert.match(zh, /共收录 \*\*5\*\* 个插件/)
   assert.match(zh, /2026-08-15/)
-  assert.match(zh, /npx @dsh-1024store\/cli add <owner>\/<repository> --profile web/)
+  assert.match(zh, /npx @dsh-1024store\/cli add <owner>\/<repository>\[\/<sub\/dir>\] --profile web/)
+  // A subdirectory plugin renders like any other entry, linking to its repository root.
+  assert.match(zh, /- \[nested-plugin\]\(https:\/\/github\.com\/owner\/monorepo\) — monorepo 子包插件。/)
   assert.match(zh, /自动合并/)
   assert.match(zh, /自动同步/)
   // zh line falls back to English when the Chinese description is missing.
@@ -116,7 +129,7 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   assert.doesNotMatch(zh, /stars?:? \d/i)
 
   assert.match(en, /DSH 1024Store/)
-  assert.match(en, /\*\*4\*\* plugins, updated 2026-08-15/)
+  assert.match(en, /\*\*5\*\* plugins, updated 2026-08-15/)
   assert.match(en, /- \[Zeta-Tool\]\(https:\/\/github\.com\/owner\/zeta\) — Zeta tool\./)
   // en line falls back to Chinese when the English description is missing.
   assert.match(en, /- \[ui-thing\]\(https:\/\/github\.com\/owner\/ui-thing\) — 界面 增强。/)
@@ -125,7 +138,7 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
 
   // Category index order and counts.
   const zhIndex = zh.slice(zh.indexOf('## 插件分类'))
-  assert.match(zhIndex, /- \[UI 增强\]\(#ui\) \(1\)\n- \[工具与能力\]\(#tools\) \(2\)\n- \[待分类\]\(#unclassified\) \(1\)/)
+  assert.match(zhIndex, /- \[UI 增强\]\(#ui\) \(1\)\n- \[工具与能力\]\(#tools\) \(3\)\n- \[待分类\]\(#unclassified\) \(1\)/)
 })
 
 test('collapses every category into a default-closed details block', async () => {
@@ -146,11 +159,11 @@ test('collapses every category into a default-closed details block', async () =>
   }
 
   // Category labels contain "&", which must be escaped inside the raw HTML summary.
-  assert.match(files['catalog/README.md'], /<summary><strong>Tools &amp; Capabilities<\/strong> · 2 plugins<\/summary>/)
+  assert.match(files['catalog/README.md'], /<summary><strong>Tools &amp; Capabilities<\/strong> · 3 plugins<\/summary>/)
   for (const summary of files['catalog/README.md'].match(/<summary>.*<\/summary>/g) ?? []) {
     assert.doesNotMatch(summary, /&(?!amp;|lt;|gt;)/, `unescaped & in ${summary}`)
   }
-  assert.match(files['README.md'], /<summary><strong>工具与能力<\/strong> · 2 个插件<\/summary>/)
+  assert.match(files['README.md'], /<summary><strong>工具与能力<\/strong> · 3 个插件<\/summary>/)
 })
 
 test('leads with the marketplace, in-app plugin, scheduled validation, API and contribution calls', async () => {
@@ -210,8 +223,8 @@ test('caps only the unclassified bucket and keeps the projection renderable', as
   const en = files['catalog/README.md']
 
   // Curated categories keep every entry.
-  assert.match(zh, /<summary><strong>工具与能力<\/strong> · 2 个插件<\/summary>/)
-  assert.match(en, /<summary><strong>Tools &amp; Capabilities<\/strong> · 2 plugins<\/summary>/)
+  assert.match(zh, /<summary><strong>工具与能力<\/strong> · 3 个插件<\/summary>/)
+  assert.match(en, /<summary><strong>Tools &amp; Capabilities<\/strong> · 3 plugins<\/summary>/)
 
   // The unclassified bucket is capped, and says so instead of pretending to be whole.
   assert.match(zh, /<summary><strong>待分类<\/strong> · 显示 500 \/ 共 621 个<\/summary>/)

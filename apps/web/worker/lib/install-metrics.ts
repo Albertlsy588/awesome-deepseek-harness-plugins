@@ -1,11 +1,14 @@
 import type { InstallMetrics } from '../types'
+import { isPluginId, PLUGIN_ID_MAX_LENGTH } from './plugin-id'
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 const MAX_QUERY_PLUGINS = 80
 const MAX_EVENTS_PER_CLIENT_HOUR = 120
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const PLUGIN_ID = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
+// owner/repository, optionally extended with a monorepo subdirectory path;
+// `.`/`..` segments are rejected by isPluginId (see lib/plugin-id.ts).
+const PLUGIN_ID = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)*$/
 const PROFILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 const SAFE_TEXT = /^[^\u0000-\u001f\u007f]*$/
 const ERROR_CODE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/
@@ -158,8 +161,8 @@ export function parseInstallationEvent(value: unknown): InstallationEventParseRe
   if (!eventId) return { ok: false, error: 'Invalid eventId.' }
   const clientId = requiredString(value, 'clientId', UUID, 36)
   if (!clientId) return { ok: false, error: 'Invalid clientId.' }
-  const pluginId = requiredString(value, 'pluginId', PLUGIN_ID, 201)
-  if (!pluginId) return { ok: false, error: 'Invalid pluginId.' }
+  const pluginId = requiredString(value, 'pluginId', PLUGIN_ID, PLUGIN_ID_MAX_LENGTH)
+  if (!pluginId || !isPluginId(pluginId)) return { ok: false, error: 'Invalid pluginId.' }
   const profile = requiredString(value, 'profile', PROFILE, 64)
   if (!profile) return { ok: false, error: 'Invalid profile.' }
 

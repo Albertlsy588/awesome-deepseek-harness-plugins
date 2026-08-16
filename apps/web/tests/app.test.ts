@@ -17,6 +17,7 @@ function testApp() {
     github: null,
     manifest: null,
     readme: null,
+    readmeBasePath: '',
     verification: { repositoryReachable: false, bundleDeclared: false },
   } satisfies PackageDetail
 
@@ -272,7 +273,7 @@ describe('market API', () => {
     }
     expect(body.packages.map((plugin) => plugin.name)).toEqual(['dsh-gomoku'])
     expect(body.rankings.stars[0]?.name).toBe('dsh-crosstalk')
-    expect(body.meta).toMatchObject({ total: 1, catalogTotal: 7 })
+    expect(body.meta).toMatchObject({ total: 1, catalogTotal: TEST_PLUGINS.length })
   })
 
   it('serves package details with the resolved category and rejects invalid identifiers', async () => {
@@ -295,6 +296,67 @@ describe('market API', () => {
     expect(missing.status).toBe(404)
   })
 
+  it('serves a monorepo subpackage plugin at its subdirectory path', async () => {
+    // Echoes back whichever plugin the route resolved, so the assertions prove
+    // the id lookup rather than the stub's fixed payload.
+    const app = createApp({
+      catalogLoader: vi.fn(async () => testCatalogResult()),
+      detailLoader: vi.fn(async (plugin) => ({
+        ...plugin,
+        github: null,
+        manifest: null,
+        readme: null,
+      readmeBasePath: '',
+        verification: { repositoryReachable: false, bundleDeclared: false },
+      } satisfies PackageDetail)),
+    })
+
+    const detail = await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector')
+    expect(detail.status).toBe(200)
+    await expect(detail.json()).resolves.toMatchObject({
+      id: 'omdsh-dev/dsh-suite/packages/dsh-inspector',
+      name: 'dsh-inspector',
+      install: 'dsh plugin --profile web add github:omdsh-dev/dsh-suite#path:packages/dsh-inspector',
+    })
+
+    // The sibling resolves independently rather than colliding on the repository.
+    const sibling = await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/packages/dsh-timeline')
+    await expect(sibling.json()).resolves.toMatchObject({ name: 'dsh-timeline' })
+
+    // The repository hosts two plugins, so it cannot pick a successor.
+    expect((await app.request('/api/v1/plugins/omdsh-dev/dsh-suite')).status).toBe(404)
+    // Plain and percent-encoded dot-dot segments are collapsed by URL parsing
+    // before routing, so they resolve to a different (absent) id.
+    expect((await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/../secret')).status).toBe(404)
+    expect((await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/%2e%2e/secret')).status).toBe(404)
+    // An encoded slash survives parsing and must be rejected, not smuggled into
+    // a segment.
+    expect((await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/..%2Fsecret')).status).toBe(400)
+  })
+
+  it('redirects a repository id whose only plugin moved into a subdirectory', async () => {
+    const base = testCatalogResult()
+    // One survivor under omdsh-dev/dsh-suite, mirroring a discovered repository
+    // whose bundle lives in a nested package.
+    const app = createApp({
+      catalogLoader: vi.fn(async () => ({
+        ...base,
+        snapshot: {
+          ...base.snapshot,
+          plugins: base.snapshot.plugins.filter(
+            (plugin) => plugin.id !== 'omdsh-dev/dsh-suite/packages/dsh-timeline',
+          ),
+        },
+      })),
+    })
+
+    const response = await app.request('https://store.example/api/v1/plugins/omdsh-dev/dsh-suite')
+    expect(response.status).toBe(301)
+    expect(response.headers.get('Location')).toBe(
+      'https://store.example/api/v1/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector',
+    )
+  })
+
   it('serves the built-in unclassified descriptor for scan-discovered plugins', async () => {
     const base = testCatalogResult()
     const detail = {
@@ -302,6 +364,7 @@ describe('market API', () => {
       github: null,
       manifest: null,
       readme: null,
+      readmeBasePath: '',
       verification: { repositoryReachable: false, bundleDeclared: false },
     } satisfies PackageDetail
     const app = createApp({
@@ -461,7 +524,47 @@ describe('market API', () => {
       SYNC_ENV,
     )
     expect(mismatchedRepository.status).toBe(400)
+
+    // A subdirectory id keeps the repository-root URL; traversal is rejected.
+    const traversalId = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({
+        source: 'github_ci',
+        entries: [{
+          ...VALID_SYNC_ENTRY,
+          id: 'openma-ai/deepseek-harness-tui/../secret',
+        }],
+      }),
+      SYNC_ENV,
+    )
+    expect(traversalId.status).toBe(400)
+
+    const subdirectoryWithNestedUrl = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({
+        source: 'github_ci',
+        entries: [{
+          ...VALID_SYNC_ENTRY,
+          id: 'openma-ai/deepseek-harness-tui/packages/foo',
+          repository: 'https://github.com/openma-ai/deepseek-harness-tui/packages/foo',
+        }],
+      }),
+      SYNC_ENV,
+    )
+    expect(subdirectoryWithNestedUrl.status).toBe(400)
     expect(curatedSyncer).not.toHaveBeenCalled()
+
+    const subdirectory = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({
+        source: 'github_ci',
+        entries: [{ ...VALID_SYNC_ENTRY, id: 'openma-ai/deepseek-harness-tui/packages/foo' }],
+      }),
+      SYNC_ENV,
+    )
+    expect(subdirectory.status).toBe(200)
+    expect(curatedSyncer.mock.calls[0]?.[1])
+      .toEqual([expect.objectContaining({ id: 'openma-ai/deepseek-harness-tui/packages/foo' })])
   })
 
   it('reconciles curated entries and refreshes the snapshot synchronously', async () => {
@@ -611,6 +714,7 @@ describe('market API', () => {
         github: null,
         manifest: null,
         readme: null,
+      readmeBasePath: '',
         verification: { repositoryReachable: false, bundleDeclared: false },
       })),
       installStatsLoader: vi.fn(async () => metrics),

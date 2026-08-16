@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "wsxwj123/dsh-plugins/packages/dsh-composer-tools",
+  "name": "dsh-composer-tools",
+  "repository": "https://github.com/wsxwj123/dsh-plugins",
+  "category": "ui",
+  "description": {
+    "en": "Composer input toolkit: arrow-key session history (first/last-line gated, IME and command-menu safe) and related input conveniences.",
+    "zh": "输入框工具集：方向键翻阅会话历史（限首行/末行触发，兼容输入法与命令菜单）及相关输入便利功能。"
+  },
+  "added": "2026-08-16"
+}

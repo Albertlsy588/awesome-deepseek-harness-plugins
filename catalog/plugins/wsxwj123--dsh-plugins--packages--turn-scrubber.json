@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "wsxwj123/dsh-plugins/packages/turn-scrubber",
+  "name": "turn-scrubber",
+  "repository": "https://github.com/wsxwj123/dsh-plugins",
+  "category": "ui",
+  "description": {
+    "en": "Compact right-edge turn rail with hover summaries and click-to-jump navigation.",
+    "zh": "右侧紧凑对话轮次导航条：悬停显示摘要，点击跳转对应轮次。"
+  },
+  "added": "2026-08-16"
+}

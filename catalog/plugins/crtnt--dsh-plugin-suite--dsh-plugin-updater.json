@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "crTnT/dsh-plugin-suite/dsh-plugin-updater",
+  "name": "dsh-plugin-updater",
+  "repository": "https://github.com/crTnT/dsh-plugin-suite",
+  "category": "tools",
+  "description": {
+    "en": "Update manager for installed plugins: check for updates, back up, and roll back.",
+    "zh": "已装插件的更新管理器：检查更新、备份与回滚。"
+  },
+  "added": "2026-08-16"
+}

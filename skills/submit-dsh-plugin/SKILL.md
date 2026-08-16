@@ -19,11 +19,13 @@ description: 验证并提交 DeepSeek Harness 插件到 imsai-sh/awesome-deepsee
 
 确定以下内容：
 
-- 插件仓库 ID：`owner/repository`
-- 插件名称，通常与仓库名一致
+- 插件 ID：仓库级插件为 `owner/repository`；monorepo 子包插件为 `owner/repository/sub/dir`，前两段之后的路径段指向仓库内的子目录
+- 插件名称：仓库级插件通常与仓库名一致，子目录 ID 默认取最后一个路径段（子包目录名）
 - 一个主要目录分类
 - 客观的英文与中文简介
 - 作者实际执行的测试命令和结果
+
+ID 各段仅限 `A-Za-z0-9_.-` 字符，路径段不得是 `.` 或 `..`，总长不超过 201 字符。无论 ID 是否携带路径，条目的 `repository` 字段始终是由前两段推导的仓库根 URL `https://github.com/owner/repository`。目录会从 ID 推导安装规格：两段 ID 安装为 `github:owner/repository`，子目录 ID 安装为 `github:owner/repository#path:sub/dir`。
 
 目录仓库固定使用 `https://github.com/imsai-sh/awesome-deepseek-harness-plugins`。创建文件前，读取其当前 checkout 中的 `CONTRIBUTING.md` 和 `catalog/categories.json`；如果线上仓库规范与本 Skill 不同，以线上规范为准。
 
@@ -34,22 +36,30 @@ description: 验证并提交 DeepSeek Harness 插件到 imsai-sh/awesome-deepsee
 先完成只读检查：
 
 1. 确认仓库公开且存在默认分支。
-2. 确认仓库包含 `dsh-plugin` GitHub topic。如果缺少 topic、用户拥有该仓库且已授权外部写入，才可执行 `gh repo edit owner/repository --add-topic dsh-plugin`。
-3. 查找插件使用的根目录或嵌套 `package.json`，排除 `node_modules`。
+2. 确认仓库包含 `dsh-plugin` GitHub topic。如果缺少 topic、用户拥有该仓库且已授权外部写入，才可执行 `gh repo edit owner/repository --add-topic dsh-plugin`。topic 作用于仓库本身：`gh repo edit` 的参数只取 ID 的前两段 `owner/repository`，子目录 ID 的路径段不参与。
+3. 定位插件的 manifest：两段 ID 可使用根目录或任意嵌套的 `package.json`（排除 `node_modules`）；子目录 ID 则必须在 `<sub/dir>/package.json` 恰好找到 manifest——ID 的路径就是安装规格 `github:owner/repository#path:sub/dir` 指向 pnpm 的位置，仓库里其他位置的 manifest 不算数。
 4. 确认其中声明了非空字符串 `dsh.bundle.patch`。
 5. 相对于声明该字段的 `package.json` 解析补丁路径；拒绝绝对路径、反斜杠以及跳出仓库的路径。
 6. 确认 manifest 和引用的补丁都存在于 GitHub 默认分支，而不只是尚未推送的本地提交。
-7. 记录作者实际执行的兼容性测试。如果尚未测试，应停止并要求作者先测试；目录自动审查不会执行第三方代码。
+7. 确认该插件能**从 GitHub 安装**，而不只是能从 npm 安装：git 安装会执行 `prepare`，除此之外只包含已提交的文件。
+   因此要么 `exports["."]` / `main` 指向的入口文件已提交，要么有一个自包含的 `prepare` 脚本在安装时构建它。
+   若入口是发布 npm 时才构建的产物，安装会成功但 `dsh` 启动时报 module-not-found。
+   **这不影响收录**：插件照常收录，但网站会把该安装方式标为 UNVERIFIED，PR 评论里也会给出修法
+   （提交构建产物、加自包含的 `prepare` 脚本，或发布到 npm 并让 `repository.url` 与 `repository.directory` 指回本插件）。
+8. 记录作者实际执行的兼容性测试。如果尚未测试，应停止并要求作者先测试；目录自动审查不会执行第三方代码。
 
 使用 GitHub 或 `gh` 获取远程默认分支证据。不得用仅存在于本地的文件作为证明。
 
 ## 3. 准备干净的目录分支
 
-优先复用干净的目录 checkout。仅本地准备时，直接克隆上游目录仓库，不创建 fork。已授权正式提交时，使用 GitHub CLI fork 并克隆，或者把用户已有的 fork 添加为推送 remote。保留上游仓库 remote，拉取其默认分支，然后创建聚焦分支，例如：
+优先复用干净的目录 checkout。仅本地准备时，直接克隆上游目录仓库，不创建 fork。已授权正式提交时，使用 GitHub CLI fork 并克隆，或者把用户已有的 fork 添加为推送 remote。保留上游仓库 remote，拉取其默认分支，然后基于完整插件 ID 创建聚焦分支，例如：
 
 ```text
 add-owner-repository
+add-owner-repository-sub-dir
 ```
+
+子目录 ID 的分支名包含 slug 化的路径段，这样同一仓库的两个子包提交不会撞到同一个分支名。
 
 不得把目录条目放进插件仓库。不得基于另一个尚未合并的贡献分支创建本次分支。
 
@@ -66,9 +76,11 @@ node <skill-directory>/scripts/create-catalog-entry.mjs \
   --description-zh "客观、具体的中文说明。"
 ```
 
-仅当展示名称需要不同于仓库名时传入 `--name`。仅当需要覆盖当天 UTC 日期时传入 `--added YYYY-MM-DD`。
+monorepo 子包传入完整 ID，例如 `--id owner/repository/packages/foo`；脚本会保持 `repository` 为仓库根 URL，并把路径段编入文件名。
 
-脚本必须拒绝未知分类、重复仓库、无效 ID 和已存在的目标文件。不得绕过这些错误手工创建文件。
+仅当展示名称需要不同于默认值（两段 ID 为仓库名，子目录 ID 为最后一个路径段）时传入 `--name`。仅当需要覆盖当天 UTC 日期时传入 `--added YYYY-MM-DD`。
+
+脚本必须拒绝未知分类、重复 ID（不区分大小写，含路径段）、无效 ID 和已存在的目标文件。同一仓库以不同子目录路径提交多个条目是允许的，只要每个完整 ID 唯一。不得绕过这些错误手工创建文件。
 
 ## 5. 验证单文件约束
 
@@ -77,6 +89,8 @@ node <skill-directory>/scripts/create-catalog-entry.mjs \
 ```text
 A catalog/plugins/<owner>--<repository>.json
 ```
+
+文件名由完整 ID 推导：每个 `/` 分隔的段转为全小写、把连续非字母数字字符替换成 `-`，再用 `--` 连接。子目录 ID 的路径段同样编入文件名，例如 `owner/repository/packages/foo` → `A catalog/plugins/owner--repository--packages--foo.json`。文件始终平铺在 `catalog/plugins/` 下，不创建子目录。
 
 然后执行以下检查：
 
@@ -91,10 +105,11 @@ A catalog/plugins/<owner>--<repository>.json
 
 ## 6. 提交并创建 PR
 
-使用聚焦的提交信息，例如：
+使用聚焦的提交信息，写入完整插件 ID，例如：
 
 ```text
 catalog: add owner/repository
+catalog: add owner/repository/packages/foo
 ```
 
 推送前，说明 fork、分支、上游仓库和唯一暂存的文件。只有获得授权后才可推送并创建 PR。
@@ -116,4 +131,4 @@ catalog: add owner/repository
 
 ## 已存在的条目与更新
 
-如果目标插件 ID 或仓库已存在于 `catalog/plugins/`，不得创建重复条目。需要修正或下架既有条目时，可以提交只修改或删除对应 `catalog/plugins/*.json` 文件的 PR：静态审查照常运行并逐个校验修改后的条目，但此类 PR 不会自动合并，必须由维护者人工审核后手动合并。提交前应向用户说明这一等待环节。
+如果完整插件 ID 已经存在（不区分大小写），不得创建重复条目。唯一性按完整 ID 判断：同一仓库已存在其他条目（例如仓库级条目或另一个子目录条目）并不阻止提交一个新的、不同的 ID。需要修正或下架既有条目时，可以提交只修改或删除对应 `catalog/plugins/*.json` 文件的 PR：静态审查照常运行并逐个校验修改后的条目，但此类 PR 不会自动合并，必须由维护者人工审核后手动合并。提交前应向用户说明这一等待环节。

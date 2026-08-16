@@ -92,6 +92,22 @@ test('install targets are derived from validated GitHub URLs', () => {
   assert.equal(installTarget(registry.plugins[0]), 'github:owner/repo')
 })
 
+test('a monorepo subpackage installs its own directory, not the repository root', () => {
+  const base = registry.plugins[0]
+  assert.equal(
+    installTarget({ ...base, id: 'owner/repo/packages/foo' }),
+    'github:owner/repo#path:packages/foo',
+  )
+  // Siblings stay distinct rather than both resolving to the repository.
+  assert.equal(
+    installTarget({ ...base, id: 'owner/repo/packages/bar' }),
+    'github:owner/repo#path:packages/bar',
+  )
+  // The id must still agree with the validated URL, and traversal is rejected.
+  assert.throws(() => installTarget({ ...base, id: 'attacker/other/packages/foo' }), /does not match/)
+  assert.throws(() => installTarget({ ...base, id: 'owner/repo/../secret' }), /unsupported plugin subdirectory/)
+})
+
 test('invalid API data cannot extend the installation allowlist', () => {
   assert.throws(
     () => validateRegistry({

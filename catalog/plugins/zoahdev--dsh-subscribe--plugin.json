@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "zoahdev/dsh-subscribe/plugin",
+  "name": "dsh-subscribe",
+  "repository": "https://github.com/zoahdev/dsh-subscribe",
+  "category": "tools",
+  "description": {
+    "en": "Steam-style plugin storefront: a plugin registry browsable inside DSH with one-click install, uninstall and update, plus a zero-dependency CLI and agent-callable market tools.",
+    "zh": "Steam 风格插件商店：可在 DSH 内浏览的插件仓库，一键安装、卸载与更新，另有零依赖 CLI 与 Agent 可调用的市场工具。"
+  },
+  "added": "2026-08-16"
+}

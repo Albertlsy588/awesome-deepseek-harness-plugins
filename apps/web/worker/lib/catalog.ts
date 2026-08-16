@@ -7,6 +7,7 @@ import type {
   RegistryPlugin,
   StoredCatalogSnapshot,
 } from '../types'
+import { normalizePluginId } from './plugin-id'
 
 export interface CatalogQuery {
   q: string
@@ -62,6 +63,9 @@ function searchableText(plugin: CatalogPlugin): string {
     plugin.name,
     plugin.owner,
     plugin.repository,
+    // The id contributes the subdirectory path of a monorepo subpackage, which
+    // usually carries the package name a searcher types.
+    plugin.id,
     plugin.category,
     plugin.description.en,
     plugin.description.zh,
@@ -228,4 +232,28 @@ export function findPlugin<T extends RegistryPlugin>(
       plugin.owner.toLocaleLowerCase() === owner.toLocaleLowerCase() &&
       repositoryName(plugin).toLocaleLowerCase() === repository.toLocaleLowerCase(),
   )
+}
+
+/**
+ * Resolves a plugin by its full id. Repository-level lookup is ambiguous once
+ * one repository hosts several subpackage plugins, so anything addressing a
+ * single plugin (detail page, telemetry canonicalization) resolves by id.
+ */
+export function findPluginById<T extends { id: string }>(plugins: T[], id: string): T | undefined {
+  const wanted = normalizePluginId(id)
+  return plugins.find((plugin) => normalizePluginId(plugin.id) === wanted)
+}
+
+/**
+ * Plugins living under `id` — the monorepo subpackages a repository-level
+ * address should lead to.
+ *
+ * A repository that publishes only a nested bundle used to be catalogued at its
+ * repository id and is now catalogued at the subpackage's id, so previously
+ * published `owner/repository` links have to find their way to the successor
+ * instead of dead-ending.
+ */
+export function findPluginsUnder<T extends { id: string }>(plugins: T[], id: string): T[] {
+  const prefix = `${normalizePluginId(id)}/`
+  return plugins.filter((plugin) => normalizePluginId(plugin.id).startsWith(prefix))
 }

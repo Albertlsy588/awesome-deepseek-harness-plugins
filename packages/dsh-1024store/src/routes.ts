@@ -157,7 +157,9 @@ function failureCode(result: CommandResult): string {
 }
 
 function pluginEventId(plugin: RegistryPlugin): string {
-  return (parseGitHubSource(plugin.url) ?? plugin.id).toLowerCase()
+  // The full id, so a monorepo subpackage's installs are counted against that
+  // plugin rather than folded onto its repository or a sibling.
+  return plugin.id.toLowerCase()
 }
 
 /** Run one plugin mutation and report its outcome anonymously (fire-and-forget). */
@@ -298,10 +300,12 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
           return
         }
         try {
-          const body = await readJsonBody(request) as { url?: unknown }
-          const requestedUrl = typeof body.url === 'string' ? body.url : ''
+          // Resolved by id: a repository URL is no longer unique now that one
+          // monorepo can contribute several plugins.
+          const body = await readJsonBody(request) as { id?: unknown }
+          const requestedId = typeof body.id === 'string' ? body.id.toLowerCase() : ''
           const { registry } = await loadRegistry(config.registryUrl)
-          const plugin = registry.plugins.find(entry => entry.url.toLowerCase() === requestedUrl.toLowerCase())
+          const plugin = registry.plugins.find(entry => entry.id.toLowerCase() === requestedId)
           if (plugin === undefined) {
             sendJson(response, 400, { error: 'plugin is not in the 1024 Store registry' })
             return

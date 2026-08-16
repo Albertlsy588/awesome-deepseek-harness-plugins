@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "jinguanghai/deepseek-harness-forge-plugins/plugins/forge-memory",
+  "name": "forge-memory",
+  "repository": "https://github.com/jinguanghai/deepseek-harness-forge-plugins",
+  "category": "memory",
+  "description": {
+    "en": "BM25 keyword-based memory recall.",
+    "zh": "基于 BM25 关键词检索的记忆召回。"
+  },
+  "added": "2026-08-16"
+}

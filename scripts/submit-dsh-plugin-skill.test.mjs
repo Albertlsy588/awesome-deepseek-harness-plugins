@@ -67,7 +67,79 @@ test('creates the exact normalized catalog entry', async t => {
   })
 })
 
-test('rejects duplicate repositories case-insensitively', async t => {
+test('creates a subdirectory catalog entry with repo-root repository and slugged filename', async t => {
+  const directory = await fixture()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+
+  const result = run(
+    directory,
+    '--id', 'Example-Org/My.Plugin/Packages/Sub_Dir',
+    '--category', 'skill',
+    '--description-en', 'A monorepo subpackage plugin.',
+    '--description-zh', '一个 monorepo 子包插件。',
+    '--added', '2026-08-16',
+  )
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /已创建 catalog\/plugins\/example-org--my-plugin--packages--sub-dir\.json/)
+
+  const entry = JSON.parse(await readFile(
+    path.join(directory, 'catalog/plugins/example-org--my-plugin--packages--sub-dir.json'),
+    'utf8',
+  ))
+  assert.deepEqual(entry, {
+    $schema: '../schema/plugin.schema.json',
+    // The id is preserved verbatim, path segments included.
+    id: 'Example-Org/My.Plugin/Packages/Sub_Dir',
+    // The default name is the last id segment (the subpackage directory).
+    name: 'Sub_Dir',
+    // The repository URL comes from the first two id segments only.
+    repository: 'https://github.com/Example-Org/My.Plugin',
+    category: 'skill',
+    description: {
+      en: 'A monorepo subpackage plugin.',
+      zh: '一个 monorepo 子包插件。',
+    },
+    added: '2026-08-16',
+  })
+})
+
+test('rejects dot and dot-dot id path segments', async t => {
+  const directory = await fixture()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+
+  for (const id of ['owner/repository/..', 'owner/repository/../escape', 'owner/repository/.', 'owner/repository//nested']) {
+    const result = run(
+      directory,
+      '--id', id,
+      '--category', 'tools',
+      '--description-en', 'A traversal attempt.',
+      '--description-zh', '路径穿越尝试。',
+    )
+    assert.notEqual(result.status, 0, `expected rejection for ${id}`)
+    assert.match(result.stderr, /--id 必须使用 owner\/repository\[\/sub\/dir\] 格式/)
+  }
+})
+
+test('rejects duplicate plugin ids case-insensitively', async t => {
+  const existing = {
+    id: 'owner/plugin/packages/foo',
+    repository: 'https://github.com/owner/plugin',
+  }
+  const directory = await fixture([['owner--plugin--packages--foo.json', existing]])
+  t.after(() => rm(directory, { recursive: true, force: true }))
+
+  const result = run(
+    directory,
+    '--id', 'OWNER/PLUGIN/PACKAGES/FOO',
+    '--category', 'tools',
+    '--description-en', 'A duplicate.',
+    '--description-zh', '重复条目。',
+  )
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /插件 ID 已存在/)
+})
+
+test('allows another subdirectory entry for an already-cataloged repository', async t => {
   const existing = {
     id: 'owner/plugin',
     repository: 'https://github.com/owner/plugin',
@@ -77,13 +149,21 @@ test('rejects duplicate repositories case-insensitively', async t => {
 
   const result = run(
     directory,
-    '--id', 'OWNER/PLUGIN',
+    '--id', 'owner/plugin/packages/foo',
     '--category', 'tools',
-    '--description-en', 'A duplicate.',
-    '--description-zh', '重复条目。',
+    '--description-en', 'A subpackage of an existing repository.',
+    '--description-zh', '同一仓库的子包条目。',
+    '--added', '2026-08-16',
   )
-  assert.notEqual(result.status, 0)
-  assert.match(result.stderr, /已存在/)
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /已创建 catalog\/plugins\/owner--plugin--packages--foo\.json/)
+
+  const entry = JSON.parse(await readFile(
+    path.join(directory, 'catalog/plugins/owner--plugin--packages--foo.json'),
+    'utf8',
+  ))
+  assert.equal(entry.id, 'owner/plugin/packages/foo')
+  assert.equal(entry.repository, 'https://github.com/owner/plugin')
 })
 
 test('rejects unknown categories', async t => {
@@ -148,6 +228,44 @@ test('documents automatic merge and automatic sync behavior consistently', async
   assert.match(reference, /自动同步/)
   assert.match(reference, /自动审查失败时，PR 会保持打开/)
   assert.match(reference, /维护者人工审核/)
+})
+
+test('documents the subdirectory plugin id contract consistently', async () => {
+  const contributing = await readFile(path.join(root, 'CONTRIBUTING.md'), 'utf8')
+  const skill = await readFile(path.join(root, 'skills/submit-dsh-plugin/SKILL.md'), 'utf8')
+  const reference = await readFile(path.join(root, 'skills/submit-dsh-plugin/references/submission-reference.md'), 'utf8')
+
+  // CONTRIBUTING.md carries the canonical contract; the skill docs must agree.
+  assert.match(contributing, /owner\/repository\/sub\/dir/)
+  assert.match(contributing, /github:owner\/repository#path:sub\/dir/)
+  assert.match(contributing, /owner--repository--packages--foo\.json/)
+  assert.match(contributing, /may not be `\.` or `\.\.`/)
+  assert.match(contributing, /one JSON file per plugin/)
+  assert.doesNotMatch(contributing, /one JSON file per repository/i)
+
+  // SKILL.md: extended id form, repo-root repository, install spec, filename
+  // slug, id-level uniqueness, and the path-aware branch/commit examples.
+  assert.match(skill, /owner\/repository\/sub\/dir/)
+  assert.match(skill, /github:owner\/repository#path:sub\/dir/)
+  assert.match(skill, /`https:\/\/github\.com\/owner\/repository`/)
+  assert.match(skill, /owner--repository--packages--foo\.json/)
+  assert.match(skill, /路径段不得是 `\.` 或 `\.\.`/)
+  assert.match(skill, /重复 ID（不区分大小写/)
+  assert.match(skill, /add-owner-repository-sub-dir/)
+  assert.match(skill, /catalog: add owner\/repository\/packages\/foo/)
+  assert.match(skill, /`gh repo edit` 的参数只取 ID 的前两段/)
+  assert.doesNotMatch(skill, /重复仓库|插件仓库 ID|插件 ID 或仓库已经存在/)
+
+  // submission-reference.md: metadata rules and the PR body template.
+  assert.match(reference, /owner\/repository\/sub\/dir/)
+  assert.match(reference, /`https:\/\/github\.com\/<owner>\/<repository>`/)
+  assert.match(reference, /github:owner\/repository#path:sub\/dir/)
+  assert.match(reference, /owner--repository--packages--foo\.json/)
+  assert.match(reference, /路径段不得是 `\.` 或 `\.\.`/)
+  assert.match(reference, /不区分大小写/)
+  assert.match(reference, /子目录：`<sub\/dir>`/)
+  assert.doesNotMatch(reference, /将 `repository` 固定为 `https:\/\/github\.com\/<id>`/)
+  assert.doesNotMatch(reference, /根据全小写 owner 和 repository 生成文件名/)
 })
 
 test('runs only the trusted static gate for pull requests', async () => {

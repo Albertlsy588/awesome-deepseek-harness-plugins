@@ -1,3 +1,5 @@
+import type { PluginInstallMethod } from './lib/install-methods'
+
 export type Language = 'en' | 'zh'
 
 export interface LocalizedText {
@@ -11,6 +13,13 @@ export interface RegistryCategory {
 }
 
 export interface RegistryPlugin {
+  /**
+   * How this plugin can be installed, each with its own verification state.
+   * Absent on snapshots written before install verification shipped.
+   */
+  installMethods?: PluginInstallMethod[]
+  /** Full plugin id: `owner/repository[/sub/dir]`, in its submitted case. */
+  id: string
   name: string
   owner: string
   url: string
@@ -55,6 +64,7 @@ export interface InstallMetrics {
 }
 
 export interface CatalogPlugin extends RegistryPlugin, RepositoryMetric, StarGrowth, InstallMetrics {
+  /** Repository name only; the in-repo path lives in `id`. */
   repository: string
 }
 
@@ -164,6 +174,12 @@ export interface PackageDetail extends RegistryPlugin, InstallMetrics {
   github: GitHubSummary | null
   manifest: PackageManifestSummary | null
   readme: string | null
+  /**
+   * Directory the README was read from, relative to the repository root
+   * (`''` for the root). A subpackage without its own README falls back to the
+   * root one, and its relative links must then resolve against the root.
+   */
+  readmeBasePath: string
   verification: {
     repositoryReachable: boolean
     bundleDeclared: boolean

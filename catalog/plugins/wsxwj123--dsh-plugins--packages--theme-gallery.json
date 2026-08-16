@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "wsxwj123/dsh-plugins/packages/theme-gallery",
+  "name": "theme-gallery",
+  "repository": "https://github.com/wsxwj123/dsh-plugins",
+  "category": "theme",
+  "description": {
+    "en": "Fifteen curated theme families plus custom CSS-only themes with import, preview, apply, delete, and restore-default flows that follow the native Light, Dark, and Follow system modes.",
+    "zh": "15 套精选主题族，外加纯 CSS 自定义主题：支持导入、预览、应用、删除与恢复默认，并跟随原生浅色/深色/跟随系统模式。"
+  },
+  "added": "2026-08-16"
+}

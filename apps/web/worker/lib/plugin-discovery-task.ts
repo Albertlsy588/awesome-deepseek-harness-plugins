@@ -2,8 +2,11 @@ import {
   claimScanLease,
   completeScanRun,
   getCatalogState,
+  hydrateCuratedRepositories,
+  loadPendingNpmProbes,
   loadPendingValidationRepositories,
   markMissingTopicRepositories,
+  saveNpmProbes,
   releaseScanLease,
   saveRepositoryInspections,
   setCatalogState,
@@ -12,6 +15,7 @@ import {
   type ScanCounters,
 } from './catalog-db'
 import { refreshCatalogSnapshot } from './catalog-store'
+import { probeNpmPackage } from './npm-registry'
 import {
   createGitHubClient,
   DISCOVERY_STRATEGY_VERSION,
@@ -24,6 +28,19 @@ import {
 const DEFAULT_TOPIC = 'dsh-plugin'
 const DISCOVERY_CHUNK_SIZE = 40
 const VALIDATION_CHUNK_SIZE = 20
+// One registry request per plugin, six at a time: ~3,200 plugins refresh over a
+// handful of cron ticks without hammering a public service we do not own.
+const NPM_PROBE_BUDGET = 400
+const NPM_PROBE_CONCURRENCY = 6
+const NPM_PROBE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+function npmBatches<T>(items: T[]): T[][] {
+  const batches: T[][] = []
+  for (let index = 0; index < items.length; index += NPM_PROBE_CONCURRENCY) {
+    batches.push(items.slice(index, index + NPM_PROBE_CONCURRENCY))
+  }
+  return batches
+}
 const CORE_RATE_LIMIT_RESERVE = 500
 const TASK_DEADLINE_MS = 12 * 60 * 1000
 const LEASE_MS = 20 * 60 * 1000
@@ -100,6 +117,18 @@ export async function runPluginDiscoveryTask(
       counters.changed += result.changedCount
     }
 
+    // Submissions arrive with a name only, so their repositories need their
+    // GitHub facts before the validation queue (which keys on github_id) can
+    // see them at all.
+    try {
+      counters.changed += await hydrateCuratedRepositories(env.CATALOG_DB, client, VALIDATION_CHUNK_SIZE, end)
+    } catch (error) {
+      console.error(JSON.stringify({
+        message: 'curated_hydration_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }))
+    }
+
     let pending = false
     while (Date.now() < deadline) {
       const candidates = await loadPendingValidationRepositories(
@@ -128,6 +157,32 @@ export async function runPluginDiscoveryTask(
       if (inspections.length < candidates.length) break
     }
     if (Date.now() >= deadline) pending = true
+
+    // npm probes run after inspection, so a plugin whose manifest was just read
+    // is probed with the package name that manifest declared. The registry is a
+    // second external dependency, so a failure here degrades the npm badge to
+    // unknown and never fails the run.
+    try {
+      const staleBefore = new Date(Date.parse(end) - NPM_PROBE_MAX_AGE_MS).toISOString()
+      const candidates = await loadPendingNpmProbes(env.CATALOG_DB, NPM_PROBE_BUDGET, staleBefore)
+      for (const batch of npmBatches(candidates)) {
+        if (Date.now() >= deadline) {
+          pending = true
+          break
+        }
+        const probes = await Promise.all(batch.map(async (candidate) => ({
+          pluginId: candidate.pluginId,
+          packageName: candidate.packageName,
+          ...(await probeNpmPackage(candidate.pluginId, candidate.packageName)),
+        })))
+        await saveNpmProbes(env.CATALOG_DB, probes, end)
+      }
+    } catch (error) {
+      console.error(JSON.stringify({
+        message: 'npm_probe_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }))
+    }
 
     if (mode === 'full') await markMissingTopicRepositories(env.CATALOG_DB, runId, end)
     await setCatalogState(env.CATALOG_DB, 'discovery_watermark', end, end)

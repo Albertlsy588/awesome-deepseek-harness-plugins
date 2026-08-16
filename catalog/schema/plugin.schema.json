@@ -18,7 +18,8 @@
     },
     "id": {
       "type": "string",
-      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+      "maxLength": 201,
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
     },
     "name": {
       "type": "string",

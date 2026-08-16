@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "whyihaveyou/dsh-suite/packages/plugins/plugin-notify",
+  "name": "plugin-notify",
+  "repository": "https://github.com/whyihaveyou/dsh-suite",
+  "category": "notify",
+  "description": {
+    "en": "IM webhook and local notifications on turn completion, errors, or approval (Feishu/WeCom/DingTalk/Slack/Discord/custom).",
+    "zh": "回合完成、报错或待审批时发送 IM webhook 与本地通知（飞书/企业微信/钉钉/Slack/Discord/自定义）。"
+  },
+  "added": "2026-08-16"
+}
