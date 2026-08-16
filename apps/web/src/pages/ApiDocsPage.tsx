@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { publicAsset } from '../lib/assets'
 import { useI18n } from '../lib/i18n'
-import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
+import { usePageSeo } from '../lib/usePageSeo'
 
-const SEARCH_EXAMPLE = `curl "${SITE_ORIGIN}/api/v1/plugins/search?q=telegram&limit=5"
+const PUBLIC_API_ORIGIN = 'https://api.deepseek1024.com'
+
+const SEARCH_EXAMPLE = `curl "${PUBLIC_API_ORIGIN}/v1/plugins/search?q=telegram&limit=5"
 
 curl -H "Authorization: Bearer dsh_live_your_api_key" \\
-  "${SITE_ORIGIN}/api/v1/plugins/search?q=telegram&sortBy=recent"`
+  "${PUBLIC_API_ORIGIN}/v1/plugins/search?q=telegram&sortBy=recent"`
 
 const RESPONSE_EXAMPLE = `{
   "query": "telegram",
@@ -76,7 +78,7 @@ export function ApiDocsPage() {
         <h1>{t('apiDocsTitle')}</h1>
         <p>{t('apiDocsIntro')}</p>
         <p className="api-docs-base">
-          {t('apiDocsBaseUrl')}: <code>{SITE_ORIGIN}</code>
+          {t('apiDocsBaseUrl')}: <code>{PUBLIC_API_ORIGIN}</code>
         </p>
       </header>
 
@@ -120,7 +122,7 @@ export function ApiDocsPage() {
 
       <section className="api-docs-section">
         <h2>{t('apiDocsEndpointsHeading')}</h2>
-        <p className="api-endpoint"><code>GET /api/v1/plugins/search</code></p>
+        <p className="api-endpoint"><code>GET /v1/plugins/search</code></p>
         <p>{t('apiDocsSearchDescription')}</p>
 
         <h3>{t('apiDocsParamsHeading')}</h3>

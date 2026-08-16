@@ -4,6 +4,12 @@
   "main": "./worker/index.ts",
   "compatibility_date": "2026-08-14",
   "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "api.deepseek1024.com",
+      "custom_domain": true
+    }
+  ],
   "secrets": {
     "required": [
       "GITHUB_TOKEN",

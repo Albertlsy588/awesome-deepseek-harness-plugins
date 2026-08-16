@@ -1,6 +1,14 @@
 # API reference (v1)
 
-All public endpoints live under `https://deepseek1024.com/api/v1/`. The Worker is the only
+The public developer API lives on its own host: `https://api.deepseek1024.com/v1/…`
+(currently only the search endpoint and `/v1/health`; everything else on that host is 404,
+and the bare host redirects to the website docs page). The same Worker serves both hosts —
+`api.deepseek1024.com` paths are rewritten onto the internal `/api/v1/…` routes below, so
+handler behaviour, quotas, and error codes are identical. `api.deepseek1024.com` is
+registered as a second custom domain of the `dsh-store` Worker via `wrangler.jsonc`
+`routes` and is provisioned automatically on deploy.
+
+All internal endpoints live under `https://deepseek1024.com/api/v1/`. The Worker is the only
 process that reads or writes the D1 catalog; every response is served from a 15-minute KV
 snapshot of D1, and stale KV is the only degradation mode. Legacy paths (`/api/plugin`,
 `/api/plugin/:owner/:name`, `/plugins.json`, `/api/install-stats/:owner/:name`,
@@ -17,8 +25,10 @@ Returns the catalog listing used by the website: `packages`, `rankings`, `catego
 ## GET /api/v1/plugins/search
 
 Rate-limited keyword search over the catalog snapshot, mirrored on the website at
-[`/docs/api`](https://deepseek1024.com/docs/api). `q` is required; matches package name,
-owner, repository, category, and both description languages.
+[`/docs/api`](https://deepseek1024.com/docs/api). The canonical public URL is
+`https://api.deepseek1024.com/v1/plugins/search`; the main-domain path remains as the
+internal alias. `q` is required; matches package name, owner, repository, category, and
+both description languages.
 
 Query parameters: `q` (required, ≤120 chars), `page` (default 1), `limit` (default 20, max
 100), `sortBy` (`stars` default, `recent` as an alias of `newest`, or any catalog sort —
