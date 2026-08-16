@@ -1,5 +1,6 @@
 import { CATALOG_CATEGORIES, isKnownCategoryId } from './categories'
 import {
+  getCatalogState,
   loadClassificationQueue,
   neuronsSpentToday,
   recordNeuronSpend,
@@ -21,6 +22,8 @@ const BATCH_SIZE = 22
 const TASK_DEADLINE_MS = 8 * 60 * 1000
 /** Leaves ~1000 of the 10,000 daily free neurons for other account usage. */
 const DEFAULT_DAILY_NEURON_BUDGET = 9000
+/** Overrides the daily budget without a deploy; 0 removes the cap entirely. */
+const BUDGET_STATE_KEY = 'classify_daily_neuron_budget'
 /** Fallback description the snapshot layer synthesises for repos with no README blurb. */
 const PLACEHOLDER_DESCRIPTION = / discovered from GitHub\.$/
 const MAX_EN = 200
@@ -226,6 +229,18 @@ function parseItems(response: AiChatResponse): ClassifierItem[] {
   return Array.isArray(items) ? (items as ClassifierItem[]) : []
 }
 
+/**
+ * Daily neuron cap, overridable from `catalog_state` so draining a large backlog
+ * (or tightening the cap) does not need a deploy. A non-numeric or negative
+ * value falls back to the default rather than disabling the cap by accident.
+ */
+async function resolveDailyBudget(db: D1Database): Promise<number> {
+  const stored = await getCatalogState(db, BUDGET_STATE_KEY)
+  if (stored === null) return DEFAULT_DAILY_NEURON_BUDGET
+  const parsed = Number(stored)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_DAILY_NEURON_BUDGET
+}
+
 export interface ClassifyCounters {
   processed: number
   written: number
@@ -254,7 +269,7 @@ export async function runPluginClassifyTask(
 ): Promise<ClassifyCounters> {
   const deadline = scheduledTime + TASK_DEADLINE_MS
   const batchSize = options.batchSize ?? BATCH_SIZE
-  const budget = options.dailyBudget ?? DEFAULT_DAILY_NEURON_BUDGET
+  const budget = options.dailyBudget ?? await resolveDailyBudget(env.CATALOG_DB)
   const counters: ClassifyCounters = {
     processed: 0, written: 0, rejected: 0, batchFailures: 0, neurons: 0,
   }
