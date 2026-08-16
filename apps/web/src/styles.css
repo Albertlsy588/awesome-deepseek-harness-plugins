@@ -2585,7 +2585,16 @@ main {
     grid-row: 1;
   }
 
+  /* 窄屏先保名字：来源标签换到第二行，不跟名字抢同一行的宽度。子目录插件的
+     「owner / repo」能吃掉三分之二，名字会被截成两三个字，而名字才是这一行的
+     主语。 */
+  .row-title-line {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
   .row-title {
+    flex: 1 0 100%;
     font-size: 14px;
   }
 
