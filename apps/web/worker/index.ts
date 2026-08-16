@@ -1,6 +1,7 @@
 import { createApp } from './app'
 import { cleanupExpiredAuthRows } from './lib/auth'
 import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
+import { runPluginClassifyTask } from './lib/plugin-classify-task'
 import { runPluginDiscoveryTask } from './lib/plugin-discovery-task'
 import { isPublicApiHost, publicApiNotFound, rewritePublicApiUrl, wwwRedirect } from './public-api'
 import { metadataForPath, rewriteHtmlResponse, seoCatalog } from './seo'
@@ -8,6 +9,7 @@ import { metadataForPath, rewriteHtmlResponse, seoCatalog } from './seo'
 const STATS_OBJECT_NAME = 'global'
 const INCREMENTAL_DISCOVERY_CRONS = new Set(['7 * * * *', '37 * * * *'])
 const FULL_DISCOVERY_CRON = '17 3 * * SUN'
+const CLASSIFY_CRON = '2,12,22,32,42,52 * * * *'
 const app = createApp()
 
 function isWorkerRoute(pathname: string): boolean {
@@ -87,6 +89,17 @@ const worker = {
       ctx.waitUntil(runPluginDiscoveryTask(env, undefined, controller.scheduledTime).then(logDiscovery))
       return
     }
+    if (controller.cron === CLASSIFY_CRON) {
+      ctx.waitUntil(runPluginClassifyTask(env, controller.scheduledTime)
+        .then(logClassify)
+        .catch((error) => {
+          console.error(JSON.stringify({
+            message: 'plugin_classify_failed',
+            error: error instanceof Error ? error.message : String(error),
+          }))
+        }))
+      return
+    }
     ctx.waitUntil(runScheduledCatalogRefresh(env, controller.scheduledTime))
   },
 } satisfies ExportedHandler<Env>
@@ -94,6 +107,11 @@ const worker = {
 export { createApp } from './app'
 export { LiveStats } from './live-stats'
 export default worker
+
+function logClassify(result: Awaited<ReturnType<typeof runPluginClassifyTask>>): void {
+  if (result.processed === 0 && !result.budgetExhausted) return
+  console.log(JSON.stringify({ message: 'plugin_classify', ...result }))
+}
 
 function logDiscovery(result: Awaited<ReturnType<typeof runPluginDiscoveryTask>>): void {
   console.log(JSON.stringify({ message: 'plugin_discovery_completed', ...result }))

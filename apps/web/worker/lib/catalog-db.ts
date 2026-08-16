@@ -638,3 +638,137 @@ export async function loadCatalogSnapshotFromD1(
     plugins,
   }
 }
+
+/** A repository awaiting AI classification, with the only signals the classifier gets. */
+export interface ClassificationCandidate {
+  repositoryId: number
+  fullName: string
+  repositoryName: string
+  description: string | null
+  stars: number | null
+}
+
+/** One classifier verdict, ready to be written into `catalog_metadata`. */
+export interface ClassificationResult {
+  repositoryId: number
+  displayName: string
+  category: string
+  descriptionEn: string
+  descriptionZh: string
+  descriptionOrigin: 'author_en' | 'author_zh' | 'generated'
+  added: string
+}
+
+/**
+ * Repositories that still need an AI verdict, highest-starred first.
+ *
+ * Curated entries are excluded by the absence of a `github_pr` source row rather
+ * than by `catalog_metadata.source`: `syncCuratedEntries` maintains the source
+ * rows precisely, but its metadata upsert leaves `source` untouched, so a
+ * repository that was AI-classified before someone submitted a PR for it would
+ * still read as `'ai'`. Keying off the source table keeps curated data out of
+ * reach without touching the curation code.
+ *
+ * Bumping `classifierVersion` re-enqueues every AI-owned row; curated rows stay out.
+ */
+export async function loadClassificationQueue(
+  db: D1Database,
+  classifierVersion: string,
+  limit: number,
+): Promise<ClassificationCandidate[]> {
+  const result = await db.prepare(
+    `SELECT r.id, r.full_name, r.repository_name, r.description, r.stars
+       FROM catalog_repositories r
+       LEFT JOIN catalog_metadata m ON m.repository_id = r.id
+      WHERE r.validation_status = 'accepted'
+        AND r.topic_present = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM catalog_repository_sources s
+           WHERE s.repository_id = r.id AND s.source = 'github_pr'
+        )
+        AND (m.repository_id IS NULL
+             OR m.classifier_version IS NULL
+             OR m.classifier_version <> ?)
+      ORDER BY r.stars DESC, r.id
+      LIMIT ?`,
+  ).bind(classifierVersion, limit).all<{
+    id: number
+    full_name: string
+    repository_name: string
+    description: string | null
+    stars: number | null
+  }>()
+  return result.results.map((row) => ({
+    repositoryId: row.id,
+    fullName: row.full_name,
+    repositoryName: row.repository_name,
+    description: row.description,
+    stars: row.stars,
+  }))
+}
+
+/**
+ * Write AI verdicts into `catalog_metadata`.
+ *
+ * The upsert guard (`WHERE catalog_metadata.source = 'ai'`) is a second line of
+ * defence: the queue already excludes curated repositories, so a curated row can
+ * only be reached through a bug — and if it is, the update silently does nothing
+ * instead of overwriting a human-written entry.
+ */
+export async function saveClassifications(
+  db: D1Database,
+  entries: ClassificationResult[],
+  classifierVersion: string,
+  now = new Date().toISOString(),
+): Promise<number> {
+  let written = 0
+  for (const group of chunks(entries, 40)) {
+    const results = await db.batch(group.map((entry) => db.prepare(
+      `INSERT INTO catalog_metadata (
+         repository_id, display_name, category, description_en, description_zh,
+         added, source, classifier_version, description_origin, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, 'ai', ?, ?, ?)
+       ON CONFLICT(repository_id) DO UPDATE SET
+         display_name = excluded.display_name,
+         category = excluded.category,
+         description_en = excluded.description_en,
+         description_zh = excluded.description_zh,
+         classifier_version = excluded.classifier_version,
+         description_origin = excluded.description_origin,
+         updated_at = excluded.updated_at
+       WHERE catalog_metadata.source = 'ai'`,
+    ).bind(
+      entry.repositoryId,
+      entry.displayName,
+      entry.category,
+      entry.descriptionEn,
+      entry.descriptionZh,
+      entry.added,
+      classifierVersion,
+      entry.descriptionOrigin,
+      now,
+    )))
+    written += results.reduce((sum, item) => sum + Number(item.meta?.changes ?? 0), 0)
+  }
+  return written
+}
+
+/** Neurons already spent on classification during the UTC day containing `now`. */
+export async function neuronsSpentToday(
+  db: D1Database,
+  now = new Date().toISOString(),
+): Promise<number> {
+  const value = await getCatalogState(db, `classify_neurons_${now.slice(0, 10)}`)
+  return value === null ? 0 : Number(value) || 0
+}
+
+/** Add this round's neuron spend to the running UTC-day total. */
+export async function recordNeuronSpend(
+  db: D1Database,
+  neurons: number,
+  now = new Date().toISOString(),
+): Promise<number> {
+  const total = (await neuronsSpentToday(db, now)) + neurons
+  await setCatalogState(db, `classify_neurons_${now.slice(0, 10)}`, String(Math.round(total)), now)
+  return total
+}
