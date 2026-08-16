@@ -38,10 +38,19 @@ Three ways this gets broken, in rough order of likelihood:
    not a patch. Deploying with a custom domain missing unbinds it, and requests to the dropped
    hostname start failing with `522`. Always keep all three entries; only ever add.
 
-Deploys run on pushes to `main` that touch `apps/web/**`, `packages/dsh-1024store/**`, or
-`catalog/categories.json` (see `.github/workflows/deploy.yml`), so a change to any of the files
-above ships as soon as it lands. Extend `apps/web/tests/public-api.test.ts` whenever you change
-which host serves what.
+Deploying is a deliberate local act, not a consequence of pushing: run `npm run deploy` (its
+`predeploy` builds first). Landing a change on `main` publishes nothing until someone does.
+When the change carries a D1 migration, export a backup first, apply the migration, and only
+then deploy — the Worker and the schema must move together, and a Worker deployed against the
+old schema cannot read the catalog:
+
+```bash
+npx wrangler d1 export CATALOG_DB --remote --output=catalog-backup-$(date +%Y%m%d-%H%M).sql
+npm run db:migrate:remote --workspace @dsh-1024store/web
+npm run deploy
+```
+
+Extend `apps/web/tests/public-api.test.ts` whenever you change which host serves what.
 
 ## Responsive web support
 
