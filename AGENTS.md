@@ -23,7 +23,20 @@ is the single place that decides which is which; `apps/web/tests/public-api.test
   `PUBLIC_API_PATHS` in `public-api.ts`, rewritten onto the internal routes:
   `/v1/plugins/search` → `/api/v1/plugins/search`, and `/v1/health` → `/api/v1/health`.
 
-Three ways this gets broken, in rough order of likelihood:
+That host exists for third-party consumers, and its one substantive endpoint is metered
+independently of the site. `/v1/plugins/search` enforces a per-caller quota — `ANONYMOUS_QUOTA`
+and `AUTHENTICATED_QUOTA` in `apps/web/worker/lib/api-quota.ts`, counters kept in D1 through
+`consumeQuota`: 10/min and 50/day anonymous, 30/min and 500/day with a key. Anonymous callers are
+keyed by `ip:<HMAC of CF-Connecting-IP>` so the raw address never reaches D1; authenticated callers
+are keyed by `user:<id>` and not by key id, so rotating or minting keys cannot open a fresh window.
+Every response carries `X-RateLimit-Daily-Limit` and `X-RateLimit-Daily-Remaining`; a rejection adds
+`Retry-After` and returns `429`, with `DAILY_QUOTA_EXCEEDED` for the day window and `RATE_LIMITED`
+for the minute window. `/v1/health` is deliberately unmetered.
+
+The quota lives on the search handler in `apps/web/worker/app.ts`, not on the host check, so
+`deepseek1024.com/api/v1/plugins/search` draws down the same counters.
+
+Four ways this gets broken, in rough order of likelihood:
 
 1. **Assuming a 404 on `api.deepseek1024.com` is a bug.** Every path outside the allow-list returns
    `404 {"code":"NOT_FOUND"}` on purpose, and `/` returns `302` to `/docs/api`. So
@@ -34,7 +47,11 @@ Three ways this gets broken, in rough order of likelihood:
    Worker does *not* publish it at `api.deepseek1024.com/v1/<thing>`. Publishing is a separate,
    deliberate act: add the mapping to `PUBLIC_API_PATHS`. Keep sign-in, key management, and anything
    session- or cookie-bearing off this host.
-3. **Editing `routes` without listing every domain.** That array is the authoritative binding list,
+3. **Publishing a public endpoint without metering it.** Adding a path to `PUBLIC_API_PATHS` only
+   routes it; the quota is per-handler. A new public endpoint that never calls `consumeQuota` is
+   unmetered on an unauthenticated host. Decide the tier deliberately, and keep `/v1/health` the
+   only unmetered entry.
+4. **Editing `routes` without listing every domain.** That array is the authoritative binding list,
    not a patch. Deploying with a custom domain missing unbinds it, and requests to the dropped
    hostname start failing with `522`. Always keep all three entries; only ever add.
 
