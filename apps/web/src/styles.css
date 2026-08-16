@@ -3674,7 +3674,10 @@ main {
   background: transparent;
   cursor: grab;
   pointer-events: auto;
-  touch-action: pan-y;
+  /* 必须在手势开始前就声明：浏览器在 touchstart 时就决定手势归属，pan-y 会让
+     纵向拖动被判成页面滚动、直接 pointercancel 掉拖拽。改 is-dragging 时的
+     touch-action 已经太晚。宠物只有 72–110px，让出这一小块滚动区是值得的。 */
+  touch-action: none;
   /* 3D 化：pointer 跟随倾斜（--kanban-tilt-* 由 JS 写入），透视在根容器上 */
   transform: rotateX(var(--kanban-tilt-x, 0deg)) rotateY(var(--kanban-tilt-y, 0deg));
   transform-style: preserve-3d;

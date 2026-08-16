@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { HEARTBEAT_TIMEOUT_MS, partitionConnections } from '../worker/lib/live-connections'
+import { newVisitId, VISIT_ID_PATTERN } from '../worker/lib/visit-id'
 
 const NOW = 1_760_000_000_000
 
@@ -67,5 +68,38 @@ describe('live connection accounting', () => {
 
     expect(result.online).toBe(0)
     expect(result.stale).toEqual(['anonymous'])
+  })
+})
+
+describe('visit identifier generation', () => {
+  // The worker tsconfig types globalThis for the Workers runtime, which does not
+  // declare `crypto` on it; the test swaps the global to exercise each fallback.
+  const globals = globalThis as unknown as { crypto: Crypto }
+  const realCrypto = globals.crypto
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'crypto', { value: realCrypto, configurable: true })
+  })
+
+  function withCrypto(value: unknown) {
+    Object.defineProperty(globalThis, 'crypto', { value, configurable: true })
+  }
+
+  it('uses randomUUID when the page is in a secure context', () => {
+    expect(newVisitId()).toMatch(VISIT_ID_PATTERN)
+  })
+
+  it('falls back to getRandomValues when randomUUID is missing (plain HTTP)', () => {
+    withCrypto({ getRandomValues: realCrypto.getRandomValues.bind(realCrypto) })
+    const id = newVisitId()
+    expect(id).toMatch(VISIT_ID_PATTERN)
+    expect(id).toHaveLength(32)
+  })
+
+  it('still produces an accepted id when no Web Crypto is available at all', () => {
+    withCrypto(undefined)
+    const ids = new Set(Array.from({ length: 50 }, () => newVisitId()))
+    for (const id of ids) expect(id).toMatch(VISIT_ID_PATTERN)
+    expect(ids.size).toBe(50)
   })
 })
