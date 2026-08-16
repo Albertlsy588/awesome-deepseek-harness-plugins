@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "ZichengGurrr/dsh-window/kit",
+  "name": "dsh-window-kit",
+  "repository": "https://github.com/ZichengGurrr/dsh-window",
+  "category": "ui",
+  "description": {
+    "en": "All-in-one bundle for DSH: the native Windows desktop window (WebView2), DeepEye vision (GLM-4V-Flash), and voice input (mic button) in a single install.",
+    "zh": "DSH 一体化套件：原生 Windows 桌面窗口（WebView2）、DeepEye 视觉（GLM-4V-Flash）与语音输入（麦克风按钮），一次安装全部可用。"
+  },
+  "added": "2026-08-16"
+}

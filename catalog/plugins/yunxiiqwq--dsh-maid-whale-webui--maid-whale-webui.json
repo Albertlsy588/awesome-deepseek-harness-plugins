@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "yunxiiQwQ/dsh-maid-whale-webUI/maid-whale-webui",
+  "name": "maid-whale-webui",
+  "repository": "https://github.com/yunxiiQwQ/dsh-maid-whale-webUI",
+  "category": "theme",
+  "description": {
+    "en": "Whale-maid paper theme for the DSH Web UI with light and dark palettes, ocean illustrations, hand-drawn frames, decorative assets, and a persistent pet.",
+    "zh": "DSH Web UI 鲸鱼女仆纸质主题：浅色/深色配色、海洋插画、手绘边框、装饰素材与常驻桌宠。"
+  },
+  "added": "2026-08-16"
+}

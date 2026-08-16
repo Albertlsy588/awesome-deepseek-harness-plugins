@@ -57,7 +57,7 @@ Local, `file:`, `link:` and `portal:` targets are a hard boundary: a filesystem
 path can never reach an install event, a local receipt, or the retry queue.
 
 ```text
-dsh1024 plugin --profile web add github:owner/repository
+dsh1024 plugin --profile web add github:owner/repository[#path:sub/dir]
         |
         +-- official @deepseek-ai/dsh plugin command
         +-- before/after profile verification
@@ -111,8 +111,11 @@ Two counting-policy notes:
 
 ## Collected fields
 
-Each event contains an idempotency UUID, the anonymous client UUID, canonical
-`owner/repository` plugin ID, profile name, the reporting source channel
+Each event contains an idempotency UUID, the anonymous client UUID, the canonical
+plugin ID (`owner/repository`, optionally extended with the monorepo subdirectory
+path, e.g. `owner/repository/packages/foo` — root and subdirectory installs of the
+same repository aggregate separately, keyed by full id), profile name, the
+reporting source channel
 (`dsh-1024store-cli` or `dsh-1024store-plugin`), operation and result, client
 start and completion times, duration, requested ref, before/after version when
 available, wrapper and DSH versions, platform, architecture, CI flag, and a
@@ -197,6 +200,7 @@ npx wrangler d1 execute dsh-store-star-history --remote --command \
 
 npx wrangler d1 execute dsh-store-star-history --remote --command \
   "SELECT event_id, substr(client_hash, 1, 16) AS install_instance, operation, status, server_received_at, duration_ms, before_version, after_version, error_code FROM installation_events WHERE plugin_id = 'owner/repository' ORDER BY server_received_at DESC LIMIT 200"
+# plugin_id may also be a monorepo subdirectory id, e.g. 'owner/repository/packages/foo'
 ```
 
 The shortened hash in these reports is only an operator-facing display label;
@@ -256,6 +260,7 @@ set, the `DSH1024_*` value wins.
 The wrapper, event contract, and ingestion code are public. As with npm download
 counts or any unauthenticated CLI telemetry, a determined attacker can forge
 requests. Event UUID idempotency, strict validation, bounded payloads,
-catalog-only plugin IDs, and per-instance aggregation prevent accidental
-inflation, but they are not proof of a real human install. Treat the metric as a
+strictly validated plugin IDs (per-segment character checks with bounded
+length, including monorepo subdirectory ids), and per-instance aggregation
+prevent accidental inflation, but they are not proof of a real human install. Treat the metric as a
 useful ecosystem signal, not a billing, payout, or security primitive.

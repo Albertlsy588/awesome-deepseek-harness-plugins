@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "severin-ye/uagent-sync/packages/dsh",
+  "name": "uagent-sync-dsh",
+  "repository": "https://github.com/severin-ye/uagent-sync",
+  "category": "workflow",
+  "description": {
+    "en": "Cross-device workspace backup, restore, and ecosystem update via the uagent-sync CLI.",
+    "zh": "通过 uagent-sync CLI 实现跨设备工作区备份、恢复与生态更新。"
+  },
+  "added": "2026-08-16"
+}

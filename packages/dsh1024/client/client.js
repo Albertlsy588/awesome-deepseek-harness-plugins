@@ -90,13 +90,34 @@ function repositoryOf(url) {
   return match ? match[1] : null
 }
 
+// Source lives in the subdirectory for a monorepo subpackage; HEAD resolves to
+// the repository's default branch. Issue trackers stay repository-level.
+function sourceUrl(plugin) {
+  const path = subPathOf(plugin)
+  if (path === '') return plugin.url
+  const segments = path.split('/').map(encodeURIComponent).join('/')
+  return plugin.url.replace(/\/+$/, '') + '/tree/HEAD/' + segments
+}
+
+function subPathOf(plugin) {
+  const segments = String(plugin.id || '').split('/')
+  return segments.length > 2 ? segments.slice(2).join('/') : ''
+}
+
 function installedName(plugin, installed) {
   if (installed[plugin.name] !== undefined) return plugin.name
   const repository = repositoryOf(plugin.url)
   if (repository === null) return null
   const needle = ('github:' + repository).toLowerCase()
+  // Monorepo siblings share a repository, so the spec's path: fragment is what
+  // distinguishes them.
+  const wantedPath = subPathOf(plugin).toLowerCase()
   for (const [name, spec] of Object.entries(installed)) {
-    if (String(spec).toLowerCase().includes(needle)) return name
+    const normalized = String(spec).toLowerCase()
+    if (!normalized.includes(needle)) continue
+    const match = /[#&]path:\/*([^&]*)/.exec(normalized)
+    const specPath = (match ? match[1] : '').replace(/\/+$/, '')
+    if (specPath === wantedPath) return name
   }
   return null
 }
@@ -190,7 +211,7 @@ function MarketTab({ locale }) {
     fetch('/dsh1024/' + kind, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(kind === 'install' ? { url: value.url } : { name: value }),
+      body: JSON.stringify(kind === 'install' ? { id: value.id } : { name: value }),
     })
       .then(responseJson)
       .then(({ status, body }) => {
@@ -246,7 +267,7 @@ function MarketTab({ locale }) {
     const categoryLabel = categoryLabels[plugin.category]?.[lang]
       || categoryLabels[plugin.category]?.en
       || plugin.category
-    return h('article', { className: 'dsm-card', key: plugin.url },
+    return h('article', { className: 'dsm-card', key: plugin.id },
       h('div', { className: 'dsm-card-head' },
         h('div', { className: 'dsm-avatar', style: { '--dsm-avatar': avatarColor(plugin.name) } },
           plugin.name.replace(/^dsh[-_]/i, '').charAt(0).toUpperCase() || 'P'),
@@ -254,7 +275,7 @@ function MarketTab({ locale }) {
           h('div', { className: 'dsm-name' }, plugin.name),
           h('div', { className: 'dsm-owner' }, plugin.owner,
             typeof plugin.stars === 'number' ? ' · ★ ' + plugin.stars : '')),
-        h('a', { className: 'dsm-source', href: plugin.url, target: '_blank', rel: 'noreferrer' }, copy.source)),
+        h('a', { className: 'dsm-source', href: sourceUrl(plugin), target: '_blank', rel: 'noreferrer' }, copy.source)),
       h('div', { className: 'dsm-desc' }, description),
       (installing || removing) && h('div', { className: 'dsm-owner' },
         h('span', { className: 'dsm-spin' }), ' ', progress || (installing ? copy.installing : copy.removing)),

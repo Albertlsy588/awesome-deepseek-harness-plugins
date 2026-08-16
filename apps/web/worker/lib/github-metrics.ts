@@ -149,10 +149,18 @@ export async function fetchGitHubMetrics(
   token: string | undefined,
   fetcher: typeof fetch = fetch,
 ): Promise<MetricMap> {
+  // Metrics are repository facts keyed by owner/repository, so monorepo
+  // siblings must not each contribute a duplicate GraphQL repository() field.
+  const byRepository = new Map<string, RegistryPlugin>()
+  for (const plugin of plugins) {
+    const key = metricKey(plugin)
+    if (!byRepository.has(key)) byRepository.set(key, plugin)
+  }
+  const unique = [...byRepository.values()]
   try {
     return token
-      ? await fetchGraphMetrics(plugins, token, fetcher)
-      : await fetchSearchMetrics(plugins, fetcher)
+      ? await fetchGraphMetrics(unique, token, fetcher)
+      : await fetchSearchMetrics(unique, fetcher)
   } catch (error) {
     console.error(
       JSON.stringify({

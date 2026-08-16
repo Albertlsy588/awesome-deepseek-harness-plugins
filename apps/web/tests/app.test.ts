@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from '../worker/app'
+
 import type { CuratedCatalogEntry } from '../worker/lib/catalog-db'
 import {
   emptyInstallMetrics,
   InstallationRateLimitError,
   type InstallationEvent,
 } from '../worker/lib/install-metrics'
+import { collectionQueryKind } from '../worker/seo'
 import type { PackageDetail } from '../worker/types'
 import { TEST_PLUGINS, testCatalogResult } from './fixtures'
 
@@ -15,6 +17,7 @@ function testApp() {
     github: null,
     manifest: null,
     readme: null,
+    readmeBasePath: '',
     verification: { repositoryReachable: false, bundleDeclared: false },
   } satisfies PackageDetail
 
@@ -132,6 +135,68 @@ describe('market API', () => {
     expect((sitemapBody.match(/<url>/g) ?? []).length).toBe(TEST_PLUGINS.length + 3)
   })
 
+  it('serves the catalog as plain text for crawlers that will not run JavaScript', async () => {
+    const response = await testApp().request('https://store.example/llms-full.txt')
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toContain('text/plain')
+    const body = await response.text()
+    expect(body).toContain(TEST_PLUGINS[0]!.name)
+    expect(body).toContain('dsh plugin --profile web add github:')
+  })
+
+  it('withholds the sitemap during a catalog outage instead of shrinking it', async () => {
+    const app = createApp({
+      catalogLoader: vi.fn(async () => ({ ...testCatalogResult('empty'), source: 'empty' as const })),
+    })
+    const sitemap = await app.request('https://store.example/sitemap.xml')
+    const llms = await app.request('https://store.example/llms-full.txt')
+
+    expect(sitemap.status).toBe(503)
+    expect(sitemap.headers.get('Cache-Control')).toBe('no-store')
+    expect(llms.status).toBe(503)
+  })
+
+  it('reports a catalog outage as unavailable, never as a missing plugin', async () => {
+    const outage = testCatalogResult('empty')
+    const app = createApp({
+      catalogLoader: vi.fn(async () => ({
+        source: 'empty' as const,
+        snapshot: { ...outage.snapshot, plugins: [], metricCoverage: 0 },
+      })),
+    })
+    const response = await app.request('/api/v1/plugins/openma-ai/deepseek-harness-tui')
+
+    // A 404 here tells the client the plugin was deleted, and the client
+    // answers by noindexing the page — during an outage that would deindex the
+    // whole catalog, which is exactly what the Worker fails open to prevent.
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toMatchObject({ code: 'CATALOG_UNAVAILABLE' })
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+
+  it('still reports a genuinely unknown plugin as not found', async () => {
+    const response = await testApp().request('/api/v1/plugins/nobody/nothing')
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('redirects the duplicate rankings route to the canonical home page', async () => {
+    const response = await testApp().request('https://store.example/rankings')
+
+    expect(response.status).toBe(301)
+    expect(response.headers.get('Location')).toBe('https://store.example/')
+  })
+
+  it('keeps the catalog JSON crawlable but unindexable', async () => {
+    const response = await testApp().request('/api/v1/plugins')
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('X-Robots-Tag')).toBe('noindex')
+    expect(response.headers.get('Cache-Control')).toContain('max-age=300')
+  })
+
   it('reports service health without exposing internals', async () => {
     const response = await testApp().request('/api/v1/health')
     expect(response.status).toBe(200)
@@ -208,7 +273,7 @@ describe('market API', () => {
     }
     expect(body.packages.map((plugin) => plugin.name)).toEqual(['dsh-gomoku'])
     expect(body.rankings.stars[0]?.name).toBe('dsh-crosstalk')
-    expect(body.meta).toMatchObject({ total: 1, catalogTotal: 7 })
+    expect(body.meta).toMatchObject({ total: 1, catalogTotal: TEST_PLUGINS.length })
   })
 
   it('serves package details with the resolved category and rejects invalid identifiers', async () => {
@@ -231,6 +296,67 @@ describe('market API', () => {
     expect(missing.status).toBe(404)
   })
 
+  it('serves a monorepo subpackage plugin at its subdirectory path', async () => {
+    // Echoes back whichever plugin the route resolved, so the assertions prove
+    // the id lookup rather than the stub's fixed payload.
+    const app = createApp({
+      catalogLoader: vi.fn(async () => testCatalogResult()),
+      detailLoader: vi.fn(async (plugin) => ({
+        ...plugin,
+        github: null,
+        manifest: null,
+        readme: null,
+      readmeBasePath: '',
+        verification: { repositoryReachable: false, bundleDeclared: false },
+      } satisfies PackageDetail)),
+    })
+
+    const detail = await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector')
+    expect(detail.status).toBe(200)
+    await expect(detail.json()).resolves.toMatchObject({
+      id: 'omdsh-dev/dsh-suite/packages/dsh-inspector',
+      name: 'dsh-inspector',
+      install: 'dsh plugin --profile web add github:omdsh-dev/dsh-suite#path:packages/dsh-inspector',
+    })
+
+    // The sibling resolves independently rather than colliding on the repository.
+    const sibling = await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/packages/dsh-timeline')
+    await expect(sibling.json()).resolves.toMatchObject({ name: 'dsh-timeline' })
+
+    // The repository hosts two plugins, so it cannot pick a successor.
+    expect((await app.request('/api/v1/plugins/omdsh-dev/dsh-suite')).status).toBe(404)
+    // Plain and percent-encoded dot-dot segments are collapsed by URL parsing
+    // before routing, so they resolve to a different (absent) id.
+    expect((await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/../secret')).status).toBe(404)
+    expect((await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/%2e%2e/secret')).status).toBe(404)
+    // An encoded slash survives parsing and must be rejected, not smuggled into
+    // a segment.
+    expect((await app.request('/api/v1/plugins/omdsh-dev/dsh-suite/..%2Fsecret')).status).toBe(400)
+  })
+
+  it('redirects a repository id whose only plugin moved into a subdirectory', async () => {
+    const base = testCatalogResult()
+    // One survivor under omdsh-dev/dsh-suite, mirroring a discovered repository
+    // whose bundle lives in a nested package.
+    const app = createApp({
+      catalogLoader: vi.fn(async () => ({
+        ...base,
+        snapshot: {
+          ...base.snapshot,
+          plugins: base.snapshot.plugins.filter(
+            (plugin) => plugin.id !== 'omdsh-dev/dsh-suite/packages/dsh-timeline',
+          ),
+        },
+      })),
+    })
+
+    const response = await app.request('https://store.example/api/v1/plugins/omdsh-dev/dsh-suite')
+    expect(response.status).toBe(301)
+    expect(response.headers.get('Location')).toBe(
+      'https://store.example/api/v1/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector',
+    )
+  })
+
   it('serves the built-in unclassified descriptor for scan-discovered plugins', async () => {
     const base = testCatalogResult()
     const detail = {
@@ -238,6 +364,7 @@ describe('market API', () => {
       github: null,
       manifest: null,
       readme: null,
+      readmeBasePath: '',
       verification: { repositoryReachable: false, bundleDeclared: false },
     } satisfies PackageDetail
     const app = createApp({
@@ -397,7 +524,47 @@ describe('market API', () => {
       SYNC_ENV,
     )
     expect(mismatchedRepository.status).toBe(400)
+
+    // A subdirectory id keeps the repository-root URL; traversal is rejected.
+    const traversalId = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({
+        source: 'github_ci',
+        entries: [{
+          ...VALID_SYNC_ENTRY,
+          id: 'openma-ai/deepseek-harness-tui/../secret',
+        }],
+      }),
+      SYNC_ENV,
+    )
+    expect(traversalId.status).toBe(400)
+
+    const subdirectoryWithNestedUrl = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({
+        source: 'github_ci',
+        entries: [{
+          ...VALID_SYNC_ENTRY,
+          id: 'openma-ai/deepseek-harness-tui/packages/foo',
+          repository: 'https://github.com/openma-ai/deepseek-harness-tui/packages/foo',
+        }],
+      }),
+      SYNC_ENV,
+    )
+    expect(subdirectoryWithNestedUrl.status).toBe(400)
     expect(curatedSyncer).not.toHaveBeenCalled()
+
+    const subdirectory = await app.request(
+      '/api/v1/catalog/sync',
+      syncRequest({
+        source: 'github_ci',
+        entries: [{ ...VALID_SYNC_ENTRY, id: 'openma-ai/deepseek-harness-tui/packages/foo' }],
+      }),
+      SYNC_ENV,
+    )
+    expect(subdirectory.status).toBe(200)
+    expect(curatedSyncer.mock.calls[0]?.[1])
+      .toEqual([expect.objectContaining({ id: 'openma-ai/deepseek-harness-tui/packages/foo' })])
   })
 
   it('reconciles curated entries and refreshes the snapshot synchronously', async () => {
@@ -591,6 +758,7 @@ describe('market API', () => {
         github: null,
         manifest: null,
         readme: null,
+      readmeBasePath: '',
         verification: { repositoryReachable: false, bundleDeclared: false },
       })),
       installStatsLoader: vi.fn(async () => metrics),
@@ -603,5 +771,23 @@ describe('market API', () => {
     )
     expect(detail.status).toBe(200)
     await expect(detail.json()).resolves.toMatchObject(metrics)
+  })
+})
+
+describe('collection query classification', () => {
+  it('separates filters, which change the page, from tags, which do not', () => {
+    const kind = (href: string) => collectionQueryKind(new URL(href))
+
+    expect(kind('https://deepseek1024.com/')).toBe('clean')
+    // An empty filter renders the unfiltered page, so it canonicalises to it
+    // rather than being noindexed as a permutation.
+    expect(kind('https://deepseek1024.com/plugins?q=')).not.toBe('filtered')
+    expect(kind('https://deepseek1024.com/plugins?q=theme')).toBe('filtered')
+    expect(kind('https://deepseek1024.com/plugins?category=ui')).toBe('filtered')
+    // A campaign tag serves the same page: noindexing it would throw away every
+    // shared link instead of consolidating it onto the clean URL.
+    expect(kind('https://deepseek1024.com/?utm_source=newsletter')).toBe('tagged')
+    expect(kind('https://deepseek1024.com/?fbclid=abc')).toBe('tagged')
+    expect(kind('https://deepseek1024.com/plugins/acme/widget?utm_source=x')).toBe('clean')
   })
 })

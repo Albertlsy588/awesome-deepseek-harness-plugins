@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "sjh9714/clippy-harness/plugin",
+  "name": "dsh-clippy",
+  "repository": "https://github.com/sjh9714/clippy-harness",
+  "category": "fun",
+  "description": {
+    "en": "Clippy is back and this time he can actually help. An office assistant pet that reacts to real agent state, jumps when the turn completes, and opens a classic \"illegal operation\" dialog when a turn fails.",
+    "zh": "Clippy 回来了，这次真能帮上忙：办公助手桌宠响应真实 Agent 状态，回合完成时跳跃，回合失败时弹出经典“非法操作”对话框。"
+  },
+  "added": "2026-08-16"
+}

@@ -8,10 +8,15 @@ import type {
 import { categoryLabelMap } from './categories'
 import { loadCatalogSnapshotFromD1, saveCatalogMetrics } from './catalog-db'
 import { fetchGitHubMetrics, metricKey } from './github-metrics'
+import { normalizePluginId } from './plugin-id'
 import { emptyInstallMetrics, loadInstallMetrics } from './install-metrics'
 import { updateStarHistory } from './star-history'
 
-const SNAPSHOT_KEY = 'catalog:snapshot:v8'
+// v9 is a fresh key on purpose: both sides of this merge shipped their own
+// numbering, and the tightened plugin validation rejects either side's leftover
+// payload wholesale, which would leave the catalog endpoint empty until the
+// next refresh. Starting clean costs one cold read instead.
+const SNAPSHOT_KEY = 'catalog:snapshot:v9'
 const SNAPSHOT_TTL_MS = 15 * 60 * 1000
 
 type JsonObject = Record<string, unknown>
@@ -23,6 +28,7 @@ function isObject(value: unknown): value is JsonObject {
 function isCatalogPlugin(value: unknown): value is CatalogPlugin {
   if (!isObject(value) || !isObject(value.description)) return false
   return (
+    typeof value.id === 'string' &&
     typeof value.name === 'string' &&
     typeof value.owner === 'string' &&
     typeof value.url === 'string' &&
@@ -91,8 +97,9 @@ function logInstallMetricsError(error: unknown): void {
   )
 }
 
-function installMetricKey(plugin: Pick<CatalogPlugin, 'owner' | 'repository'>): string {
-  return `${plugin.owner}/${plugin.repository}`.toLocaleLowerCase()
+/** Install metrics are per plugin, so monorepo siblings never share a counter. */
+function installMetricKey(plugin: Pick<CatalogPlugin, 'id'>): string {
+  return normalizePluginId(plugin.id)
 }
 
 function installMetricsFrom(plugin: CatalogPlugin): InstallMetrics {
@@ -146,15 +153,23 @@ export async function refreshCatalogSnapshot(
       if (d1Snapshot) {
         const token = env.GITHUB_TOKEN?.trim() || undefined
         const metrics = await fetchGitHubMetrics(d1Snapshot.plugins, token, fetcher)
+        // Two maps, because the two kinds of carry-over have different keys:
+        // repository facts are shared by monorepo siblings, install metrics are
+        // per plugin and would otherwise be inherited from whichever sibling
+        // happened to be last.
         const previousByRepository = new Map(
           previousSnapshot?.plugins.map((plugin) => [metricKey(plugin), plugin]) ?? [],
+        )
+        const previousByPlugin = new Map(
+          previousSnapshot?.plugins.map((plugin) => [installMetricKey(plugin), plugin]) ?? [],
         )
         let plugins = d1Snapshot.plugins.map((plugin) => {
           const metric = metrics.get(metricKey(plugin))
           const previous = previousByRepository.get(metricKey(plugin))
+          const previousPlugin = previousByPlugin.get(installMetricKey(plugin))
           return {
             ...plugin,
-            ...(previous ? installMetricsFrom(previous) : emptyInstallMetrics()),
+            ...(previousPlugin ? installMetricsFrom(previousPlugin) : emptyInstallMetrics()),
             stars: metric?.stars ?? plugin.stars ?? previous?.stars ?? null,
             forks: metric?.forks ?? plugin.forks ?? previous?.forks ?? null,
             pushedAt: metric?.pushedAt ?? plugin.pushedAt ?? previous?.pushedAt ?? null,
@@ -178,7 +193,7 @@ export async function refreshCatalogSnapshot(
         try {
           const installMetrics = await loadInstallMetrics(
             env.CATALOG_DB,
-            plugins.map((plugin) => `${plugin.owner}/${plugin.repository}`),
+            plugins.map((plugin) => plugin.id),
             capturedAt,
           )
           plugins = plugins.map((plugin) => ({

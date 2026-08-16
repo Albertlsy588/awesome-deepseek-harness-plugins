@@ -6,7 +6,7 @@ import { lstat, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { assert, isObject, validateCatalogEntry } from './lib/catalog-entry.mjs'
+import { assert, isObject, parsePluginId, repositoryUrl, validateCatalogEntry } from './lib/catalog-entry.mjs'
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const root = path.resolve(process.env.PLUGIN_REVIEW_ROOT ?? scriptRoot)
@@ -17,11 +17,10 @@ const reviewCommentMarker = '<!-- dsh-plugin-submission-review -->'
 export { validateCatalogEntry }
 
 function repositoryParts(id) {
-  const parts = id.split('/')
-  if (parts.length !== 2 || parts.some(part => !/^[A-Za-z0-9_.-]+$/.test(part))) {
-    throw new Error(`Invalid plugin id: ${id}`)
-  }
-  return parts.map(encodeURIComponent)
+  // subPath stays raw: it is compared against git tree paths and later feeds
+  // the pnpm `#path:` install spec; only owner/repository enter API URLs.
+  const { owner, repository, subPath } = parsePluginId(id)
+  return { owner: encodeURIComponent(owner), repository: encodeURIComponent(repository), subPath }
 }
 
 function decodeBlob(blob, packagePath) {
@@ -42,14 +41,122 @@ function resolvePatchPath(packagePath, patch) {
   return resolved
 }
 
-export async function findHarnessBundle(tree, readBlob) {
+/**
+ * The entry point a git install has to be able to import, taken from the
+ * manifest's `exports["."]` or `main`. Returns undefined when the manifest
+ * declares none — Node then falls back to `index.js`, but a bundle may load
+ * purely through its patch, so an undeclared entry is not treated as a defect.
+ */
+export function declaredEntryPoint(manifest) {
+  const exported = manifest.exports
+  if (typeof exported === 'string') return exported
+  if (isObject(exported)) {
+    const root = exported['.']
+    if (typeof root === 'string') return root
+    if (isObject(root)) {
+      for (const condition of ['default', 'import', 'node', 'require']) {
+        if (typeof root[condition] === 'string') return root[condition]
+      }
+    }
+  }
+  return typeof manifest.main === 'string' ? manifest.main : undefined
+}
+
+/**
+ * Classifies whether a git install of this manifest yields a loadable package.
+ *
+ * pnpm runs `prepare` after a git install and otherwise ships only what is
+ * committed. A plugin whose entry point is a build artifact that is neither
+ * committed nor produced by `prepare` installs successfully and then fails at
+ * profile boot with a module-not-found error — the failure surfaces far from
+ * its cause, so the gate names it here.
+ *
+ * This is a LABEL, not an admission test: the submission is still accepted and
+ * the plugin still gets catalogued. The website derives the same verdict from
+ * its own crawl (apps/web/worker/lib/install-methods.ts); the two must agree,
+ * or the pull-request advisory contradicts the published badge.
+ *
+ * The better outcome wins: a committed entry beats a prepare script, because a
+ * committed entry needs no build allowance from the user.
+ *
+ * @returns `{ code, entryPoint, requiresBuildAllowance }`; never throws.
+ */
+export function classifyGitInstall(packagePath, manifest, files) {
+  const prepare = isObject(manifest.scripts) ? manifest.scripts.prepare : undefined
+  const requiresBuildAllowance = typeof prepare === 'string' && prepare.trim().length > 0
+  const entry = declaredEntryPoint(manifest)
+
+  if (entry === undefined) {
+    return { code: 'no_entry_declared', entryPoint: undefined, requiresBuildAllowance }
+  }
+  let entryPath
+  try {
+    entryPath = resolvePatchPath(packagePath, entry)
+  } catch {
+    return { code: 'entry_outside_repository', entryPoint: entry, requiresBuildAllowance }
+  }
+  if (files.has(entryPath)) {
+    return { code: 'entry_committed', entryPoint: entry, requiresBuildAllowance }
+  }
+  if (requiresBuildAllowance) {
+    return { code: 'prepare_builds_entry', entryPoint: entry, requiresBuildAllowance }
+  }
+  return { code: 'entry_missing_no_prepare', entryPoint: entry, requiresBuildAllowance }
+}
+
+/** The author-facing advisory for a classification, or undefined when clean. */
+export function gitInstallAdvisory(code, entryPoint, requiresBuildAllowance) {
+  const lines = []
+  if (code === 'entry_missing_no_prepare') {
+    lines.push(
+      `The GitHub install method will be published as UNVERIFIED: the entry point ${entryPoint} is not committed `
+      + 'and the package has no prepare script, so `dsh plugin add github:…` installs cleanly and then fails at '
+      + 'startup with ERR_MODULE_NOT_FOUND. Your plugin is catalogued either way. To clear the label, commit the '
+      + 'built entry point, add a self-contained prepare script, or publish to npm with repository.url and '
+      + 'repository.directory pointing back here.',
+    )
+  }
+  if (code === 'entry_outside_repository') {
+    lines.push(`The entry point ${entryPoint} resolves outside the repository; the GitHub install method will be published as UNVERIFIED.`)
+  }
+  if (code === 'no_entry_declared') {
+    lines.push('This package declares no entry point. That is expected for a bundle whose patch only mounts other packages, but it cannot be confirmed statically, so the GitHub install method will be published as UNKNOWN.')
+  }
+  if (requiresBuildAllowance) {
+    lines.push(
+      'This package builds on install, so the first `dsh plugin add` fails until the user allowlists it — pnpm '
+      + 'prints the exact key to copy into the profile\'s pnpm-workspace.yaml. Publishing prebuilt code to npm '
+      + 'avoids asking users for that permission.',
+    )
+  }
+  return lines.length === 0 ? undefined : lines.join('\n\n')
+}
+
+export async function findHarnessBundle(tree, readBlob, subPath = '') {
   const files = new Map(tree.filter(item => item.type === 'blob').map(item => [item.path, item]))
-  const packages = [...files.values()]
+  const allPackages = [...files.values()]
     .filter(item => item.path === 'package.json' || item.path.endsWith('/package.json'))
     .filter(item => !item.path.split('/').includes('node_modules'))
     .sort((left, right) => left.path.split('/').length - right.path.split('/').length || left.path.localeCompare(right.path))
 
-  if (packages.length === 0) throw new Error('Repository contains no package.json')
+  // A subdirectory id pins the manifest to exactly that directory: the id's
+  // path becomes the pnpm `#path:` install spec, so a bundle anywhere else in
+  // the repository would not be what the derived install command installs.
+  const requiredPackagePath = subPath.length === 0 ? undefined : `${subPath}/package.json`
+  const packages = requiredPackagePath === undefined
+    ? allPackages
+    : allPackages.filter(item => item.path === requiredPackagePath)
+
+  if (packages.length === 0) {
+    if (requiredPackagePath !== undefined) {
+      const declared = allPackages.map(item => item.path)
+      throw new Error([
+        `Repository has no ${requiredPackagePath}; the id's subdirectory path must contain the plugin's package.json.`,
+        ...(declared.length > 0 ? [`package.json files found: ${declared.slice(0, 20).join(', ')}`] : []),
+      ].join('\n'))
+    }
+    throw new Error('Repository contains no package.json')
+  }
 
   const invalidBundles = []
   for (const packageFile of packages) {
@@ -76,14 +183,28 @@ export async function findHarnessBundle(tree, readBlob) {
         invalidBundles.push(`${packageFile.path}: dsh.bundle.patch does not exist: ${patchPath}`)
         continue
       }
-      return { packagePath: packageFile.path, patchPath }
+      // Classification never rejects: the entry point being unobtainable is a
+      // published label, not grounds for refusing the submission. Bundle
+      // selection therefore stays independent of the verdict — the first
+      // manifest declaring dsh.bundle wins, matching what the website's crawler
+      // picks for the same repository.
+      const gitInstall = classifyGitInstall(packageFile.path, manifest, files)
+      return {
+        packagePath: packageFile.path,
+        patchPath,
+        packageName: typeof manifest.name === 'string' ? manifest.name : undefined,
+        packageVersion: typeof manifest.version === 'string' ? manifest.version : undefined,
+        gitInstall,
+      }
     } catch (error) {
       invalidBundles.push(error instanceof Error ? error.message : String(error))
     }
   }
 
   if (invalidBundles.length > 0) throw new Error(invalidBundles.join('\n'))
-  throw new Error('No package.json declares dsh.bundle.patch')
+  throw new Error(requiredPackagePath === undefined
+    ? 'No package.json declares dsh.bundle.patch'
+    : `${requiredPackagePath} does not declare dsh.bundle.patch`)
 }
 
 export function createGitHubClient(token) {
@@ -186,11 +307,11 @@ export async function reviewRepository(entry, client) {
   if (!isObject(entry) || typeof entry.id !== 'string' || typeof entry.repository !== 'string') {
     throw new Error('Catalog entry must contain string id and repository fields')
   }
-  if (entry.repository !== `https://github.com/${entry.id}`) {
-    throw new Error(`repository must be https://github.com/${entry.id}`)
+  if (entry.repository !== repositoryUrl(entry.id)) {
+    throw new Error(`repository must be ${repositoryUrl(entry.id)}`)
   }
 
-  const [owner, repository] = repositoryParts(entry.id)
+  const { owner, repository, subPath } = repositoryParts(entry.id)
   const base = `/repos/${owner}/${repository}`
   const metadata = await client.request(base)
   if (typeof metadata.default_branch !== 'string' || metadata.default_branch.length === 0) {
@@ -203,7 +324,7 @@ export async function reviewRepository(entry, client) {
   if (!Array.isArray(tree.tree)) throw new Error('Repository tree is unavailable')
   if (tree.truncated === true) throw new Error('Repository tree is too large to inspect completely')
 
-  return findHarnessBundle(tree.tree, sha => client.request(`${base}/git/blobs/${sha}`))
+  return findHarnessBundle(tree.tree, sha => client.request(`${base}/git/blobs/${sha}`), subPath)
 }
 
 export function parseNameStatus(output) {
@@ -316,12 +437,21 @@ async function main() {
     // submission may claim, so it must not be attacker-controlled.
     const categories = JSON.parse(await readFile(path.join(scriptRoot, 'catalog/categories.json'), 'utf8'))
     const categoryIds = new Set(categories?.categories?.map(category => category?.id))
+    // Upstream's change-set loop stays; the install classification rides along
+    // per reviewed entry and is reported, never enforced.
+    const advisories = []
     for (const target of submission.reviewables) {
       file = target
       const entry = await readCatalogEntry(root, target)
       validateCatalogEntry(entry, target, categoryIds)
       const result = await reviewRepository(entry, client)
-      console.log(`PASS ${entry.id}: ${result.packagePath} -> ${result.patchPath}`)
+      const { code, entryPoint, requiresBuildAllowance } = result.gitInstall
+      console.log(
+        `PASS ${entry.id}: ${result.packagePath} -> ${result.patchPath}`
+        + ` [git-install: ${code}${requiresBuildAllowance ? ', requires build allowance' : ''}]`,
+      )
+      const advisory = gitInstallAdvisory(code, entryPoint, requiresBuildAllowance)
+      if (advisory !== undefined) advisories.push(`**${entry.id}** — ${advisory}`)
     }
     for (const target of submission.deletions) {
       console.log(`PASS delete ${target}`)
@@ -329,14 +459,23 @@ async function main() {
     file = catalogPrefix
     publishVerdict(submission.verdict)
     if (repository !== undefined && pullNumber !== undefined) {
-      const body = submission.verdict === 'auto-merge'
-        ? reviewComment('passed', 'All static checks passed. The validated pull request will be squash-merged automatically.')
-        : reviewComment('manual-review', [
+      const summary = submission.verdict === 'auto-merge'
+        ? 'All static checks passed. The validated pull request will be squash-merged automatically.'
+        : [
           'All static checks passed for this change set:',
           '',
           ...submission.changes.map(change => `- ${describeChange(change)}`),
-        ].join('\n'))
-      await upsertReviewComment(repository, pullNumber, client, body)
+        ].join('\n')
+      const detail = [
+        summary,
+        ...(advisories.length === 0 ? [] : ['', '### Install method advisory', '', ...advisories]),
+      ].join('\n')
+      await upsertReviewComment(
+        repository,
+        pullNumber,
+        client,
+        reviewComment(submission.verdict === 'auto-merge' ? 'passed' : 'manual-review', detail),
+      )
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

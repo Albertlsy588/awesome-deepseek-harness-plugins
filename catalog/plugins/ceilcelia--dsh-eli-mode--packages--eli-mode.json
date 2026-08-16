@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "CeilCelia/dsh-eli-mode/packages/eli-mode",
+  "name": "eli-mode",
+  "repository": "https://github.com/CeilCelia/dsh-eli-mode",
+  "category": "memory",
+  "description": {
+    "en": "Knowledge-base-driven agent preset: wiki long-term memory, a web KB UI, a management page and optional UI polish.",
+    "zh": "知识库驱动的 Agent 预设：wiki 长期记忆、Web 知识库界面、管理页面与可选的 UI 美化。"
+  },
+  "added": "2026-08-16"
+}

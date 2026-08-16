@@ -57,7 +57,14 @@ async function assertMinTouchTargets(page, label, selectors) {
         return style.display !== 'none' && style.visibility !== 'hidden' && box.width > 0 && box.height > 0
       })
       .map((node) => {
-        const box = node.getBoundingClientRect()
+        // A stretched link wraps short text but takes its hit area from an
+        // absolutely positioned ::after covering the whole card, so measuring
+        // the anchor's own box would understate the real touch target.
+        const overlay = getComputedStyle(node, '::after')
+        const stretched = overlay.position === 'absolute' &&
+          overlay.inset === '0px' &&
+          node.offsetParent !== null
+        const box = (stretched ? node.offsetParent : node).getBoundingClientRect()
         return {
           height: Math.round(box.height),
           label: node.getAttribute('aria-label') ?? node.textContent?.trim().slice(0, 40) ?? node.tagName,
@@ -172,16 +179,42 @@ async function assertSeo(page, label, canonicalPath, robots = 'index,follow') {
     canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
     description: document.querySelector('meta[name="description"]')?.getAttribute('content'),
     h1Count: document.querySelectorAll('h1').length,
+    h2Count: document.querySelectorAll('h2').length,
+    shellLeftBehind: document.querySelectorAll('[data-seo-shell]').length,
+    shellGuarded: (() => {
+      const probe = document.createElement('div')
+      probe.className = 'seo-shell'
+      document.body.append(probe)
+      const hidden = getComputedStyle(probe).display === 'none'
+      probe.remove()
+      return document.documentElement.classList.contains('has-js') && hidden
+    })(),
     robots: document.querySelector('meta[name="robots"]')?.getAttribute('content'),
     title: document.title,
   }))
-  if (result.canonical !== `https://deepseek1024.com${canonicalPath}`) {
+  // A noindexed permutation ships no canonical at all: pointing it at the
+  // unfiltered page would pair a "do not index" with a "index that one instead".
+  if (canonicalPath === null) {
+    if (result.canonical !== undefined) {
+      throw new Error(`${label} should not declare a canonical URL: ${result.canonical}`)
+    }
+  } else if (result.canonical !== `https://deepseek1024.com${canonicalPath}`) {
     throw new Error(`${label} has an incorrect canonical URL: ${result.canonical}`)
   }
   if (!result.description || result.description.length < 50) {
     throw new Error(`${label} is missing a useful meta description`)
   }
   if (result.h1Count !== 1) throw new Error(`${label} should render exactly one H1`)
+  // The Worker injects a crawlable shell into #root for clients that cannot run
+  // JavaScript. React replaces it on mount, and the inline head guard must have
+  // kept it from ever painting in the meantime.
+  if (result.shellLeftBehind !== 0) {
+    throw new Error(`${label} still shows the pre-hydration SEO shell after mount`)
+  }
+  if (!result.shellGuarded) {
+    throw new Error(`${label} would paint the SEO shell before React mounts`)
+  }
+  if (result.h2Count < 1) throw new Error(`${label} should name its content with at least one H2`)
   if (result.robots !== robots) throw new Error(`${label} has incorrect robots metadata`)
   if (!result.title || result.title === 'DeepSeek Harness Store') {
     throw new Error(`${label} is missing page-specific title metadata`)
@@ -482,10 +515,11 @@ try {
     undefined,
     { timeout: 5_000 },
   )
-  await assertSeo(mobile, 'filtered mobile catalog', '/plugins', 'noindex,follow')
-  if ((await mobile.locator('.directory-section .package-row').count()) === 0) {
-    throw new Error('search returned no package rows')
-  }
+  await assertSeo(mobile, 'filtered mobile catalog', null, 'noindex,follow')
+  // The URL and the robots meta flip a render before the filtered list does, so
+  // counting rows immediately races the re-render rather than testing the search.
+  await mobile.locator('.directory-section .package-row').first().waitFor({ timeout: 10_000 })
+    .catch(() => { throw new Error('search returned no package rows') })
   await mobile.locator('.directory-section .package-row .split-install-main').first().click()
   await mobile.locator('.directory-section .package-row .split-install-main[aria-label="已复制"]').waitFor()
   // The filtered list is short, so this is the first row; the portal assertion
@@ -655,6 +689,36 @@ try {
     throw new Error('compact split install menu did not close on Escape')
   }
   await compactMobile.close()
+
+  // 看板娘（桌宠）回归：固定在视口内不越界、触屏按钮 ≥44px、
+  // 投喂 → 气泡、玩耍 → 气泡。鲸鱼娘常驻（无隐藏入口）。
+  // 看板娘带持续 3D 摆动动画，Playwright 的稳定检查会一直等，交互统一用 force。
+  const pet = await openPage({ width: 390, height: 844 }, '/rankings', { touch: true })
+  await waitForRankingList(pet)
+  await pet.locator('.kanban-girl').waitFor()
+  const petBounds = await pet.evaluate(() => {
+    const rect = document.querySelector('.kanban-girl')?.getBoundingClientRect()
+    return rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } : null
+  })
+  if (
+    !petBounds
+    || petBounds.left < 0
+    || petBounds.top < 0
+    || petBounds.right > 390
+    || petBounds.bottom > 844
+  ) {
+    throw new Error(`mobile kanban girl leaves the viewport: ${JSON.stringify(petBounds)}`)
+  }
+  await pet.locator('.kanban-girl').tap({ force: true })
+  await pet.locator('.kanban-girl-menu .kanban-girl-action').first().waitFor()
+  await assertMinTouchTargets(pet, 'mobile kanban girl actions', [
+    '.kanban-girl-menu .kanban-girl-action',
+  ])
+  await pet.locator('.kanban-girl-menu .kanban-girl-action').first().tap({ force: true })
+  await pet.locator('.kanban-girl-bubble').waitFor()
+  await pet.locator('.kanban-girl-menu .kanban-girl-action').nth(1).tap({ force: true })
+  await pet.locator('.kanban-girl-bubble').waitFor()
+  await pet.close()
 
   if (errors.length > 0) throw new Error(`browser errors:\n${errors.join('\n')}`)
   console.log('Visual smoke check passed: desktop, touch-enabled 390px mobile, compact 320px mobile, search, split install menus, self install banner, copy actions, local scrollers, and package details.')

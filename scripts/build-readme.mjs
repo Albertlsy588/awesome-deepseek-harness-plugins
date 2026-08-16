@@ -52,7 +52,7 @@ export function normalizeRegistry(data) {
   return {
     updated: updatedDate(data.updated),
     plugins: data.plugins.map(plugin => {
-      assert(isObject(plugin) && typeof plugin.id === 'string' && /^[^/]+\/[^/]+$/.test(plugin.id), 'Registry plugins must carry an owner/repository id')
+      assert(isObject(plugin) && typeof plugin.id === 'string' && /^[^/]+\/[^/]+(\/[^/]+)*$/.test(plugin.id), 'Registry plugins must carry an owner/repository[/sub/dir] id')
       return normalizePlugin(plugin, plugin.id, Number.isInteger(plugin.stars) ? plugin.stars : null)
     }),
   }
@@ -143,7 +143,9 @@ function pluginLine(plugin, locale) {
 // exactly when the plugin list changes, which keeps the screenshot in step with the
 // list without producing a README commit on every no-op sync.
 export const screenshotBranch = 'assets'
-export const screenshotPath = 'homepage.png'
+// One capture per language: the site picks its locale from navigator.language, so each
+// projection shows the store in the language its readers are reading.
+export const screenshotPaths = { zh: 'homepage.zh.png', en: 'homepage.en.png' }
 const screenshotRepository = 'imsai-sh/awesome-deepseek-harness-plugins'
 
 export function catalogRevision(registry) {
@@ -153,7 +155,7 @@ export function catalogRevision(registry) {
 
 function heroImage(registry, locale) {
   const alt = locale === 'zh' ? 'DSH 1024Store 插件市场首页' : 'The DSH 1024Store plugin marketplace homepage'
-  const source = `https://raw.githubusercontent.com/${screenshotRepository}/${screenshotBranch}/${screenshotPath}?v=${catalogRevision(registry)}`
+  const source = `https://raw.githubusercontent.com/${screenshotRepository}/${screenshotBranch}/${screenshotPaths[locale]}?v=${catalogRevision(registry)}`
   return `[![${alt}](${source})](https://deepseek1024.com/)`
 }
 
@@ -300,6 +302,8 @@ dsh1024 plugin --profile web add github:<owner>/<repository>
 
 首次使用先一次性全局安装：\`npm install -g dsh1024\`。它与官方命令只差一个名字——\`plugin\` 之后的参数原样转发给官方 CLI，不增删、不改写、不重排，包装器只负责在结束后核对 profile 并记录一条匿名安装结果。参数不会写入遥测或本地 receipt。
 
+monorepo 子目录插件的标识形如 \`owner/repo/packages/foo\`，对应的安装 spec 是官方的 \`github:owner/repo#path:packages/foo\`，同仓库的兄弟插件各自独立计数。
+
 统计身份是保存在 \`$DSH_HOME/.dsh-1024store/\` 的随机安装实例 ID，不是实名用户或账号。CLI 不上传命令输出、路径、用户名、环境变量、会话内容或原始错误；可用 \`npx dsh1024 telemetry disable\`、\`DO_NOT_TRACK=1\` 或 \`DSH1024_TELEMETRY=0\`（旧变量名 \`DSH_1024STORE_TELEMETRY\` 仍兼容）关闭。直接使用官方 \`dsh plugin\` 命令仍然可用，但不会计入 DSH 1024Store 安装统计。详细字段、口径、存储和部署方式见 [安装统计设计](docs/install-analytics.md)，CLI 源码见 [\`packages/dsh1024\`](packages/dsh1024)。
 
 ## 提交插件
@@ -324,7 +328,7 @@ npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plug
 
 欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置，通过后自动合并，并由 CI 自动同步到网站与本 README。需要修正或下架既有条目时也可以发 PR，静态审查照常运行，但这类 PR 由维护者人工审核后合并。
 
-安装命令：\`dsh1024 plugin --profile web add github:<owner>/<repository>\`（首次使用先 \`npm install -g dsh1024\`）。
+安装命令：\`dsh1024 plugin --profile web add github:<owner>/<repository>[#path:<sub/dir>]\`（首次使用先 \`npm install -g dsh1024\`）。
 
 ## 项目定位
 
@@ -440,7 +444,7 @@ npm install -g dsh1024   # once
 dsh1024 plugin --profile web add github:<owner>/<repository>
 \`\`\`
 
-A pull request that adds one new entry is merged automatically once static review passes; one that updates or removes an existing entry passes the same review but waits for maintainer approval. Merged submissions are synced to the website database and into this file automatically; no manual list editing is involved.
+Monorepo subpackage plugins add the subdirectory to the spec (for example \`github:owner/repo#path:packages/foo\`), and each sibling is counted on its own. A pull request that adds one new entry is merged automatically once static review passes; one that updates or removes an existing entry passes the same review but waits for maintainer approval. Merged submissions are synced to the website database and into this file automatically; no manual list editing is involved.
 
 ## Categories
 

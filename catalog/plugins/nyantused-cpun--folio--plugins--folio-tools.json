@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "nyantused-cpun/folio/plugins/folio-tools",
+  "name": "folio-tools",
+  "repository": "https://github.com/nyantused-cpun/folio",
+  "category": "skill",
+  "description": {
+    "en": "Folio (兰亭) @folio/dsh-tools: 15 schema-validated tools (memory + quality gates) of the consulting document-generation engine; pair with @folio/dsh-events for the full session protocol.",
+    "zh": "Folio（兰亭）@folio/dsh-tools：咨询文档生成引擎的 15 个 schema 校验工具（记忆 + 质量门），与 @folio/dsh-events 搭配组成完整会话协议。"
+  },
+  "added": "2026-08-16"
+}

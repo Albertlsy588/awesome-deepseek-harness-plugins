@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "zoahdev/dsh-rule-evolve/plugin",
+  "name": "dsh-rule-evolve",
+  "repository": "https://github.com/zoahdev/dsh-rule-evolve",
+  "category": "dev",
+  "description": {
+    "en": "Verification-driven self-evolution loop: failure logs become verified AGENTS.md rules; in-session plugin (evolve_learn / evolve_apply / evolve_touch / evolve_recall), tool-verify gate, rule lifecycle, local recall.",
+    "zh": "验证驱动的自进化循环：失败日志沉淀为经验证的 AGENTS.md 规则；会话内插件（evolve_learn / evolve_apply / evolve_touch / evolve_recall）、工具验证门、规则生命周期与本地召回。"
+  },
+  "added": "2026-08-16"
+}

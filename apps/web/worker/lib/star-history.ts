@@ -58,7 +58,16 @@ export async function recordStarSnapshots(
   plugins: CatalogPlugin[],
   capturedAt: number,
 ): Promise<void> {
-  const tracked = plugins.filter((plugin) => plugin.stars !== null)
+  // Star counts are repository facts. Monorepo siblings share one repository
+  // key, and SQLite refuses an ON CONFLICT DO UPDATE that touches the same row
+  // twice within one statement, so dedupe before building the batch.
+  const byRepository = new Map<string, CatalogPlugin>()
+  for (const plugin of plugins) {
+    if (plugin.stars === null) continue
+    const key = repositoryKey(plugin)
+    if (!byRepository.has(key)) byRepository.set(key, plugin)
+  }
+  const tracked = [...byRepository.values()]
   if (tracked.length === 0) return
 
   const bucketHour = hourBucket(capturedAt)

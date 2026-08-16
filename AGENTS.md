@@ -2,10 +2,11 @@
 
 ## Public URL stability
 
-- The plugin catalog uses the canonical public path `/plugin`.
-- Plugin detail pages use the canonical public path `/plugin/:owner/:name` (singular `plugin`).
-- Plugin API routes use `/api/plugin` and `/api/plugin/:owner/:name`.
+- Canonical public paths: `/` (rankings), `/plugins` (catalog), `/plugins/:owner/:name` (plugin detail), `/docs/api` (public API reference), `/account` (noindex).
+- Plugin API routes use the `/api/v1/` prefix with plural resources (`/api/v1/plugins`, `/api/v1/plugins/:owner/:name`). The outward-facing search API is `https://api.deepseek1024.com/v1/plugins/search`.
+- `/plugin`, `/plugin/:owner/:name`, `/packages`, `/packages/:owner/:name` and `/rankings` are permanent 301 **sources only**. Do not cite them as live URLs.
 - Treat public route paths as permanent SEO contracts. Do not rename or remove them without explicit user approval and a migration plan covering permanent redirects, canonical URLs, and existing inbound links.
+- Page titles, descriptions, JSON-LD and the crawlable pre-hydration shell all come from `apps/web/worker/seo-templates.ts` and `apps/web/worker/seo-content.ts`. Both the Worker and the React app import them; never fork the copy into a page component or a translation file.
 - When replacing an already-published route, keep a permanent redirect from the old path to the canonical path.
 
 ## Bound hostnames and the public API surface

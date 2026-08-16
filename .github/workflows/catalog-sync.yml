@@ -122,10 +122,17 @@ jobs:
           GIT_COMMITTER_NAME: github-actions[bot]
           GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         run: |
-          node scripts/capture-homepage.mjs --out "$RUNNER_TEMP/homepage.png"
-          blob="$(git hash-object -w "$RUNNER_TEMP/homepage.png")"
-          tree="$(printf '100644 blob %s\thomepage.png\n' "$blob" | git mktree)"
-          commit="$(git commit-tree "$tree" -m 'chore: refresh homepage screenshot')"
+          # The runner ships no CJK font, so without this every Chinese glyph renders as
+          # a tofu box — including the plugin descriptions that show up in both locales.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+          node scripts/capture-homepage.mjs --out "$RUNNER_TEMP/homepage.zh.png" --lang zh-CN
+          node scripts/capture-homepage.mjs --out "$RUNNER_TEMP/homepage.en.png" --lang en-US
+          zh="$(git hash-object -w "$RUNNER_TEMP/homepage.zh.png")"
+          en="$(git hash-object -w "$RUNNER_TEMP/homepage.en.png")"
+          # git mktree requires entries in name order: "homepage.en.png" < "homepage.zh.png".
+          tree="$(printf '100644 blob %s\thomepage.en.png\n100644 blob %s\thomepage.zh.png\n' "$en" "$zh" | git mktree)"
+          commit="$(git commit-tree "$tree" -m 'chore: refresh homepage screenshots')"
           git push --force origin "${commit}:refs/heads/assets"
       - name: Commit refreshed README projections
         if: steps.projections.outputs.changed == 'true'

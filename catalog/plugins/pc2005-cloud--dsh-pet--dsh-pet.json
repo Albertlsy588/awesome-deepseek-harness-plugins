@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "PC2005-cloud/dsh-pet/dsh-pet",
+  "name": "dsh-pet",
+  "repository": "https://github.com/PC2005-cloud/dsh-pet",
+  "category": "fun",
+  "description": {
+    "en": "Desktop pet for the DSH Web UI with 25 transparent animations, screen wandering, click reactions and drag, plus a reproducible asset-generation pipeline.",
+    "zh": "DSH Web UI 桌宠：25 组透明动画、屏幕漫游、点击互动与拖拽，附可复现的素材生成流水线。"
+  },
+  "added": "2026-08-16"
+}

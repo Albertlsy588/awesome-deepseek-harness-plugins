@@ -12,14 +12,14 @@ function LegacyCatalogRedirect() {
 }
 
 function LegacyPackageRedirect() {
-  const { owner = '', name = '' } = useParams()
+  const { owner = '', '*': rest = '' } = useParams()
   const { hash, search } = useLocation()
-  return (
-    <Navigate
-      to={`/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}${search}${hash}`}
-      replace
-    />
-  )
+  // Splat, so a monorepo subdirectory path survives the redirect.
+  const tail = rest.split('/').filter(Boolean).map(encodeURIComponent).join('/')
+  const target = tail.length === 0
+    ? `/plugins/${encodeURIComponent(owner)}`
+    : `/plugins/${encodeURIComponent(owner)}/${tail}`
+  return <Navigate to={`${target}${search}${hash}`} replace />
 }
 
 export function App() {
@@ -29,13 +29,13 @@ export function App() {
         <Route index element={<CatalogPage view="rankings" />} />
         <Route path="/plugins" element={<CatalogPage view="catalog" />} />
         <Route path="/rankings" element={<CatalogPage view="rankings" />} />
-        <Route path="/plugins/:owner/:name" element={<PackagePage />} />
+        <Route path="/plugins/:owner/*" element={<PackagePage />} />
         <Route path="/docs/api" element={<ApiDocsPage />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/plugin" element={<LegacyCatalogRedirect />} />
-        <Route path="/plugin/:owner/:name" element={<LegacyPackageRedirect />} />
+        <Route path="/plugin/:owner/*" element={<LegacyPackageRedirect />} />
         <Route path="/packages" element={<LegacyCatalogRedirect />} />
-        <Route path="/packages/:owner/:name" element={<LegacyPackageRedirect />} />
+        <Route path="/packages/:owner/*" element={<LegacyPackageRedirect />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

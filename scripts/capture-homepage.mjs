@@ -15,9 +15,17 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const defaultUrl = 'https://deepseek1024.com/'
-export const viewport = { width: 1280, height: 760 }
+// GitHub renders README images into a ~1000 px column, so 1280 wide at 1x is already
+// slightly downscaled there — more pixels only cost bytes. The height is what matters:
+// a 760 px viewport crops to a squat 1.7:1 letterbox, so it is taller than the window
+// a visitor would use, which also gets more of the ranking list into the frame.
+export const viewport = { width: 1280, height: 940 }
+export const scale = 1
+// The site picks its language from navigator.language (apps/web/src/lib/i18n.tsx),
+// which is en-US on a CI runner. Each projection gets a capture in its own language.
+export const locales = { zh: 'zh-CN', en: 'en-US' }
 // A blank or error page compresses to a few KB at this size; a real render of the
-// homepage is ~140 KB. The threshold only has to separate those two orders.
+// homepage is ~150 KB. The threshold only has to separate those two orders.
 export const minimumBytes = 30_000
 
 const candidateBinaries = [
@@ -45,7 +53,11 @@ export function readPngHeader(buffer) {
   return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) }
 }
 
-export function assertUsableCapture(buffer, expected = viewport) {
+export function expectedSize(density = scale) {
+  return { width: viewport.width * density, height: viewport.height * density }
+}
+
+export function assertUsableCapture(buffer, expected = expectedSize()) {
   const header = readPngHeader(buffer)
   if (header === null) throw new Error('Capture is not a PNG; Chrome likely failed to start.')
   if (header.width !== expected.width || header.height !== expected.height) {
@@ -61,7 +73,7 @@ export function assertUsableCapture(buffer, expected = viewport) {
   return header
 }
 
-export async function captureHomepage({ url = defaultUrl, out, chrome, run = spawnSync } = {}) {
+export async function captureHomepage({ url = defaultUrl, out, lang = locales.zh, chrome, run = spawnSync } = {}) {
   const binary = chrome ?? resolveChrome(undefined, run)
   const profile = await mkdtemp(path.join(os.tmpdir(), 'dsh-shot-'))
   try {
@@ -71,16 +83,21 @@ export async function captureHomepage({ url = defaultUrl, out, chrome, run = spa
       '--hide-scrollbars',
       '--no-sandbox',
       `--user-data-dir=${profile}`,
-      '--force-device-scale-factor=1',
-      '--virtual-time-budget=15000',
+      `--lang=${lang}`,
+      `--accept-lang=${lang}`,
+      `--force-device-scale-factor=${scale}`,
+      '--virtual-time-budget=10000',
       `--window-size=${viewport.width},${viewport.height}`,
       `--screenshot=${out}`,
       url,
-    ], { encoding: 'utf8', timeout: 120_000 })
-    if (result.status !== 0) {
-      throw new Error(`Chrome exited with ${result.status}: ${result.stderr ?? ''}`.trim())
+    ], { encoding: 'utf8', timeout: 60_000 })
+    // Chrome writes the PNG when the virtual-time budget expires but can then linger,
+    // holding the page's live connection open until it is killed. The capture is what
+    // matters, so the exit status is only reported when no usable file was produced.
+    const buffer = await readFile(out).catch(() => null)
+    if (buffer === null) {
+      throw new Error(`Chrome produced no screenshot (exit ${result.status}): ${result.stderr ?? ''}`.trim())
     }
-    const buffer = await readFile(out)
     const header = assertUsableCapture(buffer)
     return { bytes: buffer.length, ...header }
   } finally {
@@ -100,6 +117,7 @@ function parseArguments(argv) {
     }
     if (argument === '--out') options.out = path.resolve(value())
     else if (argument === '--url') options.url = value()
+    else if (argument === '--lang') options.lang = value()
     else throw new Error(`Unknown argument: ${argument}`)
   }
   if (options.out === undefined) throw new Error('--out <file.png> is required')

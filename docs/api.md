@@ -27,8 +27,8 @@ Returns the catalog listing used by the website: `packages`, `rankings`, `catego
 Rate-limited keyword search over the catalog snapshot, mirrored on the website at
 [`/docs/api`](https://deepseek1024.com/docs/api). The canonical public URL is
 `https://api.deepseek1024.com/v1/plugins/search`; the main-domain path remains as the
-internal alias. `q` is required; matches package name, owner, repository, category, and
-both description languages.
+internal alias. `q` is required; matches package name, owner, repository, the subdirectory
+path segments of monorepo plugin ids, category, and both description languages.
 
 Query parameters: `q` (required, ≤120 chars), `page` (default 1), `limit` (default 20, max
 100), `sortBy` (`stars` default, `recent` as an alias of `newest`, or any catalog sort —
@@ -82,10 +82,13 @@ in D1; API keys are shown once at creation and stored only as hashes.
 Cookie-authenticated mutations reject mismatched `Origin` headers (`403`); expired
 sessions and stale rate counters are purged by the weekly cron.
 
-## GET /api/v1/plugins/:owner/:name
+## GET /api/v1/plugins/:owner/:name[/sub/dir…]
 
-Returns the plugin detail payload, extended with the plugin's category definition so clients
-do not hard-code category tables:
+Returns the plugin detail payload for the full plugin id — `owner/name` for a
+repository-level plugin, or `owner/name/sub/dir` for a monorepo subpackage (the route
+accepts the id's additional path segments; each segment is URI-encoded individually and
+matched against the catalog id case-insensitively). The payload is extended with the
+plugin's category definition so clients do not hard-code category tables:
 
 ```json
 "category": { "id": "tools", "order": 50, "label": { "en": "Tools & Capabilities", "zh": "工具与能力" } }
@@ -119,17 +122,29 @@ Compact full-catalog registry for the `dsh1024` in-DSH marketplace plugin, the R
     "install": "dsh plugin --profile web add github:owner/repository",
     "added": "2026-08-15",
     "stars": 12
+  }, {
+    "id": "owner/repository/packages/foo",
+    "name": "foo",
+    "owner": "owner",
+    "url": "https://github.com/owner/repository",
+    "category": "tools",
+    "description": { "en": "…", "zh": "…" },
+    "install": "dsh plugin --profile web add github:owner/repository#path:packages/foo",
+    "added": "2026-08-16",
+    "stars": 12
   }]
 }
 ```
 
-`stars` is `null` when unknown. The registry is projected from the same KV snapshot as the
-other read endpoints. The `install` field always carries the official DeepSeek Harness CLI
-command in its bare form. The website derives the tracked wrapper command at the
-presentation layer and never stores it here; that command is the same official
-command under a different name
-(`dsh1024 plugin --profile web add github:owner/repository`, after a one-off
-`npm install -g dsh1024`).
+`stars` is `null` when unknown. A monorepo subpackage plugin's `id` carries the in-repo
+path, its `url` stays the repository-root URL, its `name` conventionally is the last id
+segment, and its `install` spec gains `#path:<sub/dir>`; repository-level GitHub metrics
+such as `stars` are shared by all plugins of the same repository. The registry is projected
+from the same KV snapshot as the other read endpoints. The `install` field always carries
+the official DeepSeek Harness CLI command in its bare form. The website derives the tracked
+wrapper command at the presentation layer and never stores it here; that command is the
+same official command under a different name
+(`dsh1024 plugin --profile web add <spec>`, after a one-off `npm install -g dsh1024`).
 
 ## POST /api/v1/install-events
 
@@ -167,7 +182,8 @@ Authentication: `Authorization: Bearer <CATALOG_SYNC_TOKEN>` where the token is 
 Worker secret of at least 32 bytes. The endpoint is not a public submission API: anonymous and
 incorrectly authenticated callers cannot create or update catalog entries. Every accepted
 repository URL must be the canonical `https://github.com/<owner>/<repository>` URL matching the
-entry ID. Responses:
+first two segments of the entry ID; any remaining id segments are the plugin's in-repo path,
+and entries are unique per full id, so one repository may appear in several entries. Responses:
 
 - `503` when the secret is missing or too short on the Worker;
 - `401` when the token does not match (constant-time comparison);
@@ -186,6 +202,13 @@ Request body (produced by `scripts/sync-catalog.mjs` from `catalog/plugins/*.jso
     "category": "tools",
     "description": { "en": "…", "zh": "…" },
     "added": "2026-08-15"
+  }, {
+    "id": "owner/repository/packages/foo",
+    "name": "foo",
+    "repository": "https://github.com/owner/repository",
+    "category": "tools",
+    "description": { "en": "…", "zh": "…" },
+    "added": "2026-08-16"
   }]
 }
 ```

@@ -7,10 +7,17 @@ import { authenticateApiKey, sha256Hex, timingSafeEqualStrings } from './lib/aut
 import {
   buildCatalog,
   filterCatalogPackages,
-  findPlugin,
+  findPluginById,
+  findPluginsUnder,
   parseCatalogQuery,
-  repositoryName,
 } from './lib/catalog'
+import {
+  isPluginId,
+  normalizePluginId,
+  pluginInstallCommand,
+  pluginRepositoryFullName,
+  PLUGIN_ID_MAX_LENGTH,
+} from './lib/plugin-id'
 import { syncCuratedEntries, type CuratedCatalogEntry } from './lib/catalog-db'
 import { loadCatalogSnapshot, refreshCatalogSnapshot } from './lib/catalog-store'
 import { categoryDescriptor, isKnownCategoryId, projectCategories } from './lib/categories'
@@ -23,7 +30,7 @@ import {
   parseInstallationEvent,
   recordInstallationEvent,
 } from './lib/install-metrics'
-import { buildRobotsTxt, buildSitemap, seoCatalog } from './seo'
+import { buildLlmsFullTxt, buildRobotsTxt, buildSitemap, seoCatalog } from './seo'
 import type {
   BackgroundContext,
   CatalogSnapshotResult,
@@ -45,6 +52,10 @@ interface AppDependencies {
 
 const CACHE_HEADER = 'public, max-age=30, s-maxage=300, stale-while-revalidate=3600'
 const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
+// The catalog listing is a snapshot projection that only moves when the KV
+// snapshot does; the detail endpoint carries live install counters and keeps
+// the shorter TTL above.
+const LIST_CACHE_HEADER = 'public, max-age=300, s-maxage=900, stale-while-revalidate=3600'
 const REGISTRY_CACHE_HEADER = 'public, max-age=300, s-maxage=3600'
 const DEFAULT_SEARCH_LIMIT = 20
 const MAX_SEARCH_LIMIT = 100
@@ -52,7 +63,9 @@ const MAX_SEARCH_PAGE = 1_000_000
 const MAX_INSTALL_EVENT_BYTES = 8 * 1024
 const MAX_CATALOG_SYNC_BYTES = 2 * 1024 * 1024
 const SLUG_PART = /^[A-Za-z0-9_.-]+$/
-const ENTRY_ID = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
+// owner/repository, optionally extended with a monorepo subdirectory path.
+// isPluginId additionally rejects `.`/`..` segments (see lib/plugin-id.ts).
+const ENTRY_ID = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)*$/
 const ENTRY_DATE = /^\d{4}-\d{2}-\d{2}$/
 const ENTRY_KEYS = new Set(['id', 'name', 'repository', 'category', 'description', 'added'])
 
@@ -105,6 +118,11 @@ function boundedString(value: unknown, maxLength: number): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= maxLength
 }
 
+/**
+ * The entry's repository URL must be the repository root. A subdirectory id
+ * carries its in-repo path in the id itself, so only the `owner/repository`
+ * prefix is compared here.
+ */
 function isCanonicalGitHubRepositoryUrl(repositoryId: string, value: string): boolean {
   try {
     const url = new URL(value)
@@ -116,9 +134,44 @@ function isCanonicalGitHubRepositoryUrl(repositoryId: string, value: string): bo
       url.password === '' &&
       url.search === '' &&
       url.hash === '' &&
-      pathname.toLocaleLowerCase('en-US') === `/${repositoryId.toLocaleLowerCase('en-US')}`
+      pathname.toLocaleLowerCase('en-US')
+        === `/${pluginRepositoryFullName(repositoryId).toLocaleLowerCase('en-US')}`
   } catch {
     return false
+  }
+}
+
+/**
+ * Reads a plugin id out of a request path: decodes each segment, validates it
+ * with the same character rules as the catalog, and rejects `.`/`..`.
+ * Returns null when the remainder is not a well-formed plugin id.
+ */
+function decodePluginIdPath(pathname: string, prefix: string): string | null {
+  if (!pathname.startsWith(prefix)) return null
+  const rest = pathname.slice(prefix.length).replace(/\/+$/, '')
+  if (rest.length === 0) return null
+  let segments: string[]
+  try {
+    segments = rest.split('/').map(decodeURIComponent)
+  } catch {
+    return null
+  }
+  if (segments.some((segment) => !SLUG_PART.test(segment))) return null
+  const id = segments.join('/')
+  return isPluginId(id) ? id : null
+}
+
+/**
+ * Redirects a legacy detail path to its `/plugins/...` equivalent, preserving
+ * every path segment so monorepo subdirectory URLs keep working. The pathname
+ * is already percent-encoded, so it is sliced rather than re-encoded.
+ */
+function legacyDetailRedirect(prefix: string) {
+  return (context: { req: { url: string }; redirect: (url: string, status: 301) => Response }) => {
+    const canonicalUrl = new URL(context.req.url)
+    const rest = canonicalUrl.pathname.slice(prefix.length).replace(/\/+$/, '')
+    canonicalUrl.pathname = rest.length === 0 ? '/plugins' : `/plugins${rest}`
+    return context.redirect(canonicalUrl.toString(), 301)
   }
 }
 
@@ -130,7 +183,7 @@ function parseCuratedEntry(value: unknown, index: number): CuratedCatalogEntry |
   if (!isObject(value)) return `Entry ${index} must be a JSON object.`
   const unexpected = Object.keys(value).find((key) => !ENTRY_KEYS.has(key))
   if (unexpected) return `Entry ${index} has an unexpected field: ${unexpected}.`
-  if (!boundedString(value.id, 201) || !ENTRY_ID.test(value.id)) {
+  if (!boundedString(value.id, PLUGIN_ID_MAX_LENGTH) || !ENTRY_ID.test(value.id) || !isPluginId(value.id)) {
     return `Entry ${index} has an invalid id.`
   }
   if (!boundedString(value.name, 200)) return `Entry ${index} has an invalid name.`
@@ -211,9 +264,37 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       context.env,
       executionContext(context),
     )
+    if (result.source === 'empty') {
+      // Publishing a 3-URL sitemap during an outage would tell crawlers the
+      // catalog shrank by 2,900 pages, and the edge would cache that for a day.
+      context.header('Cache-Control', 'no-store')
+      return context.text('Catalog temporarily unavailable.', 503)
+    }
     context.header('Cache-Control', 'public, max-age=3600, s-maxage=86400')
     context.header('Content-Type', 'application/xml; charset=UTF-8')
     return context.body(buildSitemap(seoCatalog(result.snapshot)))
+  })
+
+  app.get('/llms-full.txt', async (context) => {
+    const result = await dependencies.catalogLoader(
+      context.env,
+      executionContext(context),
+    )
+    if (result.source === 'empty') {
+      context.header('Cache-Control', 'no-store')
+      return context.text('Catalog temporarily unavailable.', 503)
+    }
+    context.header('Cache-Control', 'public, max-age=3600, s-maxage=86400')
+    context.header('Content-Type', 'text/plain; charset=UTF-8')
+    return context.body(buildLlmsFullTxt(seoCatalog(result.snapshot)))
+  })
+
+  app.get('/rankings', (context) => {
+    // Nothing links to /rankings and it renders the same view as `/`; a 301
+    // keeps the duplicate out of the index instead of relying on a canonical.
+    const canonicalUrl = new URL(context.req.url)
+    canonicalUrl.pathname = '/'
+    return context.redirect(canonicalUrl.toString(), 301)
   })
 
   app.get('/plugin', (context) => {
@@ -228,21 +309,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     return context.redirect(canonicalUrl.toString(), 301)
   })
 
-  app.get('/plugin/:owner/:name', (context) => {
-    const owner = context.req.param('owner')
-    const name = context.req.param('name')
-    const canonicalUrl = new URL(context.req.url)
-    canonicalUrl.pathname = `/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
-    return context.redirect(canonicalUrl.toString(), 301)
-  })
-
-  app.get('/plugin/:owner/:name/', (context) => {
-    const owner = context.req.param('owner')
-    const name = context.req.param('name')
-    const canonicalUrl = new URL(context.req.url)
-    canonicalUrl.pathname = `/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
-    return context.redirect(canonicalUrl.toString(), 301)
-  })
+  // Wildcards, so a monorepo subdirectory path survives the redirect. The
+  // already-encoded pathname is sliced rather than decoded and re-encoded.
+  app.get('/plugin/*', legacyDetailRedirect('/plugin'))
 
   app.get('/packages', (context) => {
     const canonicalUrl = new URL(context.req.url)
@@ -256,21 +325,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     return context.redirect(canonicalUrl.toString(), 301)
   })
 
-  app.get('/packages/:owner/:name', (context) => {
-    const owner = context.req.param('owner')
-    const name = context.req.param('name')
-    const canonicalUrl = new URL(context.req.url)
-    canonicalUrl.pathname = `/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
-    return context.redirect(canonicalUrl.toString(), 301)
-  })
-
-  app.get('/packages/:owner/:name/', (context) => {
-    const owner = context.req.param('owner')
-    const name = context.req.param('name')
-    const canonicalUrl = new URL(context.req.url)
-    canonicalUrl.pathname = `/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
-    return context.redirect(canonicalUrl.toString(), 301)
-  })
+  app.get('/packages/*', legacyDetailRedirect('/packages'))
 
   app.get('/api/v1/health', (context) => context.json({ status: 'ok' }))
 
@@ -280,8 +335,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       executionContext(context),
     )
     const result = buildCatalog(snapshot, parseCatalogQuery(context.req.query()))
-    context.header('Cache-Control', CACHE_HEADER)
+    context.header('Cache-Control', LIST_CACHE_HEADER)
     context.header('X-Catalog-Source', snapshot.source)
+    // Crawlable so the SPA can be rendered, but the JSON itself must never be
+    // indexed as a page in its own right.
+    context.header('X-Robots-Tag', 'noindex')
     return context.json(result)
   })
 
@@ -347,7 +405,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const total = filtered.length
     const start = (page - 1) * limit
     const results = filtered.slice(start, start + limit).map((plugin) => ({
-      id: `${plugin.owner}/${plugin.repository}`,
+      id: plugin.id,
       name: plugin.name,
       owner: plugin.owner,
       url: plugin.url,
@@ -361,6 +419,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       install: plugin.install,
     }))
     context.header('X-Catalog-Source', snapshotResult.source)
+    context.header('X-Robots-Tag', 'noindex')
     return context.json({
       query: q,
       page,
@@ -372,10 +431,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     })
   })
 
-  app.get('/api/v1/plugins/:owner/:name', async (context) => {
-    const owner = context.req.param('owner')
-    const name = context.req.param('name')
-    if (!SLUG_PART.test(owner) || !SLUG_PART.test(name)) {
+  // Wildcard: Hono route params never span '/', but a monorepo plugin id does
+  // (owner/repository/packages/foo). Every segment is validated individually.
+  app.get('/api/v1/plugins/:owner/*', async (context) => {
+    const requestedId = decodePluginIdPath(
+      new URL(context.req.url).pathname,
+      '/api/v1/plugins/',
+    )
+    if (requestedId === null) {
       return context.json({ error: 'Invalid package identifier.' }, 400)
     }
 
@@ -383,11 +446,33 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       context.env,
       executionContext(context),
     )
-    const plugin = findPlugin(snapshot.snapshot.plugins, owner, name)
-    if (!plugin) return context.json({ error: 'Package not found.' }, 404)
+    const plugin = findPluginById(snapshot.snapshot.plugins, requestedId)
+    if (!plugin) {
+      context.header('X-Catalog-Source', snapshot.source)
+      if (snapshot.source === 'empty') {
+        // Without this the client cannot tell an outage from a deleted plugin,
+        // and would noindex every real page for the duration of the outage.
+        context.header('Cache-Control', 'no-store')
+        return context.json(
+          { error: 'The package catalog is temporarily unavailable.', code: 'CATALOG_UNAVAILABLE' },
+          503,
+        )
+      }
+      // A repository-level id whose only plugin moved into a subdirectory
+      // redirects, so existing API consumers follow the rename instead of
+      // seeing the plugin disappear. Several successors stay a 404: the
+      // request named a repository, not a plugin.
+      const successors = findPluginsUnder(snapshot.snapshot.plugins, requestedId)
+      if (successors.length === 1) {
+        const canonical = new URL(context.req.url)
+        canonical.pathname = `/api/v1/plugins/${successors[0]!.id.split('/').map(encodeURIComponent).join('/')}`
+        return context.redirect(canonical.toString(), 301)
+      }
+      return context.json({ error: 'Package not found.', code: 'NOT_FOUND' }, 404)
+    }
 
     const token = context.env?.GITHUB_TOKEN?.trim() || undefined
-    const canonicalPluginId = `${plugin.owner}/${repositoryName(plugin)}`
+    const canonicalPluginId = plugin.id
     const [detail, installMetrics] = await Promise.all([
       dependencies.detailLoader(plugin, token),
       context.env?.CATALOG_DB
@@ -407,6 +492,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     ])
     context.header('Cache-Control', CACHE_HEADER)
     context.header('X-Catalog-Source', snapshot.source)
+    context.header('X-Robots-Tag', 'noindex')
     return context.json({
       ...detail,
       ...installMetrics,
@@ -431,19 +517,20 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     const { snapshot } = result
     context.header('Cache-Control', REGISTRY_CACHE_HEADER)
     context.header('X-Catalog-Source', result.source)
+    context.header('X-Robots-Tag', 'noindex')
     const registry: RegistryProjection = {
       name: 'dsh-1024store-catalog',
       updated: snapshot.generatedAt,
       count: snapshot.plugins.length,
       categories: projectCategories(snapshot.categories),
       plugins: snapshot.plugins.map((plugin) => ({
-        id: `${plugin.owner}/${plugin.repository}`,
+        id: plugin.id,
         name: plugin.name,
         owner: plugin.owner,
         url: plugin.url,
         category: plugin.category,
         description: plugin.description,
-        install: `dsh plugin --profile web add github:${plugin.owner}/${plugin.repository}`,
+        install: pluginInstallCommand(plugin.id),
         added: plugin.added,
         stars: plugin.stars,
       })),
@@ -532,15 +619,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     // both branches so aggregates recorded before a plugin enters the catalog
     // merge with post-catalog events regardless of the repository's GitHub
     // casing (reads also compare COLLATE NOCASE in install-metrics.ts).
-    const [requestedOwner, requestedRepository] = parsed.event.pluginId.split('/') as [string, string]
+    // Matched against full catalog ids, so a subdirectory plugin's installs are
+    // never folded onto its repository or a sibling subpackage.
     const catalog = await dependencies.catalogLoader(
       context.env,
       executionContext(context),
     )
-    const plugin = findPlugin(catalog.snapshot.plugins, requestedOwner, requestedRepository)
-    const canonicalPluginId = (plugin
-      ? `${plugin.owner}/${repositoryName(plugin)}`
-      : parsed.event.pluginId).toLocaleLowerCase()
+    const plugin = findPluginById(catalog.snapshot.plugins, parsed.event.pluginId)
+    const canonicalPluginId = normalizePluginId(plugin?.id ?? parsed.event.pluginId)
 
     try {
       const recorded = await dependencies.eventRecorder(

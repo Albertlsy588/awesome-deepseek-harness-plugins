@@ -1,9 +1,19 @@
 import { DurableObject } from 'cloudflare:workers'
+import {
+  HEARTBEAT_TIMEOUT_MS,
+  partitionConnections,
+  type LiveConnection,
+} from './lib/live-connections'
 import type { LiveStatsPayload } from './types'
 
 const VISIT_DEDUPE_MS = 60 * 60 * 1000
-const CLEANUP_INTERVAL_MS = 60 * 60 * 1000
+const SWEEP_INTERVAL_MS = HEARTBEAT_TIMEOUT_MS / 3
 const VISIT_ID = /^[A-Za-z0-9-]{16,80}$/
+
+interface ConnectionAttachment {
+  visitId: string
+  connectedAt: number
+}
 
 export class LiveStats extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
@@ -20,13 +30,33 @@ export class LiveStats extends DurableObject<Env> {
       );
       CREATE INDEX IF NOT EXISTS recent_visits_expiry ON recent_visits (expires_at);
     `)
+    // Answered by the runtime without waking this object, and timestamped so the
+    // sweep below can tell a live client from one that vanished without a close frame.
+    this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'))
+  }
+
+  private liveConnections(): Array<LiveConnection<WebSocket>> {
+    return this.ctx.getWebSockets().flatMap((socket) => {
+      if (socket.readyState !== 1) return []
+      const attachment = socket.deserializeAttachment() as ConnectionAttachment | null
+      const heartbeat = this.ctx.getWebSocketAutoResponseTimestamp(socket)
+      return [{
+        socket,
+        state: {
+          visitId: attachment?.visitId ?? '',
+          lastSeenAt: heartbeat?.getTime() ?? attachment?.connectedAt ?? 0,
+        },
+      }]
+    })
   }
 
   private currentStats(): LiveStatsPayload {
     const row = this.ctx.storage.sql.exec<{ views: number }>(
       'SELECT views FROM counters WHERE id = 1',
     ).one()
-    const online = this.ctx.getWebSockets().filter((socket) => socket.readyState === 1).length
+    // Sockets pending eviction are excluded here too, so a sweep that has not run
+    // yet never inflates the number.
+    const { online } = partitionConnections(this.liveConnections(), Date.now())
     return {
       type: 'stats',
       views: row.views,
@@ -61,10 +91,32 @@ export class LiveStats extends DurableObject<Env> {
     }
   }
 
-  private async ensureCleanupAlarm(): Promise<void> {
-    if ((await this.ctx.storage.getAlarm()) === null) {
-      await this.ctx.storage.setAlarm(Date.now() + CLEANUP_INTERVAL_MS)
+  private evictStaleConnections(): number {
+    const { stale } = partitionConnections(this.liveConnections(), Date.now())
+    for (const socket of stale) {
+      try {
+        socket.close(1001, 'Heartbeat timeout')
+      } catch {
+        // The socket is already closed.
+      }
     }
+    return stale.length
+  }
+
+  private async scheduleNextSweep(): Promise<void> {
+    const now = Date.now()
+    // Connected clients need a regular sweep; an idle object only has to wake up
+    // when the next visit dedupe entry expires.
+    const next: number | null = this.ctx.getWebSockets().length > 0
+      ? now + SWEEP_INTERVAL_MS
+      : this.ctx.storage.sql.exec<{ expiresAt: number | null }>(
+        'SELECT MIN(expires_at) AS expiresAt FROM recent_visits',
+      ).one().expiresAt
+
+    if (next === null) return
+    const current = await this.ctx.storage.getAlarm()
+    if (current !== null && current <= next) return
+    await this.ctx.storage.setAlarm(Math.max(next, now + 1000))
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -80,17 +132,19 @@ export class LiveStats extends DurableObject<Env> {
     const pair = new WebSocketPair()
     const client = pair[0]
     const server = pair[1]
-    server.serializeAttachment({ visitId, connectedAt: Date.now() })
+    server.serializeAttachment({ visitId, connectedAt: Date.now() } satisfies ConnectionAttachment)
     this.ctx.acceptWebSocket(server)
     this.recordVisit(visitId)
-    await this.ensureCleanupAlarm()
+    await this.scheduleNextSweep()
     this.broadcast()
 
     return new Response(null, { status: 101, webSocket: client })
   }
 
   webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
-    if (message === 'ping') socket.send(JSON.stringify(this.currentStats()))
+    // 'ping' never reaches here: the auto-response pair answers it without waking
+    // this object. 'stats' is the explicit resync a client can ask for.
+    if (message === 'stats') socket.send(JSON.stringify(this.currentStats()))
   }
 
   webSocketClose(_socket: WebSocket, _code: number, _reason: string, _wasClean: boolean): void {
@@ -109,11 +163,7 @@ export class LiveStats extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     this.ctx.storage.sql.exec('DELETE FROM recent_visits WHERE expires_at <= ?', Date.now())
-    const next = this.ctx.storage.sql.exec<{ expiresAt: number | null }>(
-      'SELECT MIN(expires_at) AS expiresAt FROM recent_visits',
-    ).one()
-    if (next.expiresAt !== null) {
-      await this.ctx.storage.setAlarm(Math.max(next.expiresAt, Date.now() + 1000))
-    }
+    if (this.evictStaleConnections() > 0) this.broadcast()
+    await this.scheduleNextSweep()
   }
 }

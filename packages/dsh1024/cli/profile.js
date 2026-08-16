@@ -69,12 +69,19 @@ export async function readProfileState(dshHome, profile) {
   return { exists: Boolean(manifest), profileDirectory, dependencies, bundles, installedVersions }
 }
 
-// Bounded on both sides: a bare substring test made `nest/plug` match
-// `github:nest/plugin-x`, which would file an install under the wrong plugin.
 function dependencyMatchesPlugin(spec, pluginId) {
   const normalized = spec.toLowerCase().replaceAll('\\', '/')
-  const escaped = pluginId.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`(?:^|[:/])${escaped}(?:\\.git)?(?:#|$)`).test(normalized)
+  const segments = pluginId.toLowerCase().split('/')
+  const repository = segments.slice(0, 2).join('/')
+  // Bounded on both sides: a bare substring test made `nest/plug` match
+  // `github:nest/plugin-x`, which would file an install under the wrong plugin.
+  const escaped = repository.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (!new RegExp(`(?:^|[:/])${escaped}(?:\\.git)?(?:[#&]|$)`).test(normalized)) return false
+  // Monorepo siblings share a repository, so the spec's `path:` fragment is
+  // what tells them apart. A repository-root plugin (no path) must likewise not
+  // match a dependency installed from one of its subdirectories.
+  const specPath = (/[#&]path:\/*([^&]*)/.exec(normalized)?.[1] ?? '').replace(/\/+$/, '')
+  return specPath === segments.slice(2).join('/')
 }
 
 function receiptNamesPresent(state, names) {
