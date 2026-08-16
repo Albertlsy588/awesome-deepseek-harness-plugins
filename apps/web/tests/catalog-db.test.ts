@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  loadCatalogSnapshotFromD1,
   normalizeRepositoryName,
   syncCuratedEntries,
   upsertDiscoveredRepositories,
@@ -412,6 +413,91 @@ describe('curated catalog reconciliation', () => {
       JOIN catalog_repositories r ON r.id = s.repository_id
       WHERE r.normalized_full_name = 'owner/scanned-plugin'
     `).get()).toEqual({ count: 1 })
+    database.close()
+  })
+})
+
+
+describe('catalog snapshot identity', () => {
+  const now = '2026-08-16T00:00:00.000Z'
+
+  function seedRepository(database: DatabaseSync, overrides: Record<string, string | number | null> = {}): void {
+    const row = {
+      github_id: 900,
+      full_name: 'Acme/Mono',
+      normalized_full_name: 'acme/mono',
+      owner: 'Acme',
+      repository_name: 'Mono',
+      html_url: 'https://github.com/Acme/Mono',
+      package_path: 'packages/nested/package.json',
+      ...overrides,
+    }
+    database.prepare(`
+      INSERT INTO catalog_repositories (github_id, full_name, normalized_full_name, owner, repository_name,
+        html_url, description, package_path, validation_status, topic_present,
+        first_seen_at, last_seen_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'Discovered.', ?, 'accepted', 1, ?, ?, ?, ?)
+    `).run(row.github_id, row.full_name, row.normalized_full_name, row.owner, row.repository_name,
+      row.html_url, row.package_path, now, now, now, now)
+    database.prepare(`
+      INSERT INTO catalog_repository_sources (repository_id, source, source_reference, first_seen_at, last_seen_at)
+      SELECT id, 'github_topic', 'dsh-plugin', ?, ? FROM catalog_repositories WHERE normalized_full_name = ?
+    `).run(now, now, row.normalized_full_name)
+  }
+
+  // The topic scan accepts nested manifests, and the plugin id is derived from
+  // that path. Without it the install spec points at the repository root, where
+  // no bundle exists — the case that affects most auto-discovered monorepos.
+  it('derives a discovered plugin id from the accepted manifest directory', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+
+    const snapshot = await loadCatalogSnapshotFromD1(sqliteD1(database), now)
+
+    expect(snapshot?.plugins).toHaveLength(1)
+    expect(snapshot?.plugins[0]).toMatchObject({
+      id: 'Acme/Mono/packages/nested',
+      repository: 'Mono',
+      url: 'https://github.com/Acme/Mono',
+      install: 'dsh plugin --profile web add github:Acme/Mono#path:packages/nested',
+    })
+    database.close()
+  })
+
+  it('keeps a root-manifest discovery at its repository id', async () => {
+    const database = catalogDatabase()
+    seedRepository(database, { package_path: 'package.json' })
+
+    const snapshot = await loadCatalogSnapshotFromD1(sqliteD1(database), now)
+
+    expect(snapshot?.plugins[0]).toMatchObject({
+      id: 'Acme/Mono',
+      install: 'dsh plugin --profile web add github:Acme/Mono',
+    })
+    database.close()
+  })
+
+  it('lets a repository contribute one plugin per curated entry', async () => {
+    const database = catalogDatabase()
+    const db = sqliteD1(database)
+    seedRepository(database, { package_path: null })
+    await syncCuratedEntries(db, [
+      curatedEntry({ id: 'Acme/Mono/packages/foo', name: 'foo', repository: 'https://github.com/Acme/Mono' }),
+      curatedEntry({ id: 'Acme/Mono/packages/bar', name: 'bar', repository: 'https://github.com/Acme/Mono' }),
+    ], now)
+
+    const snapshot = await loadCatalogSnapshotFromD1(db, now)
+
+    // Curated metadata defines the repository's plugins; the topic scan only
+    // contributes repository facts, so it adds no extra repository-level row.
+    expect(snapshot?.plugins.map((plugin) => plugin.id).sort()).toEqual([
+      'Acme/Mono/packages/bar',
+      'Acme/Mono/packages/foo',
+    ])
+    expect(snapshot?.plugins.map((plugin) => plugin.install).sort()).toEqual([
+      'dsh plugin --profile web add github:Acme/Mono#path:packages/bar',
+      'dsh plugin --profile web add github:Acme/Mono#path:packages/foo',
+    ])
     database.close()
   })
 })
