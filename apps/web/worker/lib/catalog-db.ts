@@ -3,7 +3,6 @@ import type { CatalogPlugin, LocalizedText, StoredCatalogSnapshot } from '../typ
 import { categoryLabelMap, UNCLASSIFIED_CATEGORY } from './categories'
 import { emptyInstallMetrics } from './install-metrics'
 import {
-  buildPluginId,
   normalizePluginId,
   parsePluginId,
   pluginInstallCommand,
@@ -16,7 +15,8 @@ interface RepositoryIdentityRow {
   normalized_full_name: string
   default_branch: string | null
   pushed_at: string | null
-  validation_status: string
+  /** 1 when any of the repository's plugins still needs inspecting. */
+  needs_validation: number
 }
 
 interface PendingRepositoryRow {
@@ -24,7 +24,7 @@ interface PendingRepositoryRow {
   full_name: string
   repository_name: string
   html_url: string
-  description: string | null
+  github_description: string | null
   default_branch: string
   stars: number
   forks: number
@@ -39,19 +39,18 @@ interface CatalogRow {
   owner: string
   repository_name: string
   html_url: string
-  description: string | null
+  github_description: string | null
   stars: number | null
   forks: number | null
   pushed_at: string | null
   github_updated_at: string | null
-  package_path: string | null
-  plugin_path: string | null
-  plugin_id: string | null
-  display_name: string | null
-  category: string | null
-  description_en: string | null
-  description_zh: string | null
-  added: string | null
+  plugin_path: string
+  plugin_id: string
+  curated_name: string | null
+  curated_category: string | null
+  curated_description_en: string | null
+  curated_description_zh: string | null
+  curated_added: string | null
 }
 
 export interface ScanCounters {
@@ -99,10 +98,15 @@ async function queryRepositoryIdentities(
   const names = repositories.map((repository) => normalizeRepositoryName(repository.full_name))
   const placeholders = (values: unknown[]) => values.map(() => '?').join(', ')
   const result = await db.prepare(
-    `SELECT id, github_id, normalized_full_name, default_branch, pushed_at, validation_status
-       FROM catalog_repositories
-      WHERE github_id IN (${placeholders(ids)})
-         OR normalized_full_name IN (${placeholders(names)})`,
+    `SELECT r.id, r.github_id, r.normalized_full_name, r.default_branch, r.pushed_at,
+            EXISTS (
+              SELECT 1 FROM catalog_plugins p
+               WHERE p.repository_id = r.id
+                 AND p.validation_status IN ('pending', 'error')
+            ) AS needs_validation
+       FROM catalog_repositories r
+      WHERE r.github_id IN (${placeholders(ids)})
+         OR r.normalized_full_name IN (${placeholders(names)})`,
   ).bind(...ids, ...names).all<RepositoryIdentityRow>()
   const byKey = new Map<string, RepositoryIdentityRow>()
   for (const row of result.results) {
@@ -134,12 +138,11 @@ export interface CuratedSyncResult {
 /**
  * Full reconciliation of the curated catalog (catalog/plugins/*.json) into D1.
  *
- * Upserts `catalog_repositories`, the `github_pr` source rows, and
- * `catalog_metadata`. Metadata is per plugin, so several entries may share one
- * repository row (a monorepo contributing more than one subpackage plugin).
- * Entries missing from `entries` lose their metadata, and a repository that
- * keeps no curated plugin loses its `github_pr` source — the
- * `catalog_repositories` row is never deleted, so production data is
+ * Upserts `catalog_repositories` and the curated columns of `catalog_plugins`.
+ * A plugin row is per plugin, so several entries may share one repository row
+ * (a monorepo contributing more than one subpackage plugin). Entries missing
+ * from `entries` lose their curated columns, and a plugin nothing else knows
+ * about is removed; repository rows are never deleted, so production data is
  * preserved. Idempotent: re-running with the same input is a no-op apart from
  * `last_seen_at`/`updated_at` bumps.
  */
@@ -149,7 +152,8 @@ export async function syncCuratedEntries(
   now = new Date().toISOString(),
 ): Promise<CuratedSyncResult> {
   // Several entries can share one repository; the repository row is upserted
-  // once per distinct owner/repository.
+  // once per distinct owner/repository. Only repository-level facts are touched
+  // here — the crawler owns the GitHub columns and this must not disturb them.
   const repositories = new Map<string, { fullName: string; owner: string; name: string; url: string }>()
   for (const entry of entries) {
     const { owner, name } = curatedEntryParts(entry.id)
@@ -160,43 +164,46 @@ export async function syncCuratedEntries(
   }
 
   for (const group of chunks([...repositories.values()], 50)) {
-    await db.batch(group.map(({ fullName, owner, name, url }) => {
-      return db.prepare(
-        `INSERT INTO catalog_repositories (
-           full_name, normalized_full_name, owner, repository_name, html_url,
-           validation_status, topic_present, first_seen_at, last_seen_at, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?)
-         ON CONFLICT(normalized_full_name) DO UPDATE SET
-           full_name = excluded.full_name,
-           owner = excluded.owner,
-           repository_name = excluded.repository_name,
-           html_url = excluded.html_url,
-           last_seen_at = excluded.last_seen_at,
-           updated_at = excluded.updated_at`,
-      ).bind(
-        fullName,
-        normalizeRepositoryName(fullName),
-        owner,
-        name,
-        url,
-        now,
-        now,
-        now,
-        now,
-      )
-    }))
+    await db.batch(group.map(({ fullName, owner, name, url }) => db.prepare(
+      `INSERT INTO catalog_repositories (
+         full_name, normalized_full_name, owner, repository_name, html_url,
+         first_seen_at, last_seen_at, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(normalized_full_name) DO UPDATE SET
+         full_name = excluded.full_name,
+         owner = excluded.owner,
+         repository_name = excluded.repository_name,
+         html_url = excluded.html_url,
+         last_seen_at = excluded.last_seen_at,
+         updated_at = excluded.updated_at`,
+    ).bind(fullName, normalizeRepositoryName(fullName), owner, name, url, now, now, now, now)))
   }
 
   // Retired plugins are dropped BEFORE the upserts. The primary key
   // (repository_id, plugin_path) is case-sensitive while normalized_plugin_id
   // is not, so an entry that only changes the case of its path would insert a
   // second row and trip UNIQUE(normalized_plugin_id) if the stale row were
-  // still present.
+  // still present. A plugin the topic scan also found keeps its row and simply
+  // loses its curated columns.
   const currentPluginIds = JSON.stringify(entries.map((entry) => normalizePluginId(entry.id)))
-  await db.prepare(
-    `DELETE FROM catalog_metadata
-      WHERE normalized_plugin_id NOT IN (SELECT value FROM json_each(?))`,
-  ).bind(currentPluginIds).run()
+  const retired = await db.batch([
+    db.prepare(
+      `DELETE FROM catalog_plugins
+        WHERE from_pr = 1
+          AND validation_status = 'pending'
+          AND normalized_plugin_id NOT IN (SELECT value FROM json_each(?))`,
+    ).bind(currentPluginIds),
+    db.prepare(
+      `UPDATE catalog_plugins
+          SET from_pr = 0, pr_reference = NULL,
+              curated_name = NULL, curated_category = NULL,
+              curated_description_en = NULL, curated_description_zh = NULL,
+              curated_added = NULL, curated_updated_at = NULL,
+              updated_at = ?
+        WHERE from_pr = 1
+          AND normalized_plugin_id NOT IN (SELECT value FROM json_each(?))`,
+    ).bind(now, currentPluginIds),
+  ])
 
   for (const group of chunks(entries, 40)) {
     const normalizedNames = [...new Set(group.map((entry) => {
@@ -214,59 +221,44 @@ export async function syncCuratedEntries(
       const { owner, name, path } = curatedEntryParts(entry.id)
       const id = ids.get(normalizeRepositoryName(`${owner}/${name}`))
       if (id === undefined) throw new Error(`Curated repository was not inserted: ${entry.id}`)
-      statements.push(
-        db.prepare(
-          `INSERT INTO catalog_repository_sources (
-             repository_id, source, source_reference, first_seen_at, last_seen_at
-           ) VALUES (?, 'github_pr', ?, ?, ?)
-           ON CONFLICT(repository_id, source) DO UPDATE SET
-             source_reference = excluded.source_reference,
-             last_seen_at = excluded.last_seen_at`,
-        ).bind(id, entry.repository, now, now),
-        db.prepare(
-          `INSERT INTO catalog_metadata (
-             repository_id, plugin_path, plugin_id, normalized_plugin_id,
-             display_name, category, description_en, description_zh,
-             added, source, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'github_pr', ?)
-           ON CONFLICT(repository_id, plugin_path) DO UPDATE SET
-             plugin_id = excluded.plugin_id,
-             normalized_plugin_id = excluded.normalized_plugin_id,
-             display_name = excluded.display_name,
-             category = excluded.category,
-             description_en = excluded.description_en,
-             description_zh = excluded.description_zh,
-             added = excluded.added,
-             updated_at = excluded.updated_at`,
-        ).bind(
-          id,
-          path,
-          entry.id,
-          normalizePluginId(entry.id),
-          entry.name,
-          entry.category,
-          entry.description.en,
-          entry.description.zh,
-          entry.added,
-          now,
-        ),
-      )
+      statements.push(db.prepare(
+        // Only curated_* and the provenance flag are written. The crawler's
+        // columns are absent from both the insert and the update, so a sync
+        // never overwrites install facts it did not produce.
+        `INSERT INTO catalog_plugins (
+           repository_id, plugin_id, normalized_plugin_id, plugin_path,
+           from_pr, pr_reference,
+           curated_name, curated_category, curated_description_en, curated_description_zh,
+           curated_added, curated_updated_at,
+           first_seen_at, last_seen_at, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(repository_id, plugin_path) DO UPDATE SET
+           plugin_id = excluded.plugin_id,
+           normalized_plugin_id = excluded.normalized_plugin_id,
+           from_pr = 1,
+           pr_reference = excluded.pr_reference,
+           curated_name = excluded.curated_name,
+           curated_category = excluded.curated_category,
+           curated_description_en = excluded.curated_description_en,
+           curated_description_zh = excluded.curated_description_zh,
+           curated_added = excluded.curated_added,
+           curated_updated_at = excluded.curated_updated_at,
+           last_seen_at = excluded.last_seen_at,
+           updated_at = excluded.updated_at`,
+      ).bind(
+        id, entry.id, normalizePluginId(entry.id), path,
+        entry.repository,
+        entry.name, entry.category, entry.description.en, entry.description.zh,
+        entry.added, now,
+        now, now, now, now,
+      ))
     }
     await db.batch(statements)
   }
 
-  // A repository keeps its `github_pr` source only while at least one of its
-  // curated plugins survives, so sibling subpackage plugins of one repository
-  // no longer evict each other.
-  const removedSources = await db.prepare(
-    `DELETE FROM catalog_repository_sources
-      WHERE source = 'github_pr'
-        AND repository_id NOT IN (SELECT repository_id FROM catalog_metadata)`,
-  ).run()
-
   return {
     total: entries.length,
-    removedSources: Number(removedSources.meta.changes ?? 0),
+    removedSources: Number(retired[0]?.meta.changes ?? 0) + Number(retired[1]?.meta.changes ?? 0),
   }
 }
 
@@ -370,46 +362,46 @@ export async function upsertDiscoveredRepositories(
     }
     await db.batch([
       db.prepare(
-        `INSERT INTO catalog_repository_sources (
-           repository_id, source, source_reference, first_seen_at, last_seen_at, last_seen_run_id
-         )
-         SELECT ?, source, source_reference, first_seen_at, last_seen_at, last_seen_run_id
-           FROM catalog_repository_sources WHERE repository_id = ?
-         ON CONFLICT(repository_id, source) DO UPDATE SET
-           source_reference = excluded.source_reference,
-           first_seen_at = MIN(catalog_repository_sources.first_seen_at, excluded.first_seen_at),
-           last_seen_at = MAX(catalog_repository_sources.last_seen_at, excluded.last_seen_at),
-           last_seen_run_id = excluded.last_seen_run_id`,
-      ).bind(byName.id, byGithubId.id),
-      // The losing row's metadata is deleted before the copy lands: plugin ids
-      // are globally unique, so keeping both would trip
-      // UNIQUE(normalized_plugin_id) inside this one atomic batch. Ids are
-      // rebuilt from the surviving repository's full_name because the rename
-      // changed the owner/repository prefix of every one of its plugins.
+        `UPDATE catalog_repositories
+            SET from_topic = MAX(from_topic, (SELECT from_topic FROM catalog_repositories WHERE id = ?)),
+                topic_last_run_id = COALESCE(
+                  (SELECT topic_last_run_id FROM catalog_repositories WHERE id = ?), topic_last_run_id),
+                topic_last_seen_at = COALESCE(
+                  (SELECT topic_last_seen_at FROM catalog_repositories WHERE id = ?), topic_last_seen_at)
+          WHERE id = ?`,
+      ).bind(byGithubId.id, byGithubId.id, byGithubId.id, byName.id),
+      // Plugin ids are globally unique, so the losing rows go before the copy
+      // lands. Ids are rebuilt around the surviving repository's name.
       db.prepare(
-        `DELETE FROM catalog_metadata
+        `DELETE FROM catalog_plugins
           WHERE repository_id = ?
-            AND plugin_path IN (SELECT plugin_path FROM catalog_metadata WHERE repository_id = ?)`,
+            AND plugin_path IN (SELECT plugin_path FROM catalog_plugins WHERE repository_id = ?)`,
       ).bind(byName.id, byGithubId.id),
       db.prepare(
-        `INSERT INTO catalog_metadata (
-           repository_id, plugin_path, plugin_id, normalized_plugin_id,
-           display_name, category, description_en, description_zh,
-           added, source, updated_at
+        `INSERT INTO catalog_plugins (
+           repository_id, plugin_id, normalized_plugin_id, plugin_path,
+           from_pr, pr_reference,
+           curated_name, curated_category, curated_description_en, curated_description_zh,
+           curated_added, curated_updated_at,
+           manifest_path, package_name, package_version, bundle_patch,
+           validation_status, validation_code, validation_reason,
+           first_seen_at, last_seen_at, created_at, updated_at
          )
-         SELECT ?, m.plugin_path,
-                CASE WHEN m.plugin_path = '' THEN r.full_name
-                     ELSE r.full_name || '/' || m.plugin_path END,
-                lower(CASE WHEN m.plugin_path = '' THEN r.full_name
-                           ELSE r.full_name || '/' || m.plugin_path END),
-                m.display_name, m.category, m.description_en, m.description_zh,
-                m.added, m.source, m.updated_at
-           FROM catalog_metadata m
+         SELECT ?, r.full_name || CASE WHEN p.plugin_path = '' THEN '' ELSE '/' || p.plugin_path END,
+                lower(r.normalized_full_name || CASE WHEN p.plugin_path = '' THEN '' ELSE '/' || p.plugin_path END),
+                p.plugin_path,
+                p.from_pr, p.pr_reference,
+                p.curated_name, p.curated_category, p.curated_description_en, p.curated_description_zh,
+                p.curated_added, p.curated_updated_at,
+                p.manifest_path, p.package_name, p.package_version, p.bundle_patch,
+                p.validation_status, p.validation_code, p.validation_reason,
+                p.first_seen_at, p.last_seen_at, p.created_at, p.updated_at
+           FROM catalog_plugins p
            JOIN catalog_repositories r ON r.id = ?
-          WHERE m.repository_id = ?
+          WHERE p.repository_id = ?
          ON CONFLICT(repository_id, plugin_path) DO NOTHING`,
       ).bind(byName.id, byName.id, byGithubId.id),
-      // Cascades the losing repository's own metadata and source rows away.
+      // Cascades the losing repository's remaining plugin rows away.
       db.prepare('DELETE FROM catalog_repositories WHERE id = ?').bind(byGithubId.id),
     ])
     identities.set(`id:${repository.id}`, byName)
@@ -420,8 +412,7 @@ export async function upsertDiscoveredRepositories(
     const changed = existing === undefined ||
       existing.pushed_at !== repository.pushed_at ||
       existing.default_branch !== repository.default_branch ||
-      existing.validation_status === 'pending' ||
-      existing.validation_status === 'error'
+      existing.needs_validation === 1
     if (changed) {
       changedCount += 1
     }
@@ -442,7 +433,7 @@ export async function upsertDiscoveredRepositories(
       license: repository.license?.spdx_id ?? null,
       githubUpdatedAt: repository.updated_at,
       pushedAt: repository.pushed_at,
-      validationStatus: changed ? 'pending' : existing?.validation_status ?? 'pending',
+      needsValidation: changed ? 1 : 0,
     }
   })
   const serialized = JSON.stringify(incoming)
@@ -467,19 +458,18 @@ export async function upsertDiscoveredRepositories(
            json_extract(value, '$.language') AS language,
            json_extract(value, '$.license') AS license,
            json_extract(value, '$.githubUpdatedAt') AS github_updated_at,
-           json_extract(value, '$.pushedAt') AS pushed_at,
-           json_extract(value, '$.validationStatus') AS validation_status
+           json_extract(value, '$.pushedAt') AS pushed_at
          FROM json_each(?)
          WHERE json_extract(value, '$.internalId') IS NOT NULL
        )
        UPDATE catalog_repositories
           SET (github_id, full_name, normalized_full_name, owner, repository_name,
-               html_url, description, default_branch, stars, forks, language, license,
-               github_updated_at, pushed_at, validation_status, topic_present,
+               html_url, github_description, default_branch, stars, forks, language, license,
+               github_updated_at, pushed_at, from_topic,
                last_seen_at, updated_at) =
               (SELECT github_id, full_name, normalized_full_name, owner, repository_name,
                       html_url, description, default_branch, stars, forks, language, license,
-                      github_updated_at, pushed_at, validation_status, 1, ?, ?
+                      github_updated_at, pushed_at, 1, ?, ?
                  FROM incoming WHERE internal_id = catalog_repositories.id)
         WHERE id IN (SELECT internal_id FROM incoming)`,
     ).bind(serialized, now, now).run()
@@ -489,8 +479,8 @@ export async function upsertDiscoveredRepositories(
     await db.prepare(
       `INSERT INTO catalog_repositories (
          github_id, full_name, normalized_full_name, owner, repository_name, html_url,
-         description, default_branch, stars, forks, language, license, github_updated_at,
-         pushed_at, validation_status, topic_present, first_seen_at, last_seen_at,
+         github_description, default_branch, stars, forks, language, license, github_updated_at,
+         pushed_at, from_topic, first_seen_at, last_seen_at,
          created_at, updated_at
        )
        SELECT
@@ -501,25 +491,36 @@ export async function upsertDiscoveredRepositories(
          json_extract(value, '$.defaultBranch'), CAST(json_extract(value, '$.stars') AS INTEGER),
          CAST(json_extract(value, '$.forks') AS INTEGER), json_extract(value, '$.language'),
          json_extract(value, '$.license'), json_extract(value, '$.githubUpdatedAt'),
-         json_extract(value, '$.pushedAt'), 'pending', 1, ?, ?, ?, ?
+         json_extract(value, '$.pushedAt'), 1, ?, ?, ?, ?
        FROM json_each(?)
        WHERE json_extract(value, '$.internalId') IS NULL`,
     ).bind(now, now, now, now, serialized).run()
   }
 
-  await db.prepare(
-    `INSERT INTO catalog_repository_sources (
-       repository_id, source, source_reference, first_seen_at, last_seen_at, last_seen_run_id
-     )
-     SELECT r.id, 'github_topic', json_extract(j.value, '$.htmlUrl'), ?, ?, ?
-       FROM json_each(?) j
-       JOIN catalog_repositories r
-         ON r.normalized_full_name = json_extract(j.value, '$.normalizedName')
-     ON CONFLICT(repository_id, source) DO UPDATE SET
-       source_reference = excluded.source_reference,
-       last_seen_at = excluded.last_seen_at,
-       last_seen_run_id = excluded.last_seen_run_id`,
-  ).bind(now, now, runId, serialized).run()
+  // The topic provenance is a column now, and every discovered repository needs
+  // a plugin row for the validation queue to have something to inspect. The
+  // plugin sits at the repository root until inspection finds a nested manifest;
+  // an existing row (curated, or from an earlier scan) is left alone.
+  await db.batch([
+    db.prepare(
+      `UPDATE catalog_repositories
+          SET from_topic = 1, topic_last_run_id = ?, topic_last_seen_at = ?, updated_at = ?
+        WHERE normalized_full_name IN (
+          SELECT json_extract(value, '$.normalizedName') FROM json_each(?)
+        )`,
+    ).bind(runId, now, now, serialized),
+    db.prepare(
+      `INSERT INTO catalog_plugins (
+         repository_id, plugin_id, normalized_plugin_id, plugin_path,
+         first_seen_at, last_seen_at, created_at, updated_at
+       )
+       SELECT r.id, r.full_name, r.normalized_full_name, '', ?, ?, ?, ?
+         FROM json_each(?) j
+         JOIN catalog_repositories r
+           ON r.normalized_full_name = json_extract(j.value, '$.normalizedName')
+       ON CONFLICT(repository_id, plugin_path) DO NOTHING`,
+    ).bind(now, now, now, now, serialized),
+  ])
 
   return { changedCount }
 }
@@ -529,12 +530,16 @@ export async function loadPendingValidationRepositories(
   limit = 20,
 ): Promise<GitHubRepository[]> {
   const result = await db.prepare(
-    `SELECT github_id, full_name, repository_name, html_url, description, default_branch,
+    `SELECT github_id, full_name, repository_name, html_url, github_description, default_branch,
             stars, forks, language, license, github_updated_at, pushed_at
        FROM catalog_repositories
       WHERE github_id IS NOT NULL
-        AND topic_present = 1
-        AND validation_status = 'pending'
+        AND from_topic = 1
+        AND EXISTS (
+          SELECT 1 FROM catalog_plugins p
+           WHERE p.repository_id = catalog_repositories.id
+             AND p.validation_status = 'pending'
+        )
       ORDER BY last_scanned_at IS NOT NULL, last_scanned_at, id
       LIMIT ?`,
   ).bind(limit).all<PendingRepositoryRow>()
@@ -543,7 +548,7 @@ export async function loadPendingValidationRepositories(
     name: row.repository_name,
     full_name: row.full_name,
     html_url: row.html_url,
-    description: row.description,
+    description: row.github_description,
     fork: false,
     archived: false,
     disabled: false,
@@ -563,24 +568,62 @@ export async function saveRepositoryInspections(
   now = new Date().toISOString(),
 ): Promise<void> {
   if (inspections.length === 0) return
-  await db.batch(inspections.map((inspection) => db.prepare(
-    `UPDATE catalog_repositories SET
-       validation_status = ?, validation_code = ?, validation_reason = ?,
-       package_name = ?, package_version = ?, package_path = ?, bundle_patch = ?,
-       last_scanned_at = ?, updated_at = ?
-     WHERE github_id = ?`,
-  ).bind(
-    inspection.status,
-    inspection.code,
-    inspection.reason,
-    inspection.package?.name ?? null,
-    inspection.package?.version ?? null,
-    inspection.package?.path ?? null,
-    inspection.package?.patch ?? null,
-    now,
-    now,
-    inspection.githubId,
-  )))
+  const statements: D1PreparedStatement[] = []
+  for (const inspection of inspections) {
+    // The manifest's directory is where the plugin actually lives. A discovered
+    // repository starts with one plugin row at the root; when inspection finds
+    // the bundle nested, the row moves there so the install spec carries
+    // `#path:` instead of pointing at a root that has no bundle. The move is
+    // skipped when a curated plugin already occupies that path — that row is
+    // the same plugin and already carries better metadata.
+    const pluginPath = pluginPathFromPackagePath(inspection.package?.path ?? null)
+    statements.push(
+      db.prepare(
+        `UPDATE catalog_plugins
+            SET plugin_path = ?,
+                plugin_id = (SELECT r.full_name FROM catalog_repositories r WHERE r.id = repository_id)
+                            || CASE WHEN ? = '' THEN '' ELSE '/' || ? END,
+                normalized_plugin_id = lower(
+                  (SELECT r.normalized_full_name FROM catalog_repositories r WHERE r.id = repository_id)
+                  || CASE WHEN ? = '' THEN '' ELSE '/' || ? END
+                ),
+                updated_at = ?
+          WHERE plugin_path = ''
+            AND ? <> ''
+            AND repository_id = (SELECT id FROM catalog_repositories WHERE github_id = ?)
+            AND NOT EXISTS (
+              SELECT 1 FROM catalog_plugins other
+               WHERE other.repository_id = catalog_plugins.repository_id
+                 AND other.plugin_path = ?
+            )`,
+      ).bind(pluginPath, pluginPath, pluginPath, pluginPath, pluginPath, now, pluginPath,
+        inspection.githubId, pluginPath),
+      db.prepare(
+        `UPDATE catalog_plugins SET
+           validation_status = ?, validation_code = ?, validation_reason = ?,
+           package_name = ?, package_version = ?, manifest_path = ?, bundle_patch = ?,
+           updated_at = ?
+         WHERE repository_id = (SELECT id FROM catalog_repositories WHERE github_id = ?)
+           AND plugin_path = ?`,
+      ).bind(
+        inspection.status,
+        inspection.code,
+        inspection.reason,
+        inspection.package?.name ?? null,
+        inspection.package?.version ?? null,
+        inspection.package?.path ?? null,
+        inspection.package?.patch ?? null,
+        now,
+        inspection.githubId,
+        pluginPath,
+      ),
+      // last_scanned_at stays a repository fact: it paces the crawler.
+      db.prepare(
+        'UPDATE catalog_repositories SET last_scanned_at = ?, updated_at = ? WHERE github_id = ?',
+      ).bind(now, now, inspection.githubId),
+    )
+  }
+  await db.batch(statements)
 }
 
 export async function saveCatalogMetrics(
@@ -624,13 +667,9 @@ export async function markMissingTopicRepositories(
 ): Promise<void> {
   await db.prepare(
     `UPDATE catalog_repositories
-        SET topic_present = 0, updated_at = ?
-      WHERE topic_present = 1
-        AND id IN (
-          SELECT repository_id FROM catalog_repository_sources
-           WHERE source = 'github_topic'
-             AND (last_seen_run_id IS NULL OR last_seen_run_id <> ?)
-        )`,
+        SET from_topic = 0, updated_at = ?
+      WHERE from_topic = 1
+        AND (topic_last_run_id IS NULL OR topic_last_run_id <> ?)`,
   ).bind(now, runId).run()
 }
 
@@ -648,46 +687,43 @@ export async function loadCatalogSnapshotFromD1(
   // (a monorepo may contribute several); a topic-only repository contributes
   // exactly one plugin, located at its accepted manifest's directory.
   const result = await db.prepare(
-    `SELECT r.full_name, r.owner, r.repository_name, r.html_url, r.description,
-            r.stars, r.forks, r.pushed_at, r.github_updated_at, r.package_path,
-            m.plugin_path, m.plugin_id,
-            m.display_name, m.category, m.description_en, m.description_zh, m.added
-       FROM catalog_repositories r
-       LEFT JOIN catalog_metadata m ON m.repository_id = r.id
-      WHERE (r.topic_present = 1 AND r.validation_status = 'accepted')
-         OR EXISTS (
-           SELECT 1 FROM catalog_repository_sources s
-            WHERE s.repository_id = r.id AND s.source = 'github_pr'
-         )
-      ORDER BY r.normalized_full_name, m.plugin_path`,
+    `SELECT r.full_name, r.owner, r.repository_name, r.html_url, r.github_description,
+            r.stars, r.forks, r.pushed_at, r.github_updated_at,
+            p.plugin_path, p.plugin_id,
+            p.curated_name, p.curated_category,
+            p.curated_description_en, p.curated_description_zh, p.curated_added
+       FROM catalog_plugins p
+       JOIN catalog_repositories r ON r.id = p.repository_id
+      WHERE p.from_pr = 1
+         OR (r.from_topic = 1 AND p.validation_status = 'accepted')
+      ORDER BY r.normalized_full_name, p.plugin_path`,
   ).all<CatalogRow>()
   if (result.results.length === 0) return null
 
   const categories = categoryLabelMap()
-  if (result.results.some((row) => row.category === null)) {
+  if (result.results.some((row) => row.curated_category === null)) {
     categories[UNCLASSIFIED_CATEGORY.id] = { ...UNCLASSIFIED_CATEGORY.label }
   }
   const plugins = result.results.map<CatalogPlugin>((row) => {
-    const description = row.description ?? `${row.full_name} discovered from GitHub.`
-    // Curated rows carry the submitted id; a discovered row derives it from the
-    // accepted manifest's directory, so a nested monorepo manifest yields the
-    // `#path:` install spec pnpm needs instead of a broken repository-root one.
+    const description = row.github_description ?? `${row.full_name} discovered from GitHub.`
+    // The plugin row owns its id: inspection moves a discovered plugin to its
+    // manifest's directory, so a nested monorepo bundle yields the `#path:`
+    // install spec pnpm needs instead of a broken repository-root one.
     const id = row.plugin_id
-      ?? buildPluginId(row.full_name, pluginPathFromPackagePath(row.package_path))
     return {
       ...emptyInstallMetrics(),
       id,
-      name: row.display_name ?? row.repository_name,
+      name: row.curated_name ?? row.repository_name,
       owner: row.owner,
       url: row.html_url,
       repository: row.repository_name,
-      category: row.category ?? UNCLASSIFIED_CATEGORY.id,
+      category: row.curated_category ?? UNCLASSIFIED_CATEGORY.id,
       description: {
-        en: row.description_en ?? description,
-        zh: row.description_zh ?? description,
+        en: row.curated_description_en ?? description,
+        zh: row.curated_description_zh ?? description,
       },
       install: pluginInstallCommand(id),
-      added: row.added ?? (row.github_updated_at ?? now).slice(0, 10),
+      added: row.curated_added ?? (row.github_updated_at ?? now).slice(0, 10),
       stars: row.stars,
       forks: row.forks,
       pushedAt: row.pushed_at,
