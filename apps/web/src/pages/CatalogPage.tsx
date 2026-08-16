@@ -357,13 +357,12 @@ export function CatalogPage({ view }: CatalogPageProps) {
               )}
             </dl>
 
+            <SelfInstallBanner />
           </header>
         </div>
       </section>
 
       <div className="page-container catalog-content">
-        <SelfInstallBanner />
-
         <section className="catalog-navigation" aria-label={`${t('search')} / ${t('catalog')} / ${t('rankings')}`}>
           <section className="catalog-toolbar" aria-label={t('search')}>
             <label className="search-control">

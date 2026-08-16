@@ -155,10 +155,11 @@ body {
 .hero-stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 310px;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   grid-template-areas:
     "heading actions"
-    "heading tally";
+    "heading tally"
+    "self    self";
   column-gap: 56px;
   row-gap: 14px;
 }
@@ -377,6 +378,7 @@ body {
   .hero-heading h1,
   .hero-heading > p:last-child,
   .hero-tally,
+  .self-install-banner,
   .catalog-navigation {
     animation: hero-rise 620ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
@@ -391,6 +393,10 @@ body {
 
   .hero-tally {
     animation-delay: 150ms;
+  }
+
+  .self-install-banner {
+    animation-delay: 175ms;
   }
 
   .catalog-navigation {
@@ -411,6 +417,7 @@ body {
 .hero-static .hero-heading h1,
 .hero-static .hero-heading > p:last-child,
 .hero-static .hero-tally,
+.hero-static .self-install-banner,
 .hero-static .catalog-navigation {
   animation: none;
 }
@@ -565,7 +572,8 @@ body {
     grid-template-areas:
       "actions"
       "heading"
-      "tally";
+      "tally"
+      "self";
     gap: 18px;
   }
 
@@ -1629,84 +1637,140 @@ main {
   font-weight: 620;
 }
 
-/* Self-install banner: invites visitors to put the store itself inside
-   DeepSeek Harness. Reuses the hero panel's paper + grid backdrop; desktop
-   pairs copy with commands side by side, mobile stacks them. */
+/* Self-install strip: a compact hero row inviting visitors to put the store
+   itself inside DeepSeek Harness. Shares the hero's paper card language with
+   the tally; desktop lines title + both commands up on one row, mobile
+   stacks them. */
 .self-install-banner {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
-  gap: 16px 32px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 26px;
-  padding: 18px 20px;
+  justify-content: space-between;
+  gap: 10px 24px;
+  grid-area: self;
+  margin-top: 4px;
+  padding: 9px 14px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;
-  background-color: #f7f3ea;
-  background-image:
-    linear-gradient(rgba(53, 49, 40, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(53, 49, 40, 0.055) 1px, transparent 1px);
-  background-size: 32px 32px;
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 3px 3px 0 rgba(36, 35, 31, 0.09);
+}
+
+.self-install-copy {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
 }
 
 .self-install-copy h2 {
   margin: 0;
   color: var(--ink);
   font-family: var(--font-display);
-  font-size: 19px;
+  font-size: 14px;
   font-weight: 740;
-  letter-spacing: -0.015em;
-  line-height: 1.25;
-}
-
-.self-install-copy p {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 }
 
 .self-install-count {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 5px;
-  margin-top: 11px;
-  padding: 3px 10px;
+  gap: 4px;
+  padding: 2px 8px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: var(--surface);
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 640;
 }
 
 .self-install-commands {
   display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: 11px;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
+.self-install-recommended,
+.self-install-official {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
 }
 
 .self-install-recommended {
-  padding: 9px 10px 10px;
+  padding: 3px 4px 3px 8px;
   border: 0.5px solid var(--brand);
   border-radius: 8px;
   background: var(--surface);
 }
 
-.self-install-recommended .install-option-badge {
-  margin-bottom: 7px;
+.self-install-banner .install-option-badge,
+.self-install-banner .install-option-label {
+  flex: none;
+  margin: 0;
 }
 
-.self-install-official .install-option-label {
-  margin-bottom: 5px;
+.self-install-banner .install-command {
+  min-width: 0;
+}
+
+.self-install-banner .install-command code {
+  padding: 7px 10px;
+}
+
+.self-install-banner .install-command .icon-button {
+  min-height: 32px;
 }
 
 @media (max-width: 860px) {
-  .self-install-banner {
+  .self-install-banner,
+  .self-install-commands {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .self-install-copy {
+    justify-content: space-between;
+  }
+
+  .self-install-recommended,
+  .self-install-official {
+    display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
-    padding: 16px 14px;
+    justify-items: start;
+  }
+
+  .self-install-recommended {
+    padding: 8px;
+  }
+
+  .self-install-banner .install-option-badge,
+  .self-install-banner .install-option-label {
+    margin-bottom: 5px;
+  }
+
+  .self-install-banner .install-command {
+    width: 100%;
+    grid-template-columns: auto minmax(0, 1fr) 44px;
+  }
+
+  .self-install-banner .install-command code {
+    padding: 12px 10px;
+  }
+
+  .self-install-banner .install-command .icon-button {
+    width: 44px;
+    min-height: 44px;
   }
 }
 

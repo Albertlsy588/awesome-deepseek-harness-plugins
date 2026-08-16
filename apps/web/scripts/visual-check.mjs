@@ -161,10 +161,10 @@ try {
   if ((await desktop.locator('.directory-section .sort-segments button').count()) !== 3) {
     throw new Error('directory sort controls should only contain stars, newest, and active')
   }
-  if ((await desktop.locator('.self-install-banner').count()) !== 1) {
-    throw new Error('directory view is missing the self install banner')
+  if ((await desktop.locator('.catalog-hero .self-install-banner').count()) !== 1) {
+    throw new Error('directory hero is missing the self install banner')
   }
-  if (!(await desktop.locator('.self-install-banner').textContent())?.includes('npx dsh1024 store')) {
+  if (!(await desktop.locator('.catalog-hero .self-install-banner').textContent())?.includes('npx dsh1024 store')) {
     throw new Error('directory self install banner is missing the npx dsh1024 store command')
   }
   if ((await desktop.locator('.directory-section .package-row .split-install-main').count()) === 0) {
@@ -254,10 +254,10 @@ try {
   if ((await rankings.locator('footer, .reset-button').count()) !== 0) {
     throw new Error('removed footer or refresh control is still rendered')
   }
-  if ((await rankings.locator('.self-install-banner').count()) !== 1) {
-    throw new Error('rankings view is missing the self install banner')
+  if ((await rankings.locator('.catalog-hero .self-install-banner').count()) !== 1) {
+    throw new Error('rankings hero is missing the self install banner')
   }
-  if (!(await rankings.locator('.self-install-banner').textContent())?.includes('npx dsh1024 store')) {
+  if (!(await rankings.locator('.catalog-hero .self-install-banner').textContent())?.includes('npx dsh1024 store')) {
     throw new Error('rankings self install banner is missing the npx dsh1024 store command')
   }
   await assertSeo(rankings, 'desktop rankings', '/')
@@ -348,6 +348,7 @@ try {
     '.catalog-view-tabs a',
     '.category-filter button',
     '.segmented-control button',
+    '.self-install-banner .install-command .icon-button',
     '.package-row .split-install-main',
     '.package-row .split-install-toggle',
     '.package-row .row-link',
@@ -521,6 +522,7 @@ try {
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
     '.catalog-view-tabs a',
+    '.self-install-banner .install-command .icon-button',
     '.package-row .split-install-main',
     '.package-row .split-install-toggle',
     '.package-row .row-link',

@@ -27,13 +27,14 @@ export function SelfInstallBanner() {
     return () => controller.abort()
   }, [])
 
+  // Compact hero strip: a one-line invitation with both install commands and a
+  // small install-count badge; the hero stays the shared home of both views.
   return (
-    <section className="self-install-banner" aria-labelledby="self-install-heading">
+    <aside className="self-install-banner" aria-labelledby="self-install-heading">
       <div className="self-install-copy">
         <h2 id="self-install-heading">{t('selfInstallTitle')}</h2>
-        <p>{t('selfInstallSubtitle')}</p>
         <span className="self-install-count" title={t('installOperations')}>
-          <Download size={14} aria-hidden="true" />
+          <Download size={12} aria-hidden="true" />
           {stats ? formatNumber(stats.installCount ?? 0, language) : '--'}
         </span>
       </div>
@@ -47,6 +48,6 @@ export function SelfInstallBanner() {
           <InstallCommand command={SELF_OFFICIAL_COMMAND} />
         </div>
       </div>
-    </section>
+    </aside>
   )
 }
