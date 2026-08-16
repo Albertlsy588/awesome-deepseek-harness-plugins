@@ -3457,3 +3457,359 @@ main {
     font-size: 13px;
   }
 }
+
+/* Developer API docs and account pages share the detail-page utility header;
+   these sections only add the docs/table/key-management vocabulary. */
+.api-docs-page,
+.account-page {
+  padding-top: 26px;
+  padding-bottom: 64px;
+}
+
+.api-docs-header h1,
+.account-header h1 {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 30px;
+  letter-spacing: 0.01em;
+}
+
+.api-docs-header p,
+.account-header p {
+  max-width: 640px;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.api-docs-base code {
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.api-docs-section {
+  margin-top: 34px;
+}
+
+.api-docs-section h2 {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 19px;
+}
+
+.api-docs-section h3 {
+  margin: 22px 0 8px;
+  font-size: 14.5px;
+}
+
+.api-docs-section p {
+  max-width: 680px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+.api-endpoint code {
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--brand-dark);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.api-code {
+  overflow-x: auto;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #23241f;
+  color: #f3f0e6;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.api-docs-key-button {
+  margin-top: 4px;
+}
+
+.api-table-scroll {
+  overflow-x: auto;
+  margin: 0 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.api-table {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.api-table th,
+.api-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.api-table tbody tr:last-child th,
+.api-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.api-table th {
+  color: var(--subtle);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.api-table td {
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+.api-table code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--brand-dark);
+}
+
+.account-docs-link {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--brand-dark);
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.account-error {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--coral);
+  border-radius: 10px;
+  background: rgba(224, 90, 70, 0.08);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.account-loading {
+  margin-top: 30px;
+  color: var(--subtle);
+}
+
+.account-signin {
+  margin-top: 30px;
+  padding: 30px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.account-github-button img {
+  width: 16px;
+  height: 16px;
+  filter: invert(1);
+}
+
+.account-signin-note {
+  margin: 12px 0 0;
+  color: var(--subtle);
+  font-size: 12.5px;
+}
+
+.account-profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 30px;
+  padding: 18px 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.account-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+.account-identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-signed-in {
+  margin: 0;
+  color: var(--subtle);
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.account-login {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.account-login span {
+  margin-left: 7px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.account-keys {
+  margin-top: 26px;
+}
+
+.account-keys h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 19px;
+}
+
+.account-keys-intro {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.account-key-create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.account-key-create input {
+  flex: 1;
+  min-width: 200px;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.account-key-create input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.account-key-reveal {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  background: rgba(214, 167, 62, 0.1);
+}
+
+.account-key-reveal p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.account-key-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-key-value code {
+  overflow-x: auto;
+  flex: 1;
+  min-width: 220px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  user-select: all;
+}
+
+.account-keys-empty {
+  color: var(--subtle);
+  font-size: 13.5px;
+}
+
+.account-key-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-key-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.account-key-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-key-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.account-key-prefix {
+  margin: 3px 0 0;
+}
+
+.account-key-prefix code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.account-key-dates {
+  margin: 3px 0 0;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+@media (max-width: 680px) {
+  .account-profile,
+  .account-key-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

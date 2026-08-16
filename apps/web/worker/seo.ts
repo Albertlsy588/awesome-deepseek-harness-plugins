@@ -132,6 +132,44 @@ export function metadataForPath(
     }
   }
 
+  if (pathname === '/docs/api') {
+    const title = 'Developer API | DSH 1024Store'
+    const description = 'Search the DeepSeek Harness community plugin catalog over a public REST API with GitHub-login API keys and transparent rate limits.'
+    return {
+      title,
+      description,
+      canonical: absolute('/docs/api'),
+      robots: 'index,follow',
+      schema: {
+        '@context': 'https://schema.org',
+        '@type': 'WebPage',
+        url: absolute('/docs/api'),
+        name: title,
+        description,
+      },
+      status: 200,
+    }
+  }
+
+  if (pathname === '/account') {
+    const title = 'Account & API keys | DSH 1024Store'
+    const description = 'Manage your DSH 1024Store account and developer API keys.'
+    return {
+      title,
+      description,
+      canonical: absolute('/account'),
+      robots: 'noindex,follow',
+      schema: {
+        '@context': 'https://schema.org',
+        '@type': 'WebPage',
+        url: absolute('/account'),
+        name: title,
+        description,
+      },
+      status: 200,
+    }
+  }
+
   const match = pathname.match(/^\/plugins\/([^/]+)\/([^/]+)\/?$/)
   if (match) {
     const owner = safeDecode(match[1] ?? '')
@@ -186,6 +224,7 @@ export function buildSitemap(catalog: SeoCatalog): string {
   const pages = [
     { path: '/', lastModified: catalog.updated },
     { path: '/plugins', lastModified: catalog.updated },
+    { path: '/docs/api', lastModified: catalog.updated },
     ...catalog.plugins.map((plugin) => ({
       path: `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`,
       lastModified: plugin.added,

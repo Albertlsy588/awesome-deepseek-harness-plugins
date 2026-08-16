@@ -1,6 +1,7 @@
 import {
   AlertCircle,
   ArrowUpRight,
+  Code,
   ListFilter,
   PackagePlus,
   Search,
@@ -290,6 +291,10 @@ export function CatalogPage({ view }: CatalogPageProps) {
         <div className="page-container catalog-hero-inner">
           <header className="hero-stage">
             <div className="hero-actions" aria-label={t('siteActions')}>
+              <Link className="hero-action-link" to="/docs/api" aria-label={t('apiDocsTitle')}>
+                <Code size={16} aria-hidden="true" />
+                <span>{t('navApi')}</span>
+              </Link>
               <a
                 className="hero-action-link github-link"
                 href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"

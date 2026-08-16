@@ -1,13 +1,23 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
-import { buildCatalog, findPlugin, parseCatalogQuery, repositoryName } from './lib/catalog'
+import { registerAuthRoutes } from './auth-api'
+import { ANONYMOUS_QUOTA, AUTHENTICATED_QUOTA, consumeQuota } from './lib/api-quota'
+import { authenticateApiKey, sha256Hex, timingSafeEqualStrings } from './lib/auth'
+import {
+  buildCatalog,
+  filterCatalogPackages,
+  findPlugin,
+  parseCatalogQuery,
+  repositoryName,
+} from './lib/catalog'
 import { syncCuratedEntries, type CuratedCatalogEntry } from './lib/catalog-db'
 import { loadCatalogSnapshot, refreshCatalogSnapshot } from './lib/catalog-store'
 import { categoryDescriptor, isKnownCategoryId, projectCategories } from './lib/categories'
 import { fetchPackageDetail } from './lib/github'
 import {
   emptyInstallMetrics,
+  hashInstallationClient,
   InstallationRateLimitError,
   loadPluginInstallStats,
   parseInstallationEvent,
@@ -30,11 +40,15 @@ interface AppDependencies {
   curatedSyncer: typeof syncCuratedEntries
   snapshotRefresher: (env: Env, fetcher?: typeof fetch, capturedAt?: number) => Promise<CatalogSnapshotResult>
   clock: () => number
+  oauthFetcher: typeof fetch
 }
 
 const CACHE_HEADER = 'public, max-age=30, s-maxage=300, stale-while-revalidate=3600'
 const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
 const REGISTRY_CACHE_HEADER = 'public, max-age=300, s-maxage=3600'
+const DEFAULT_SEARCH_LIMIT = 20
+const MAX_SEARCH_LIMIT = 100
+const MAX_SEARCH_PAGE = 1_000_000
 const MAX_INSTALL_EVENT_BYTES = 8 * 1024
 const MAX_CATALOG_SYNC_BYTES = 2 * 1024 * 1024
 const SLUG_PART = /^[A-Za-z0-9_.-]+$/
@@ -76,17 +90,11 @@ function executionContext(context: { executionCtx: BackgroundContext }): Backgro
   }
 }
 
-/** Constant-time string comparison so the sync token cannot be probed byte by byte. */
-function timingSafeEqualStrings(expected: string, presented: string): boolean {
-  const encoder = new TextEncoder()
-  const expectedBytes = encoder.encode(expected)
-  const presentedBytes = encoder.encode(presented)
-  let difference = expectedBytes.length ^ presentedBytes.length
-  const length = Math.max(expectedBytes.length, presentedBytes.length)
-  for (let index = 0; index < length; index += 1) {
-    difference |= (expectedBytes[index] ?? 0) ^ (presentedBytes[index] ?? 0)
-  }
-  return difference === 0
+function boundedPositiveInt(value: string | undefined, fallback: number, maximum: number): number {
+  if (!value || !/^\d+$/.test(value)) return fallback
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return fallback
+  return Math.min(parsed, maximum)
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -180,6 +188,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     curatedSyncer: syncCuratedEntries,
     snapshotRefresher: refreshCatalogSnapshot,
     clock: Date.now,
+    oauthFetcher: (input, init) => fetch(input, init),
     ...overrides,
   }
   const app = new Hono<{ Bindings: Env }>()
@@ -274,6 +283,93 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     context.header('Cache-Control', CACHE_HEADER)
     context.header('X-Catalog-Source', snapshot.source)
     return context.json(result)
+  })
+
+  app.get('/api/v1/plugins/search', async (context) => {
+    context.header('Cache-Control', 'no-store')
+    if (!context.env?.CATALOG_DB) {
+      return context.json({ error: 'Search is temporarily unavailable.', code: 'SERVICE_UNAVAILABLE' }, 503)
+    }
+
+    const q = (context.req.query('q') ?? '').trim().slice(0, 120)
+    if (!q) {
+      return context.json({ error: 'Missing required query parameter "q".', code: 'MISSING_QUERY' }, 400)
+    }
+    const category = (context.req.query('category') ?? '').trim().slice(0, 40)
+    if (category && !isKnownCategoryId(category)) {
+      return context.json({ error: `Unknown category "${category}".`, code: 'INVALID_CATEGORY' }, 400)
+    }
+    const requestedSort = context.req.query('sortBy') ?? ''
+    const sort = parseCatalogQuery({ sort: requestedSort === 'recent' ? 'newest' : requestedSort }).sort
+    const page = boundedPositiveInt(context.req.query('page'), 1, MAX_SEARCH_PAGE)
+    const limit = boundedPositiveInt(context.req.query('limit'), DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT)
+
+    const authorization = context.req.header('Authorization') ?? ''
+    let limits = ANONYMOUS_QUOTA
+    let counterKey: string
+    if (authorization) {
+      const presented = authorization.startsWith('Bearer ') ? authorization.slice('Bearer '.length).trim() : ''
+      const keyAuth = presented
+        ? await authenticateApiKey(context.env.CATALOG_DB, presented, dependencies.clock())
+        : null
+      if (!keyAuth) {
+        return context.json({ error: 'Invalid API key.', code: 'INVALID_API_KEY' }, 401)
+      }
+      limits = AUTHENTICATED_QUOTA
+      // Keyed by account, not key id: rotating or multiplying keys must not
+      // mint fresh quota windows.
+      counterKey = `user:${keyAuth.userId}`
+    } else {
+      // The raw client IP never reaches D1: it is keyed through the same HMAC
+      // secret the install telemetry uses (plain SHA-256 as a fallback when
+      // the secret is not configured, e.g. bare local dev).
+      const ip = context.req.header('CF-Connecting-IP')?.trim() || 'unknown'
+      const secret = context.env?.INSTALL_CLIENT_HASH_SECRET?.trim()
+      counterKey = `ip:${secret ? await hashInstallationClient(secret, ip) : await sha256Hex(ip)}`
+    }
+
+    const decision = await consumeQuota(context.env.CATALOG_DB, counterKey, limits, dependencies.clock())
+    context.header('X-RateLimit-Daily-Limit', String(decision.dailyLimit))
+    context.header('X-RateLimit-Daily-Remaining', String(decision.dailyRemaining))
+    if (!decision.allowed) {
+      context.header('Retry-After', String(decision.retryAfterSeconds ?? 60))
+      if (decision.reason === 'day') {
+        return context.json({ error: 'Daily API quota exceeded.', code: 'DAILY_QUOTA_EXCEEDED' }, 429)
+      }
+      return context.json({ error: 'Too many requests.', code: 'RATE_LIMITED' }, 429)
+    }
+
+    const snapshotResult = await dependencies.catalogLoader(
+      context.env,
+      executionContext(context),
+    )
+    const filtered = filterCatalogPackages(snapshotResult.snapshot.plugins, { q, category, sort })
+    const total = filtered.length
+    const start = (page - 1) * limit
+    const results = filtered.slice(start, start + limit).map((plugin) => ({
+      id: `${plugin.owner}/${plugin.repository}`,
+      name: plugin.name,
+      owner: plugin.owner,
+      url: plugin.url,
+      category: plugin.category,
+      description: plugin.description,
+      stars: plugin.stars,
+      installCount: plugin.installCount ?? 0,
+      growth24h: plugin.growth24h,
+      added: plugin.added,
+      pushedAt: plugin.pushedAt,
+      install: plugin.install,
+    }))
+    context.header('X-Catalog-Source', snapshotResult.source)
+    return context.json({
+      query: q,
+      page,
+      limit,
+      sortBy: sort,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      results,
+    })
   })
 
   app.get('/api/v1/plugins/:owner/:name', async (context) => {
@@ -470,6 +566,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     }
   })
 
+  registerAuthRoutes(app, {
+    clock: dependencies.clock,
+    oauthFetcher: dependencies.oauthFetcher,
+  })
+
   app.notFound((context) => context.json({ error: 'API route not found.' }, 404))
   app.onError((error, context) => {
     console.error(
@@ -479,7 +580,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
         error: error.message,
       }),
     )
-    return context.json({ error: 'The package catalog is temporarily unavailable.' }, 500)
+    return context.json({ error: 'The package catalog is temporarily unavailable.', code: 'INTERNAL_ERROR' }, 500)
   })
 
   return app

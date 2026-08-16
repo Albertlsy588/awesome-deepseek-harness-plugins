@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -134,18 +135,96 @@ function pluginLine(plugin, locale) {
     : `- [${plugin.name}](${plugin.url})`
 }
 
+// The homepage screenshot lives on a dedicated orphan `assets` branch that CI
+// force-pushes to a single commit, so republishing it never grows the repository.
+// GitHub proxies README images through camo and keys that cache on the URL, so a
+// stable URL would leave readers looking at a stale screenshot. The cache-buster is
+// derived from the catalog contents rather than the clock: the image URL changes
+// exactly when the plugin list changes, which keeps the screenshot in step with the
+// list without producing a README commit on every no-op sync.
+export const screenshotBranch = 'assets'
+export const screenshotPath = 'homepage.png'
+const screenshotRepository = 'imsai-sh/awesome-deepseek-harness-plugins'
+
+export function catalogRevision(registry) {
+  const material = registry.plugins.map(plugin => `${plugin.id}\u0000${plugin.category}`).join('\n')
+  return createHash('sha256').update(`${registry.updated}\n${material}`).digest('hex').slice(0, 12)
+}
+
+function heroImage(registry, locale) {
+  const alt = locale === 'zh' ? 'DSH 1024Store 插件市场首页' : 'The DSH 1024Store plugin marketplace homepage'
+  const source = `https://raw.githubusercontent.com/${screenshotRepository}/${screenshotBranch}/${screenshotPath}?v=${catalogRevision(registry)}`
+  return `[![${alt}](${source})](https://deepseek1024.com/)`
+}
+
+// GitHub stops rendering Markdown at 500 KiB and gives no truncation notice: every
+// entry past that byte offset simply does not exist for readers. Measured against the
+// live catalog on 2026-08-16, an uncapped projection was 594 KB and silently dropped
+// its last 479 plugins. Curated categories are always listed in full; the
+// auto-discovered `unclassified` bucket is the only one large enough to blow the
+// budget, so it is the only one capped. Its natural (name) ordering is reused as-is —
+// `added` carries no usable ordering signal here, since the topic-scan backfill gave
+// most of the bucket the same date.
+const githubRenderLimit = 500 * 1024
+const unclassifiedListLimit = 500
+
+function withVisiblePlugins(group) {
+  const capped = group.id === 'unclassified' && group.plugins.length > unclassifiedListLimit
+  return {
+    ...group,
+    total: group.plugins.length,
+    visible: capped ? group.plugins.slice(0, unclassifiedListLimit) : group.plugins,
+    capped,
+  }
+}
+
+export function assertRenderable(files) {
+  for (const [relative, content] of Object.entries(files)) {
+    const bytes = Buffer.byteLength(content, 'utf8')
+    assert(
+      bytes <= githubRenderLimit,
+      `${relative} is ${bytes} bytes; GitHub renders at most ${githubRenderLimit} and silently drops everything past that offset. Lower unclassifiedListLimit in scripts/build-readme.mjs.`,
+    )
+  }
+}
+
+function escapeHtml(value) {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 function categoryIndex(groups, locale) {
   return groups.map(group => `- [${group.label[locale]}](#${group.id}) (${group.plugins.length})`).join('\n')
 }
 
+// Each category is a collapsed <details> block: the full list is ~3k entries, so an
+// expanded README buries everything above it. GitHub only renders Markdown inside
+// <details> when the element is unindented and the <summary> is followed by a blank
+// line, and category labels contain "&", so the summary text must be HTML-escaped.
+// The <a id> anchor stays outside the block so the category index still jumps to a
+// collapsed group.
 function categorySections(groups, locale) {
-  return groups.map(group => [
-    `<a id="${group.id}"></a>`,
-    '',
-    `## ${group.label[locale]}`,
-    '',
-    group.plugins.map(plugin => pluginLine(plugin, locale)).join('\n'),
-  ].join('\n')).join('\n\n')
+  return groups.map(withVisiblePlugins).map(group => {
+    const count = group.capped
+      ? (locale === 'zh' ? `显示 ${group.visible.length} / 共 ${group.total} 个` : `showing ${group.visible.length} of ${group.total}`)
+      : (locale === 'zh' ? `${group.total} 个插件` : `${group.total} plugins`)
+    const lines = group.visible.map(plugin => pluginLine(plugin, locale))
+    if (group.capped) {
+      const rest = group.total - group.visible.length
+      lines.push(locale === 'zh'
+        ? `- *其余 ${rest} 个待分类插件未在此列出，可在[在线网站](https://deepseek1024.com/)搜索或浏览完整目录。*`
+        : `- *The remaining ${rest} unclassified plugins are not listed here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*`)
+    }
+    return [
+      `<a id="${group.id}"></a>`,
+      '',
+      '<details>',
+      `<summary><strong>${escapeHtml(group.label[locale])}</strong> · ${count}</summary>`,
+      '',
+      lines.join('\n'),
+      '',
+      '</details>',
+    ].join('\n')
+  }).join('\n\n')
 }
 
 function chineseReadme(registry, groups) {
@@ -156,13 +235,60 @@ ${generatedNotice.zh}
 
 面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（\`dsh\`）生态的社区插件目录，共收录 **${total}** 个插件（含 PR 收录与 GitHub \`dsh-plugin\` topic 自动发现），目录数据更新于 ${registry.updated}。
 
-这里主要展示可安装的插件。每个插件由各自作者独立开发和维护，收录仅表示其通过了目录的基础格式校验。
+**但这个仓库不只是一份 awesome list。** 维护这份目录所需要的全部基建都在这里开源：一个在线插件市场、一个把市场装进 \`dsh\` 本体的插件、一条定时自动收集并做格式校验的目录流水线，以及一套免费的公开查询 API。代码采用 MIT 协议，fork 之后就能部署成你自己的插件市场。
 
-[在线网站](https://deepseek1024.com/) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md)
+${heroImage(registry, 'zh')}
+
+[在线网站](https://deepseek1024.com/) · [API 文档](docs/api.md) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md)
 
 [![GitHub Stars](https://img.shields.io/github/stars/imsai-sh/awesome-deepseek-harness-plugins?style=social)](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)
 
-> 如果这个目录帮你找到好用的插件，欢迎点个 [⭐ Star](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)，让更多 DeepSeek Harness 用户看到它。
+## 项目亮点
+
+### 在线插件市场（开源 · 可一键自部署）
+
+[deepseek1024.com](https://deepseek1024.com/) 提供搜索、分类筛选、安装排行榜、插件详情与 GitHub 活跃度数据。整站跑在 Cloudflare Workers + D1 + KV 上，源码在 [\`apps/web\`](apps/web)。
+
+想要一个完全属于自己的插件市场：fork 本仓库，把 \`apps/web/wrangler.jsonc\` 里的 \`routes\` 换成你自己的域名，创建 D1 数据库与 KV 命名空间，配齐 \`secrets.required\` 列出的 Worker secret，再把 \`CLOUDFLARE_API_TOKEN\` 与 \`CLOUDFLARE_ACCOUNT_ID\` 存为仓库 secret。配置完成后，每次 push 到 \`main\` 都由 GitHub Actions 自动执行 D1 迁移并部署 Worker，不需要自己写一行部署脚本。完整步骤见下文[本地运行与部署](#本地运行与部署)。
+
+### 把插件市场装进 dsh 本体
+
+不想切浏览器，就把市场本身作为插件装进 DeepSeek Harness：
+
+\`\`\`bash
+dsh plugin --profile web add dsh-1024store
+\`\`\`
+
+重启后「设置」里会出现独立的 **1024 Store** 入口，「设置 → 插件」下也会多出一个 **1024 Store（数量）** 标签页，可以直接搜索目录、按分类筛选、识别已安装状态、安装与卸载，并显示操作进度。安装器只接受目录中已校验过的仓库地址，并自行推导 \`github:owner/repository\`，不会执行目录返回的展示命令。源码见 [\`packages/dsh-1024store\`](packages/dsh-1024store)。
+
+### 定时自动收集 + 格式校验
+
+这是本目录与多数插件市场最大的区别：**目录不靠人肉维护，收录前一定过校验。**
+
+- **定时收集**：Cloudflare Cron 每 30 分钟做一次增量扫描，用 \`created:\` 与 \`pushed:\` 两路搜索抓取带 \`dsh-plugin\` topic 的 GitHub 仓库；每周日再做一次全量对账，长期不活跃的仓库不会被漏收，掉了 topic 也只在一次成功的全量扫描后才下架。
+- **格式校验**：每个候选仓库都要通过静态校验——读取默认分支的 Git tree，检查 \`package.json\`、\`dsh.bundle.patch\` 字段，以及 patch 文件在同一棵 tree 中确实存在。**全程只读文件，绝不安装依赖、绝不执行仓库代码。** 校验不通过就不进目录。
+- **自动同步**：PR 合并后由 CI 自动同步目录到网站数据库并刷新本 README，贡献者和维护者都不需要手工改任何生成文件。
+
+调度节奏、GitHub API 限额与失败行为见 [插件发现运维文档](docs/plugin-discovery.md)。
+
+### 免费查询 API
+
+目录数据免费开放，匿名即可调用：
+
+\`\`\`bash
+curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'
+\`\`\`
+
+匿名调用每天 50 次、每分钟 10 次；用 GitHub 账号登录网站创建 API Key 后提升到每天 500 次、每分钟 30 次。另有 \`/api/v1/registry\` 返回全量目录快照——本 README 就是由它生成的。完整端点、参数与错误码见 [API 参考](docs/api.md)。
+
+## 参与进来
+
+这个项目由社区维护，下面每一种参与都真的有用：
+
+- **点个 Star** — [Star 本仓库](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)是成本最低、帮助最大的支持，能让更多 DeepSeek Harness 用户找到这里。
+- **提 Issue** — 插件信息有误、分类不合理、网站或 API 有问题、想要新功能，都欢迎[提 Issue](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/issues/new)。
+- **发 PR** — [提交你自己的插件](CONTRIBUTING.md)，或改进网站、CLI、市场插件与目录流水线，欢迎直接发 [Pull Request](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/pulls)。
+- **Fork 自建** — 想要自己的插件市场，[Fork](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/fork) 之后按上面的步骤配置即可，MIT 协议，随便改。
 
 ## 安装插件并计入统计
 
@@ -192,20 +318,17 @@ npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plug
 使用 $submit-dsh-plugin 检查并提交我的 DeepSeek Harness 插件。
 \`\`\`
 
-该 Skill 会检查插件仓库、生成唯一允许提交的目录 JSON、验证变更范围，并在获得授权后创建 PR。静态审查通过的非草稿 PR 会自动合并；合并后 CI 自动同步目录到网站数据库并刷新本 README，贡献者和维护者都不需要手工更新任何生成文件。查看 [Skill 源码](skills/submit-dsh-plugin/SKILL.md)。
+该 Skill 会检查插件仓库、生成唯一允许提交的目录 JSON、验证变更范围，并在获得授权后创建 PR。新增条目的非草稿 PR 通过静态审查后会自动合并；修改或删除既有条目的 PR 同样会跑静态审查，但不会自动合并，需要维护者人工审核后手动合并。合并后 CI 自动同步目录到网站数据库并刷新本 README，贡献者和维护者都不需要手工更新任何生成文件。查看 [Skill 源码](skills/submit-dsh-plugin/SKILL.md)。
 
 ### 手动提交
 
-欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置，通过后自动合并，并由 CI 自动同步到网站与本 README。
+欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置，通过后自动合并，并由 CI 自动同步到网站与本 README。需要修正或下架既有条目时也可以发 PR，静态审查照常运行，但这类 PR 由维护者人工审核后合并。
 
 安装命令：\`npx dsh1024 add <owner>/<repository>\`。
 
 ## 项目定位
 
-本项目与 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 都服务于 DeepSeek Harness 插件生态。在继承其目录数据与社区整理思路的基础上，本项目重点补充两类能力：
-
-- **自动发现与校验**：定期扫描 GitHub 上带有 \`dsh-plugin\` topic 的仓库，校验 \`package.json\`、\`dsh.bundle\` 及插件补丁路径，并以结构化 JSON 提交、自动审查和自动同步维护目录。
-- **在线插件市场**：提供功能较完整的 [deepseek1024.com](https://deepseek1024.com/) 网站，支持搜索、分类筛选、排行榜、插件详情及 GitHub 活跃度数据浏览。
+本项目与 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 都服务于 DeepSeek Harness 插件生态。在继承其目录数据与社区整理思路的基础上，本项目把「一份人工维护的列表」扩展成一套开源、可自部署的插件市场基建：自动发现与静态校验的目录流水线、在线市场网站、dsh 内置市场插件与免费查询 API，具体见上文[项目亮点](#项目亮点)。
 
 ## 项目结构
 
@@ -258,6 +381,8 @@ npx wrangler deploy --secrets-file .dev.vars
 
 ## 插件分类
 
+分组默认折叠，点开即可展开。策展分类完整列出；自动发现的「待分类」条目太多，只列出其中一部分，完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。
+
 ${categoryIndex(groups, 'zh')}
 
 ${categorySections(groups, 'zh')}
@@ -286,7 +411,27 @@ ${generatedNotice.en}
 
 The **DSH 1024Store** community catalog for [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) plugins: **${total}** plugins, updated ${registry.updated}.
 
-[Live website](https://deepseek1024.com/) · [中文目录](../README.md) · [Submit a plugin](../CONTRIBUTING.md)
+**This repository is more than an awesome list.** Everything needed to run the catalog is open source here: a hosted plugin marketplace, a plugin that puts that marketplace inside \`dsh\` itself, a scheduled discovery pipeline that validates every entry, and a free public query API. The code is MIT licensed, so you can fork it and run your own marketplace.
+
+${heroImage(registry, 'en')}
+
+[Live website](https://deepseek1024.com/) · [API reference](../docs/api.md) · [中文目录](../README.md) · [Submit a plugin](../CONTRIBUTING.md)
+
+[![GitHub Stars](https://img.shields.io/github/stars/imsai-sh/awesome-deepseek-harness-plugins?style=social)](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)
+
+## What this repository ships
+
+- **Hosted plugin marketplace, one fork away.** [deepseek1024.com](https://deepseek1024.com/) offers search, category filters, install rankings, plugin detail pages, and GitHub activity data on Cloudflare Workers + D1 + KV ([\`apps/web\`](../apps/web)). To self-host: fork the repository, point \`routes\` in \`apps/web/wrangler.jsonc\` at your own domain, create the D1 database and KV namespace, set the Worker secrets listed under \`secrets.required\`, and add \`CLOUDFLARE_API_TOKEN\` and \`CLOUDFLARE_ACCOUNT_ID\` as repository secrets. From then on every push to \`main\` runs the D1 migrations and deploys the Worker for you.
+- **The marketplace as a \`dsh\` plugin.** \`dsh plugin --profile web add dsh-1024store\` adds a **1024 Store** entry to Settings and a **1024 Store (count)** tab under Settings → Plugins, with search, filters, installed-state detection, install, and uninstall ([\`packages/dsh-1024store\`](../packages/dsh-1024store)).
+- **Scheduled collection with format validation.** Cron scans GitHub for \`dsh-plugin\` topic repositories every 30 minutes and reconciles the full set weekly. Every candidate is statically validated — the default-branch Git tree, \`package.json\`, \`dsh.bundle.patch\`, and the patch blob must exist — by reading files only, never installing dependencies or executing repository code ([\`docs/plugin-discovery.md\`](../docs/plugin-discovery.md)).
+- **Free query API.** \`curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'\` works anonymously at 50 requests/day (10/minute); a GitHub-login API key raises that to 500/day (30/minute). \`/api/v1/registry\` returns the full catalog snapshot that generates this file ([\`docs/api.md\`](../docs/api.md)).
+
+## Get involved
+
+- **Star** the [repository](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers) so more DeepSeek Harness users find the catalog.
+- **Open an [issue](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/issues/new)** for wrong plugin metadata, a bad category, or a website/API bug.
+- **Send a [pull request](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/pulls)** — [submit your plugin](../CONTRIBUTING.md) or improve the website, CLI, marketplace plugin, or catalog pipeline.
+- **[Fork](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/fork)** it and run your own marketplace — see the self-hosting steps above.
 
 Install any plugin and count it on the leaderboard with:
 
@@ -294,9 +439,11 @@ Install any plugin and count it on the leaderboard with:
 npx dsh1024 add <owner>/<repository>
 \`\`\`
 
-Merged submissions are synced to the website database and into this file automatically; no manual list editing is involved.
+A pull request that adds one new entry is merged automatically once static review passes; one that updates or removes an existing entry passes the same review but waits for maintainer approval. Merged submissions are synced to the website database and into this file automatically; no manual list editing is involved.
 
 ## Categories
+
+Groups are collapsed by default. Curated categories are listed in full; the auto-discovered Unclassified bucket lists only a subset — search the [live website](https://deepseek1024.com/) for the complete catalog.
 
 ${categoryIndex(groups, 'en')}
 
@@ -306,10 +453,12 @@ ${categorySections(groups, 'en')}
 
 export async function buildReadmeFiles(registry, categories) {
   const groups = groupPlugins(registry, categories)
-  return {
+  const files = {
     'README.md': chineseReadme(registry, groups),
     'catalog/README.md': englishReadme(registry, groups),
   }
+  assertRenderable(files)
+  return files
 }
 
 export function parseArguments(argv) {

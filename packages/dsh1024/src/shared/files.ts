@@ -69,14 +69,21 @@ export async function withFileLock<T>(
   const lockDirectory = `${path}.lock`
   const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS
   let ownerPath: string | undefined
+  let lastCreationError: unknown
 
   while (true) {
     try {
       await mkdir(lockDirectory, { mode: 0o700 })
     } catch (error) {
-      if (errno(error) !== 'EEXIST') throw error
-      if (!await removeStaleLock(lockDirectory)) {
-        if (Date.now() >= deadline) throw new Error(`timed out waiting for file lock: ${path}`)
+      if (!isTransientCreationError(error)) throw error
+      lastCreationError = error
+      // EEXIST means the directory is genuinely there, so it may be a stale lock
+      // worth reaping. The Windows race codes mean the create itself was refused
+      // and there is nothing to inspect yet — just back off and try again.
+      if (errno(error) !== 'EEXIST' || !await removeStaleLock(lockDirectory)) {
+        if (Date.now() >= deadline) {
+          throw new Error(`timed out waiting for file lock: ${path} (last ${errno(lastCreationError)})`)
+        }
         await delay(10 + Math.floor(Math.random() * 20))
       }
       continue
@@ -118,7 +125,7 @@ async function installOwner(lockDirectory: string, ownerPath: string, options: F
     await handle?.close().catch(() => {})
     await unlinkIfPresent(temporaryOwner).catch(() => {})
     await releaseOwnedLock(lockDirectory, ownerPath).catch(() => {})
-    if (errno(error) === 'ENOENT') return false
+    if (errno(error) === 'ENOENT' || isLockRaceError(error)) return false
     throw error
   }
 
@@ -127,7 +134,8 @@ async function installOwner(lockDirectory: string, ownerPath: string, options: F
       .filter((entry) => entry.isFile() && entry.name.endsWith('.owner'))
     if (owners.length === 1 && join(lockDirectory, owners[0].name) === ownerPath) return true
   } catch (error) {
-    if (errno(error) !== 'ENOENT') throw error
+    // Could not confirm sole ownership; fall through and yield the lock.
+    if (errno(error) !== 'ENOENT' && !isLockRaceError(error)) throw error
   }
 
   await releaseOwnedLock(lockDirectory, ownerPath)
@@ -140,6 +148,7 @@ async function removeStaleLock(lockDirectory: string): Promise<boolean> {
     entries = await readdir(lockDirectory, { withFileTypes: true })
   } catch (error) {
     if (errno(error) === 'ENOENT') return true
+    if (isLockRaceError(error)) return false
     throw error
   }
 
@@ -166,6 +175,7 @@ async function removeStaleLock(lockDirectory: string): Promise<boolean> {
       await unlink(ownerPath)
     } catch (error) {
       if (errno(error) === 'ENOENT') return false
+      if (isLockRaceError(error)) return false
       throw error
     }
   }
@@ -180,13 +190,26 @@ async function removeStaleLock(lockDirectory: string): Promise<boolean> {
   }
 }
 
-// Windows can transiently refuse to remove a directory whose entries were just
-// unlinked (open handles, antivirus scans). Treat those refusals like "lock is
-// still busy" instead of crashing; acquisition already handles leftover empty
-// lock directories via the stale-lock path.
+// Windows reports a lock path that is racing another process as EPERM/EBUSY
+// from whichever syscall touched it — mkdir, readdir, stat, unlink, rmdir or
+// rename alike — where POSIX would report ENOENT or EEXIST. The usual cause is
+// a directory still in a pending-delete state because its previous owner just
+// released it; open handles and antivirus scans do the same. Every operation on
+// a lock therefore has to read these as "busy, look again" rather than as a
+// hard failure. A genuine permission problem still surfaces: acquisition
+// exhausts its wait and the timeout message carries the underlying code.
+function isLockRaceError(error: unknown): boolean {
+  const code = errno(error)
+  return code === 'EPERM' || code === 'EBUSY'
+}
+
 function isTransientRemovalError(error: unknown): boolean {
   const code = errno(error)
-  return code === 'ENOTEMPTY' || code === 'EEXIST' || code === 'EPERM' || code === 'EBUSY'
+  return code === 'ENOTEMPTY' || code === 'EEXIST' || isLockRaceError(error)
+}
+
+function isTransientCreationError(error: unknown): boolean {
+  return errno(error) === 'EEXIST' || isLockRaceError(error)
 }
 
 async function ownerIsStale(ownerPath: string): Promise<boolean | null> {
@@ -199,6 +222,9 @@ async function ownerIsStale(ownerPath: string): Promise<boolean | null> {
     ])
   } catch (error) {
     if (errno(error) === 'ENOENT') return null
+    // Staleness is indeterminable while the path is contended; treat the lock
+    // as live so nobody reaps an owner that may still be running.
+    if (isLockRaceError(error)) return null
     throw error
   }
 
@@ -220,7 +246,10 @@ async function releaseOwnedLock(lockDirectory: string, ownerPath: string): Promi
     await unlink(ownerPath)
   } catch (error) {
     if (errno(error) === 'ENOENT') return
-    throw error
+    // This runs from withFileLock's finally, so throwing would replace the
+    // caller's own result with a teardown error. Fall through to the rmdir
+    // retries; anything left behind is reaped by the stale-lock path.
+    if (!isLockRaceError(error)) throw error
   }
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {

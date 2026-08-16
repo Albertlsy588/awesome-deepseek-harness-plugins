@@ -4,8 +4,28 @@
   "main": "./worker/index.ts",
   "compatibility_date": "2026-08-14",
   "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "deepseek1024.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.deepseek1024.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "api.deepseek1024.com",
+      "custom_domain": true
+    }
+  ],
   "secrets": {
-    "required": ["GITHUB_TOKEN", "INSTALL_CLIENT_HASH_SECRET", "CATALOG_SYNC_TOKEN"]
+    "required": [
+      "GITHUB_TOKEN",
+      "INSTALL_CLIENT_HASH_SECRET",
+      "CATALOG_SYNC_TOKEN",
+      "GITHUB_OAUTH_CLIENT_ID",
+      "GITHUB_OAUTH_CLIENT_SECRET"
+    ]
   },
   "kv_namespaces": [
     {

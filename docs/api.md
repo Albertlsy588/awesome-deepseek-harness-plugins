@@ -1,6 +1,14 @@
 # API reference (v1)
 
-All public endpoints live under `https://deepseek1024.com/api/v1/`. The Worker is the only
+The public developer API lives on its own host: `https://api.deepseek1024.com/v1/…`
+(currently only the search endpoint and `/v1/health`; everything else on that host is 404,
+and the bare host redirects to the website docs page). The same Worker serves both hosts —
+`api.deepseek1024.com` paths are rewritten onto the internal `/api/v1/…` routes below, so
+handler behaviour, quotas, and error codes are identical. `api.deepseek1024.com` is
+registered as a second custom domain of the `dsh-store` Worker via `wrangler.jsonc`
+`routes` and is provisioned automatically on deploy.
+
+All internal endpoints live under `https://deepseek1024.com/api/v1/`. The Worker is the only
 process that reads or writes the D1 catalog; every response is served from a 15-minute KV
 snapshot of D1, and stale KV is the only degradation mode. Legacy paths (`/api/plugin`,
 `/api/plugin/:owner/:name`, `/plugins.json`, `/api/install-stats/:owner/:name`,
@@ -13,6 +21,66 @@ Query parameters: `q` (search), `category`, `sort`.
 
 Returns the catalog listing used by the website: `packages`, `rankings`, `categories`, and
 `meta`. The response structure matches the previous catalog payload; only the path changed.
+
+## GET /api/v1/plugins/search
+
+Rate-limited keyword search over the catalog snapshot, mirrored on the website at
+[`/docs/api`](https://deepseek1024.com/docs/api). The canonical public URL is
+`https://api.deepseek1024.com/v1/plugins/search`; the main-domain path remains as the
+internal alias. `q` is required; matches package name, owner, repository, category, and
+both description languages.
+
+Query parameters: `q` (required, ≤120 chars), `page` (default 1), `limit` (default 20, max
+100), `sortBy` (`stars` default, `recent` as an alias of `newest`, or any catalog sort —
+the `growth*` sorts additionally exclude plugins without enough recorded star history),
+`category` (must be a known category id, otherwise `400 INVALID_CATEGORY`).
+
+Authentication is optional: anonymous callers get 50 requests/day and 10/minute (keyed by
+HMAC-hashed client IP; the raw IP is never stored), while requests carrying
+`Authorization: Bearer dsh_live_…` from a GitHub-login account get 500/day and 30/minute.
+Authenticated quotas are keyed to the **account**, not the individual key, so creating or
+rotating keys does not multiply or reset the window.
+Every response carries `X-RateLimit-Daily-Limit` / `X-RateLimit-Daily-Remaining`; `429`
+responses add `Retry-After`. Unlike the other read endpoints the search response is
+`Cache-Control: no-store`.
+
+Error codes (JSON `{"error": "…", "code": "…"}`): `MISSING_QUERY` (400),
+`INVALID_CATEGORY` (400), `INVALID_API_KEY` (401), `RATE_LIMITED` (429, minute window —
+does not consume daily quota), `DAILY_QUOTA_EXCEEDED` (429), `SERVICE_UNAVAILABLE` (503).
+
+Response: `{"query", "page", "limit", "sortBy", "total", "totalPages", "results": [...]}`
+where each result carries the registry projection fields (`id`, `name`, `owner`, `url`,
+`category`, `description`, `install`, `added`, `stars`) plus `installCount`, `growth24h`,
+and `pushedAt`.
+
+## Account & API-key endpoints
+
+GitHub OAuth is the only sign-in method; the Worker needs the `GITHUB_OAUTH_CLIENT_ID` and
+`GITHUB_OAUTH_CLIENT_SECRET` secrets (endpoints answer `503` while they are unset at
+runtime). **Deploy prerequisite:** both are listed in `wrangler.jsonc` `secrets.required`,
+and wrangler 4 refuses to deploy a Worker whose secret store is missing a required secret —
+run `wrangler secret put GITHUB_OAUTH_CLIENT_ID` / `wrangler secret put
+GITHUB_OAUTH_CLIENT_SECRET` once before the first deploy of this feature. Sessions
+are 30-day `dsh_session` cookies (HttpOnly, Secure, SameSite=Lax) whose SHA-256 hash lives
+in D1; API keys are shown once at creation and stored only as hashes.
+
+- `GET /api/v1/auth/github/login?returnTo=/account` — redirects to GitHub authorize with a
+  state cookie; `returnTo` accepts same-site absolute paths only.
+- `GET /api/v1/auth/github/callback` — validates state, exchanges the code, upserts the
+  user by GitHub id, sets the session cookie, redirects to `returnTo` (or
+  `/account?login=error` on failure).
+- `GET /api/v1/auth/me` — `{"user": {"githubLogin", "githubName", "avatarUrl"}}` or
+  `{"user": null}`; always 200, `Cache-Control: no-store`.
+- `POST /api/v1/auth/logout` — deletes the session row and clears the cookie.
+- `GET /api/v1/api-keys` — lists the caller's active keys (id, name, `keyPrefix`,
+  timestamps; never the secret).
+- `POST /api/v1/api-keys` — body `{"name"?}`; returns the full key exactly once
+  (`dsh_live_` + 40 hex chars). At most 5 active keys per user
+  (`400 KEY_LIMIT_REACHED`).
+- `DELETE /api/v1/api-keys/:id` — revokes (soft-deletes) the key.
+
+Cookie-authenticated mutations reject mismatched `Origin` headers (`403`); expired
+sessions and stale rate counters are purged by the weekly cron.
 
 ## GET /api/v1/plugins/:owner/:name
 

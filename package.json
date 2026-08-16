@@ -24,7 +24,7 @@
     "dev": "npm run dev --workspace @dsh-1024store/web",
     "build": "npm run build --workspace @dsh-1024store/web && npm run build --workspace dsh1024",
     "typecheck": "npm run typecheck --workspace @dsh-1024store/web && npm run typecheck --workspace dsh1024",
-    "test": "npm run test:plugin-review && npm run test:plugin-merge && npm run test:submit-skill && npm run test:catalog-sync && npm run test:readme-build && npm run test:cli && npm run test --workspace @dsh-1024store/web",
+    "test": "npm run test:plugin-review && npm run test:plugin-merge && npm run test:submit-skill && npm run test:catalog-sync && npm run test:readme-build && npm run test:capture-homepage && npm run test:cli && npm run test --workspace @dsh-1024store/web",
     "market:build": "npm run build --workspace dsh1024",
     "market:test": "npm run test --workspace dsh1024",
     "test:visual": "npm run test:visual --workspace @dsh-1024store/web",
@@ -34,7 +34,8 @@
     "db:migrate:local": "npm run db:migrate:local --workspace @dsh-1024store/web",
     "db:migrate:remote": "npm run db:migrate:remote --workspace @dsh-1024store/web",
     "predeploy": "npm run build",
-    "deploy": "npm run deploy:worker --workspace @dsh-1024store/web"
+    "deploy": "npm run deploy:worker --workspace @dsh-1024store/web",
+    "test:capture-homepage": "node --test scripts/capture-homepage.test.mjs"
   },
   "engines": {
     "node": ">=22",

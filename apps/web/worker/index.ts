@@ -1,6 +1,8 @@
 import { createApp } from './app'
+import { cleanupExpiredAuthRows } from './lib/auth'
 import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
 import { runPluginDiscoveryTask } from './lib/plugin-discovery-task'
+import { isPublicApiHost, publicApiNotFound, rewritePublicApiUrl, wwwRedirect } from './public-api'
 import { metadataForPath, rewriteHtmlResponse, seoCatalog } from './seo'
 
 const STATS_OBJECT_NAME = 'global'
@@ -48,6 +50,13 @@ async function handleLiveStats(request: Request, env: Env): Promise<Response> {
 const worker = {
   fetch(request, env, ctx) {
     const url = new URL(request.url)
+    const canonicalHostRedirect = wwwRedirect(url)
+    if (canonicalHostRedirect) return canonicalHostRedirect
+    if (isPublicApiHost(url)) {
+      const rewritten = rewritePublicApiUrl(url)
+      if (!rewritten) return publicApiNotFound(url.pathname)
+      return app.fetch(new Request(rewritten.toString(), request), env, ctx)
+    }
     if (url.pathname === '/api/live') return handleLiveStats(request, env)
     const trailingSlashRedirect = canonicalTrailingSlashRedirect(url)
     if (trailingSlashRedirect) return trailingSlashRedirect
@@ -66,6 +75,12 @@ const worker = {
   scheduled(controller, env, ctx) {
     if (controller.cron === FULL_DISCOVERY_CRON) {
       ctx.waitUntil(runPluginDiscoveryTask(env, 'full', controller.scheduledTime).then(logDiscovery))
+      ctx.waitUntil(cleanupExpiredAuthRows(env.CATALOG_DB, controller.scheduledTime).catch((error) => {
+        console.error(JSON.stringify({
+          message: 'auth_cleanup_failed',
+          error: error instanceof Error ? error.message : String(error),
+        }))
+      }))
       return
     }
     if (INCREMENTAL_DISCOVERY_CRONS.has(controller.cron)) {
