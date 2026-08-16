@@ -188,6 +188,57 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   assert.match(en, /\]\(\.\.\/docs\/api\.md\)/)
 })
 
+test('caps only the unclassified bucket and keeps the projection renderable', async () => {
+  // 3 unclassified entries with a limit of 500 stay uncapped; build a bucket big
+  // enough to trip the cap without depending on the production catalog.
+  const many = Array.from({ length: 620 }, (_, index) => ({
+    id: `scanner/plugin-${String(index).padStart(4, '0')}`,
+    name: `scanned-${String(index).padStart(4, '0')}`,
+    owner: 'scanner',
+    url: `https://github.com/scanner/plugin-${String(index).padStart(4, '0')}`,
+    category: 'unclassified',
+    description: { en: 'Discovered by the topic scan.', zh: '由 topic 扫描发现。' },
+    added: '2026-08-15',
+    stars: null,
+  }))
+  const big = { ...registryFixture, plugins: [...registryFixture.plugins, ...many] }
+  const files = await buildReadmeFiles(normalizeRegistry(big), categories)
+  const zh = files['README.md']
+  const en = files['catalog/README.md']
+
+  // Curated categories keep every entry.
+  assert.match(zh, /<summary><strong>工具与能力<\/strong> · 2 个插件<\/summary>/)
+  assert.match(en, /<summary><strong>Tools &amp; Capabilities<\/strong> · 2 plugins<\/summary>/)
+
+  // The unclassified bucket is capped, and says so instead of pretending to be whole.
+  assert.match(zh, /<summary><strong>待分类<\/strong> · 显示 500 \/ 共 621 个<\/summary>/)
+  assert.match(en, /<summary><strong>Unclassified<\/strong> · showing 500 of 621<\/summary>/)
+  assert.match(zh, /其余 121 个待分类插件未在此列出/)
+  assert.match(en, /The remaining 121 unclassified plugins are not listed here/)
+
+  // The category index still reports the true total, not the truncated one.
+  assert.match(zh, /- \[待分类\]\(#unclassified\) \(621\)/)
+
+  const listed = (zh.match(/^- \[scanned-\d{4}\]/gm) ?? []).length
+  assert.equal(listed, 500, 'exactly the cap should be listed')
+})
+
+test('refuses to emit a projection GitHub would silently truncate', async () => {
+  // One entry whose description alone blows the 500 KiB budget: the guard must throw
+  // rather than ship a file whose tail is invisible on GitHub.
+  const huge = {
+    ...registryFixture,
+    plugins: [{
+      ...registryFixture.plugins[0],
+      description: { en: 'x'.repeat(600 * 1024), zh: 'x'.repeat(600 * 1024) },
+    }],
+  }
+  await assert.rejects(
+    buildReadmeFiles(normalizeRegistry(huge), categories),
+    /GitHub renders at most \d+ and silently drops everything past that offset/,
+  )
+})
+
 test('adapts the legacy /plugins.json shape', () => {
   const legacy = {
     updated: '2026-08-15',

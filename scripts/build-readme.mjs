@@ -134,6 +134,37 @@ function pluginLine(plugin, locale) {
     : `- [${plugin.name}](${plugin.url})`
 }
 
+// GitHub stops rendering Markdown at 500 KiB and gives no truncation notice: every
+// entry past that byte offset simply does not exist for readers. Measured against the
+// live catalog on 2026-08-16, an uncapped projection was 594 KB and silently dropped
+// its last 479 plugins. Curated categories are always listed in full; the
+// auto-discovered `unclassified` bucket is the only one large enough to blow the
+// budget, so it is the only one capped. Its natural (name) ordering is reused as-is —
+// `added` carries no usable ordering signal here, since the topic-scan backfill gave
+// most of the bucket the same date.
+const githubRenderLimit = 500 * 1024
+const unclassifiedListLimit = 500
+
+function withVisiblePlugins(group) {
+  const capped = group.id === 'unclassified' && group.plugins.length > unclassifiedListLimit
+  return {
+    ...group,
+    total: group.plugins.length,
+    visible: capped ? group.plugins.slice(0, unclassifiedListLimit) : group.plugins,
+    capped,
+  }
+}
+
+export function assertRenderable(files) {
+  for (const [relative, content] of Object.entries(files)) {
+    const bytes = Buffer.byteLength(content, 'utf8')
+    assert(
+      bytes <= githubRenderLimit,
+      `${relative} is ${bytes} bytes; GitHub renders at most ${githubRenderLimit} and silently drops everything past that offset. Lower unclassifiedListLimit in scripts/build-readme.mjs.`,
+    )
+  }
+}
+
 function escapeHtml(value) {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
@@ -149,16 +180,28 @@ function categoryIndex(groups, locale) {
 // The <a id> anchor stays outside the block so the category index still jumps to a
 // collapsed group.
 function categorySections(groups, locale) {
-  return groups.map(group => [
-    `<a id="${group.id}"></a>`,
-    '',
-    '<details>',
-    `<summary><strong>${escapeHtml(group.label[locale])}</strong> · ${group.plugins.length} ${locale === 'zh' ? '个插件' : 'plugins'}</summary>`,
-    '',
-    group.plugins.map(plugin => pluginLine(plugin, locale)).join('\n'),
-    '',
-    '</details>',
-  ].join('\n')).join('\n\n')
+  return groups.map(withVisiblePlugins).map(group => {
+    const count = group.capped
+      ? (locale === 'zh' ? `显示 ${group.visible.length} / 共 ${group.total} 个` : `showing ${group.visible.length} of ${group.total}`)
+      : (locale === 'zh' ? `${group.total} 个插件` : `${group.total} plugins`)
+    const lines = group.visible.map(plugin => pluginLine(plugin, locale))
+    if (group.capped) {
+      const rest = group.total - group.visible.length
+      lines.push(locale === 'zh'
+        ? `- *其余 ${rest} 个待分类插件未在此列出，可在[在线网站](https://deepseek1024.com/)搜索或浏览完整目录。*`
+        : `- *The remaining ${rest} unclassified plugins are not listed here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*`)
+    }
+    return [
+      `<a id="${group.id}"></a>`,
+      '',
+      '<details>',
+      `<summary><strong>${escapeHtml(group.label[locale])}</strong> · ${count}</summary>`,
+      '',
+      lines.join('\n'),
+      '',
+      '</details>',
+    ].join('\n')
+  }).join('\n\n')
 }
 
 function chineseReadme(registry, groups) {
@@ -314,7 +357,7 @@ npx wrangler deploy --secrets-file .dev.vars
 
 ## 插件分类
 
-分组默认折叠，点开即可展开该分类下的全部插件；也可以直接在[在线网站](https://deepseek1024.com/)搜索。
+分组默认折叠，点开即可展开。策展分类完整列出；自动发现的「待分类」条目太多，只列出其中一部分，完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。
 
 ${categoryIndex(groups, 'zh')}
 
@@ -374,7 +417,7 @@ A pull request that adds one new entry is merged automatically once static revie
 
 ## Categories
 
-Groups are collapsed by default — expand one to see every plugin in it, or search the [live website](https://deepseek1024.com/).
+Groups are collapsed by default. Curated categories are listed in full; the auto-discovered Unclassified bucket lists only a subset — search the [live website](https://deepseek1024.com/) for the complete catalog.
 
 ${categoryIndex(groups, 'en')}
 
@@ -384,10 +427,12 @@ ${categorySections(groups, 'en')}
 
 export async function buildReadmeFiles(registry, categories) {
   const groups = groupPlugins(registry, categories)
-  return {
+  const files = {
     'README.md': chineseReadme(registry, groups),
     'catalog/README.md': englishReadme(registry, groups),
   }
+  assertRenderable(files)
+  return files
 }
 
 export function parseArguments(argv) {
