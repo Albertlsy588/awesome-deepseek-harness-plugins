@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { newVisitId, VISIT_ID_PATTERN } from '../../worker/lib/visit-id'
 import { API_ORIGIN, type LiveStats } from './api'
 
 interface LiveStatsState {
@@ -7,7 +8,6 @@ interface LiveStatsState {
 }
 
 const VISIT_STORAGE_KEY = 'dsh.visit-id'
-const VISIT_ID = /^[A-Za-z0-9-]{16,80}$/
 
 let pageVisitId: string | undefined
 
@@ -20,7 +20,7 @@ function visitId(): string {
 
   try {
     const stored = window.localStorage.getItem(VISIT_STORAGE_KEY)
-    if (stored && VISIT_ID.test(stored)) {
+    if (stored && VISIT_ID_PATTERN.test(stored)) {
       pageVisitId = stored
       return pageVisitId
     }
@@ -28,7 +28,7 @@ function visitId(): string {
     // Storage can be denied in private browsing; fall back to a per-page identity.
   }
 
-  pageVisitId = crypto.randomUUID()
+  pageVisitId = newVisitId()
   try {
     window.localStorage.setItem(VISIT_STORAGE_KEY, pageVisitId)
   } catch {
