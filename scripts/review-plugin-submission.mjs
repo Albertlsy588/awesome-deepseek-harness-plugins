@@ -311,7 +311,10 @@ async function main() {
       ? changedFiles(base, head)
       : await pullRequestChanges(repository, pullNumber, client)
     const submission = validateSubmissionChanges(changes)
-    const categories = JSON.parse(await readFile(path.join(root, 'catalog/categories.json'), 'utf8'))
+    // Read the category allow-list from the trusted checkout this script was
+    // loaded from, never from the submitted tree: it decides which categories a
+    // submission may claim, so it must not be attacker-controlled.
+    const categories = JSON.parse(await readFile(path.join(scriptRoot, 'catalog/categories.json'), 'utf8'))
     const categoryIds = new Set(categories?.categories?.map(category => category?.id))
     for (const target of submission.reviewables) {
       file = target
