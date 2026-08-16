@@ -34,6 +34,7 @@ interface PendingRepositoryRow {
   license: string | null
   github_updated_at: string
   pushed_at: string | null
+  manifest_cursor: string | null
 }
 
 interface CatalogRow {
@@ -524,6 +525,12 @@ export async function upsertDiscoveredRepositories(
         )`,
     ).bind(runId, now, now, serialized),
     db.prepare(
+      // Only a repository nothing knows a plugin for gets a placeholder. The
+      // guard is what stops the row from coming back: inspection removes the
+      // placeholder once it has resolved the repository's real plugins, and
+      // without `NOT EXISTS` the next discovery pass would seed another one —
+      // pending, unresolvable, and enough to keep the repository in the
+      // validation queue for good.
       `INSERT INTO catalog_plugins (
          repository_id, plugin_id, normalized_plugin_id, plugin_path,
          first_seen_at, last_seen_at, created_at, updated_at
@@ -532,6 +539,9 @@ export async function upsertDiscoveredRepositories(
          FROM json_each(?) j
          JOIN catalog_repositories r
            ON r.normalized_full_name = json_extract(j.value, '$.normalizedName')
+        WHERE NOT EXISTS (
+          SELECT 1 FROM catalog_plugins existing WHERE existing.repository_id = r.id
+        )
        ON CONFLICT(repository_id, plugin_path) DO NOTHING`,
     ).bind(now, now, now, now, serialized),
   ])
@@ -539,43 +549,103 @@ export async function upsertDiscoveredRepositories(
   return { changedCount }
 }
 
+export interface PendingRepository {
+  repository: GitHubRepository
+  /** Manifest path the next inspection pass resumes after, `null` to restart. */
+  manifestCursor: string | null
+}
+
+/**
+ * Repositories the crawler still owes an answer on, oldest scan first.
+ *
+ * Membership used to be "some plugin row says pending", which had two holes.
+ * A curated repository the topic scan had never seen was excluded outright by
+ * `from_topic = 1`, so it published with no install facts at all. And nothing
+ * ever put an inspected repository *back* into the queue — re-inspection only
+ * happened by accident, because the phantom root row 0006 deletes was
+ * permanently pending. With that row gone the queue has to say plainly when a
+ * repository is due: it was pushed since the last scan, or a sweep is still
+ * mid-flight. Neither has to disturb `validation_status`, so plugins stay
+ * published while they wait rather than blinking out of the catalog.
+ */
 export async function loadPendingValidationRepositories(
   db: D1Database,
   limit = 20,
-): Promise<GitHubRepository[]> {
+  staleBefore: string | null = null,
+): Promise<PendingRepository[]> {
   const result = await db.prepare(
     `SELECT github_id, full_name, repository_name, html_url, github_description, default_branch,
-            stars, forks, language, license, github_updated_at, pushed_at
+            stars, forks, language, license, github_updated_at, pushed_at, manifest_cursor
        FROM catalog_repositories
       WHERE github_id IS NOT NULL
-        AND from_topic = 1
-        AND EXISTS (
-          SELECT 1 FROM catalog_plugins p
-           WHERE p.repository_id = catalog_repositories.id
-             AND p.validation_status = 'pending'
+        AND (
+          from_topic = 1
+          OR EXISTS (
+            SELECT 1 FROM catalog_plugins p
+             WHERE p.repository_id = catalog_repositories.id AND p.from_pr = 1
+          )
+        )
+        AND (
+          last_scanned_at IS NULL
+          OR manifest_cursor IS NOT NULL
+          OR (pushed_at IS NOT NULL AND last_scanned_at < pushed_at)
+          -- The floor under everything else. Without it a repository that was
+          -- rejected wholesale — a tree 404 while it was briefly private, a
+          -- default_branch gone stale after a rename — leaves the queue for
+          -- good: its plugins are all retired rather than pending, its cursor
+          -- is cleared, and its last scan is newer than its last push, so no
+          -- other clause can ever fire again. It also catches a repository that
+          -- gained or lost the topic with no push behind it.
+          OR (? IS NOT NULL AND last_scanned_at < ?)
+          OR EXISTS (
+            SELECT 1 FROM catalog_plugins p
+             WHERE p.repository_id = catalog_repositories.id
+               AND p.validation_status = 'pending'
+          )
         )
       ORDER BY last_scanned_at IS NOT NULL, last_scanned_at, id
       LIMIT ?`,
-  ).bind(limit).all<PendingRepositoryRow>()
+  ).bind(staleBefore, staleBefore, limit).all<PendingRepositoryRow>()
   return result.results.map((row) => ({
-    id: row.github_id,
-    name: row.repository_name,
-    full_name: row.full_name,
-    html_url: row.html_url,
-    description: row.github_description,
-    fork: false,
-    archived: false,
-    disabled: false,
-    default_branch: row.default_branch,
-    stargazers_count: row.stars,
-    forks_count: row.forks,
-    language: row.language,
-    license: row.license === null ? null : { spdx_id: row.license },
-    updated_at: row.github_updated_at,
-    pushed_at: row.pushed_at,
+    manifestCursor: row.manifest_cursor,
+    repository: {
+      id: row.github_id,
+      name: row.repository_name,
+      full_name: row.full_name,
+      html_url: row.html_url,
+      description: row.github_description,
+      fork: false,
+      archived: false,
+      disabled: false,
+      default_branch: row.default_branch,
+      stargazers_count: row.stars,
+      forks_count: row.forks,
+      language: row.language,
+      license: row.license === null ? null : { spdx_id: row.license },
+      updated_at: row.github_updated_at,
+      pushed_at: row.pushed_at,
+    },
   }))
 }
 
+/**
+ * Records one inspection pass.
+ *
+ * The write path used to be three UPDATEs against a single plugin row — it
+ * relocated that row to wherever the bundle turned out to live and wrote the
+ * verdict there. With one row per repository to work with, a monorepo could
+ * never publish more than one of its packages, and the relocation left the
+ * `(repository_id, '')` slot free for the next scan to refill with a row
+ * nothing could ever resolve.
+ *
+ * Every accepted manifest is upserted as its own plugin now, and the plugins a
+ * finished sweep did not re-confirm are retired. Sweep membership is decided by
+ * `git_checked_at` against the repository's `sweep_started_at`, not by
+ * `last_seen_at`: `git_checked_at` is written here and nowhere else, so a
+ * catalog sync landing mid-sweep cannot make a vanished plugin look alive, and
+ * a placeholder that was never inspected (NULL) retires on the first sweep
+ * rather than surviving a timestamp tie.
+ */
 export async function saveRepositoryInspections(
   db: D1Database,
   inspections: RepositoryInspection[],
@@ -583,73 +653,188 @@ export async function saveRepositoryInspections(
   headSha: string | null = null,
 ): Promise<void> {
   if (inspections.length === 0) return
-  const statements: D1PreparedStatement[] = []
   for (const inspection of inspections) {
-    // The manifest's directory is where the plugin actually lives. A discovered
-    // repository starts with one plugin row at the root; when inspection finds
-    // the bundle nested, the row moves there so the install spec carries
-    // `#path:` instead of pointing at a root that has no bundle. The move is
-    // skipped when a curated plugin already occupies that path — that row is
-    // the same plugin and already carries better metadata.
-    const pluginPath = pluginPathFromPackagePath(inspection.package?.path ?? null)
-    statements.push(
-      db.prepare(
-        `UPDATE catalog_plugins
-            SET plugin_path = ?,
-                plugin_id = (SELECT r.full_name FROM catalog_repositories r WHERE r.id = repository_id)
-                            || CASE WHEN ? = '' THEN '' ELSE '/' || ? END,
+    const statements: D1PreparedStatement[] = []
+    const sweepComplete = inspection.nextManifestCursor === null
+
+    // A pass that starts at offset 0 starts a sweep. Stamping before the
+    // upserts is what makes `git_checked_at < sweep_started_at` mean "this
+    // sweep never saw you".
+    if (inspection.sweepRestarted) {
+      statements.push(db.prepare(
+        'UPDATE catalog_repositories SET sweep_started_at = ?, updated_at = ? WHERE github_id = ?',
+      ).bind(now, now, inspection.githubId))
+    }
+
+    for (const packageInfo of inspection.packages) {
+      const pluginPath = pluginPathFromPackagePath(packageInfo.path)
+      statements.push(
+        // `normalized_plugin_id` is UNIQUE across the whole table while the
+        // conflict target below is the case-SENSITIVE primary key, so a stale
+        // row differing only in case — `packages/app` renamed to `packages/App`,
+        // or the same package copied under a second directory — is invisible to
+        // ON CONFLICT and the INSERT raises a constraint error instead. A D1
+        // batch is one transaction: that error rolls the pass back, leaves the
+        // cursor where it was, and every later run collides identically, so the
+        // whole catalog stops updating. Clearing the crawler's own stale row
+        // first is what keeps a rename from wedging the crawler.
+        db.prepare(
+          `DELETE FROM catalog_plugins
+            WHERE repository_id = (SELECT id FROM catalog_repositories WHERE github_id = ?)
+              AND from_pr = 0
+              AND plugin_path <> ?
+              AND (
                 normalized_plugin_id = lower(
-                  (SELECT r.normalized_full_name FROM catalog_repositories r WHERE r.id = repository_id)
+                  (SELECT r.normalized_full_name FROM catalog_repositories r
+                    WHERE r.github_id = ?)
                   || CASE WHEN ? = '' THEN '' ELSE '/' || ? END
-                ),
-                updated_at = ?
-          WHERE plugin_path = ''
-            AND ? <> ''
-            AND repository_id = (SELECT id FROM catalog_repositories WHERE github_id = ?)
+                )
+                OR package_name = ?
+              )
+              AND (git_checked_at IS NULL OR git_checked_at < COALESCE(
+                (SELECT sweep_started_at FROM catalog_repositories WHERE github_id = ?), ?
+              ))`,
+        ).bind(
+          inspection.githubId, pluginPath, inspection.githubId, pluginPath, pluginPath,
+          packageInfo.name, inspection.githubId, now,
+        ),
+      )
+      statements.push(db.prepare(
+        // The conflict clause lists crawler-owned columns only. curated_*,
+        // from_pr and pr_reference are absent on purpose — 0005 gives them to
+        // the submission, and a re-crawl that overwrote a reviewed description
+        // with a GitHub blurb is exactly what that split exists to prevent.
+        // plugin_id is left alone for the same reason it always was: it is
+        // covered by UNIQUE(normalized_plugin_id), and rebuilding it on every
+        // pass would turn a repository rename into a failed batch.
+        `INSERT INTO catalog_plugins (
+           repository_id, plugin_id, normalized_plugin_id, plugin_path,
+           manifest_path, package_name, package_version, bundle_patch,
+           git_entry_point, git_entry_committed, git_has_prepare,
+           git_status, git_code, git_head_sha, git_checked_at,
+           validation_status, validation_code, validation_reason,
+           first_seen_at, last_seen_at, created_at, updated_at
+         )
+         SELECT r.id,
+                r.full_name || CASE WHEN ? = '' THEN '' ELSE '/' || ? END,
+                lower(r.normalized_full_name || CASE WHEN ? = '' THEN '' ELSE '/' || ? END),
+                ?,
+                ?, ?, ?, ?,
+                ?, ?, ?,
+                'ok', ?, ?, ?,
+                'accepted', NULL, NULL,
+                ?, ?, ?, ?
+           FROM catalog_repositories r
+          WHERE r.github_id = ?
+            -- Whatever survived the DELETE above owns this identity: either a
+            -- curated row, which only a submission may move, or a sibling this
+            -- same sweep already confirmed. Standing down keeps the first path
+            -- in sweep order winning, exactly as the in-pass de-duplication
+            -- decides it, instead of the last pass to run.
             AND NOT EXISTS (
               SELECT 1 FROM catalog_plugins other
-               WHERE other.repository_id = catalog_plugins.repository_id
-                 AND other.plugin_path = ?
-            )`,
-      ).bind(pluginPath, pluginPath, pluginPath, pluginPath, pluginPath, now, pluginPath,
-        inspection.githubId, pluginPath),
-      db.prepare(
-        `UPDATE catalog_plugins SET
-           validation_status = ?, validation_code = ?, validation_reason = ?,
-           package_name = ?, package_version = ?, manifest_path = ?, bundle_patch = ?,
-           git_entry_point = ?, git_entry_committed = ?, git_has_prepare = ?,
-           git_status = ?, git_code = ?, git_head_sha = ?, git_checked_at = ?,
-           updated_at = ?
-         WHERE repository_id = (SELECT id FROM catalog_repositories WHERE github_id = ?)
-           AND plugin_path = ?`,
+               WHERE other.repository_id = r.id
+                 AND other.plugin_path <> ?
+                 AND (
+                   other.normalized_plugin_id = lower(
+                     r.normalized_full_name || CASE WHEN ? = '' THEN '' ELSE '/' || ? END
+                   )
+                   OR other.package_name = ?
+                 )
+            )
+         ON CONFLICT(repository_id, plugin_path) DO UPDATE SET
+           manifest_path = excluded.manifest_path,
+           package_name = excluded.package_name,
+           package_version = excluded.package_version,
+           bundle_patch = excluded.bundle_patch,
+           git_entry_point = excluded.git_entry_point,
+           git_entry_committed = excluded.git_entry_committed,
+           git_has_prepare = excluded.git_has_prepare,
+           git_status = excluded.git_status,
+           git_code = excluded.git_code,
+           git_head_sha = excluded.git_head_sha,
+           git_checked_at = excluded.git_checked_at,
+           validation_status = excluded.validation_status,
+           validation_code = excluded.validation_code,
+           validation_reason = excluded.validation_reason,
+           last_seen_at = excluded.last_seen_at,
+           updated_at = excluded.updated_at`,
       ).bind(
-        inspection.status,
-        inspection.code,
-        inspection.reason,
-        inspection.package?.name ?? null,
-        inspection.package?.version ?? null,
-        inspection.package?.path ?? null,
-        inspection.package?.patch ?? null,
-        inspection.package?.entryPoint ?? null,
-        inspection.package?.entryCommitted ? 1 : 0,
-        inspection.package?.hasPrepare ? 1 : 0,
-        // A rejected repository has no manifest to judge, so the git method
-        // stays unknown rather than being called broken.
-        inspection.package ? 'ok' : 'error',
-        inspection.package?.gitCode ?? null,
-        headSha ?? null,
-        now,
-        now,
+        pluginPath, pluginPath, pluginPath, pluginPath, pluginPath,
+        packageInfo.path, packageInfo.name, packageInfo.version, packageInfo.patch,
+        packageInfo.entryPoint, packageInfo.entryCommitted ? 1 : 0, packageInfo.hasPrepare ? 1 : 0,
+        packageInfo.gitCode, headSha ?? null, now,
+        now, now, now, now,
         inspection.githubId,
-        pluginPath,
-      ),
-      // last_scanned_at stays a repository fact: it paces the crawler.
-      db.prepare(
-        'UPDATE catalog_repositories SET last_scanned_at = ?, updated_at = ? WHERE github_id = ?',
-      ).bind(now, now, inspection.githubId),
+        pluginPath, pluginPath, pluginPath, packageInfo.name,
+      ))
+    }
+
+    if (sweepComplete) {
+      statements.push(
+        // Retiring rather than deleting: a plugin that once published is worth
+        // a reason. A crawler row loses its publication here (the snapshot
+        // needs 'accepted'); a curated row keeps its own (from_pr = 1) because
+        // only a catalog submission may retract one — but it still gets a
+        // verdict, which is what finally drains it out of the queue.
+        db.prepare(
+          `UPDATE catalog_plugins
+              SET validation_status = 'rejected',
+                  validation_code = ?,
+                  validation_reason = ?,
+                  git_status = 'absent',
+                  git_code = 'manifest_missing',
+                  git_checked_at = ?,
+                  updated_at = ?
+            WHERE repository_id = (SELECT id FROM catalog_repositories WHERE github_id = ?)
+              AND (
+                git_checked_at IS NULL
+                OR git_checked_at < (
+                  SELECT COALESCE(sweep_started_at, ?)
+                    FROM catalog_repositories WHERE github_id = ?
+                )
+              )
+              AND NOT (validation_status = 'rejected' AND git_status = 'absent')`,
+        ).bind(
+          inspection.code ?? 'bundle_absent',
+          inspection.reason ?? 'No manifest at this path declares dsh.bundle',
+          now, now, inspection.githubId, now, inspection.githubId,
+        ),
+        // The placeholder `upsertDiscoveredRepositories` seeds so the queue has
+        // something to inspect. Once the sweep has spoken it is either a real
+        // root plugin (upserted above, so package_name is set) or bookkeeping
+        // that would otherwise sit in the catalog as a rejected phantom.
+        db.prepare(
+          `DELETE FROM catalog_plugins
+            WHERE repository_id = (SELECT id FROM catalog_repositories WHERE github_id = ?)
+              AND plugin_path = ''
+              AND from_pr = 0
+              AND package_name IS NULL`,
+        ).bind(inspection.githubId),
+      )
+    }
+
+    statements.push(
+      // last_scanned_at stays a repository fact: it paces the crawler, and the
+      // queue reads it against pushed_at to decide who needs re-checking.
+      sweepComplete
+        ? db.prepare(
+            `UPDATE catalog_repositories
+                SET manifest_cursor = NULL, sweep_started_at = NULL,
+                    last_scanned_at = ?, updated_at = ?
+              WHERE github_id = ?`,
+          ).bind(now, now, inspection.githubId)
+        : db.prepare(
+            `UPDATE catalog_repositories
+                SET manifest_cursor = ?, last_scanned_at = ?, updated_at = ?
+              WHERE github_id = ?`,
+          ).bind(inspection.nextManifestCursor, now, now, inspection.githubId),
     )
+
+    // One batch per repository: a monorepo can contribute more statements than
+    // D1 accepts in a single batch when several are inspected in one chunk.
+    await db.batch(statements)
   }
-  await db.batch(statements)
 }
 
 export async function saveCatalogMetrics(
@@ -697,6 +882,19 @@ export async function markMissingTopicRepositories(
       WHERE from_topic = 1
         AND (topic_last_run_id IS NULL OR topic_last_run_id <> ?)`,
   ).bind(now, runId).run()
+}
+
+/**
+ * The leaf directory of a monorepo subpackage, or null for a root plugin.
+ *
+ * Deliberately not the manifest's `name`: catalog names are compared and
+ * sorted against repository names everywhere else, and `@scope/thing` sorts
+ * and reads badly next to them. The frontend reaches the same answer from the
+ * id alone (`pluginListIdentity`), so the two agree.
+ */
+function subpackageName(pluginPath: string): string | null {
+  const leaf = pluginPath.split('/').filter(Boolean).at(-1)
+  return leaf === undefined || leaf.length === 0 ? null : leaf
 }
 
 async function sha256(value: string): Promise<string> {
@@ -747,7 +945,11 @@ export async function loadCatalogSnapshotFromD1(
     return {
       ...emptyInstallMetrics(),
       id,
-      name: row.curated_name ?? row.repository_name,
+      // A monorepo's packages share one repository name, so falling back to it
+      // published a dozen identically-named plugins whose only difference was
+      // a URL fragment. The directory a package lives in is the name its
+      // author gave it, and it is what `#path:` installs.
+      name: row.curated_name ?? subpackageName(row.plugin_path) ?? row.repository_name,
       owner: row.owner,
       url: row.html_url,
       repository: row.repository_name,

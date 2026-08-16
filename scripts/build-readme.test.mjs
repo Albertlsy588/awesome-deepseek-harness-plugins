@@ -149,8 +149,11 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   assert.match(zh, /2026-08-15/)
   assert.match(zh, /dsh1024 plugin --profile web add github:<owner>\/<repository>/)
   assert.doesNotMatch(zh, /npx @dsh-1024store\/cli add/)
-  // A subdirectory plugin renders like any other entry, linking to its repository root.
-  assert.match(zh, /- \[nested-plugin\]\(https:\/\/github\.com\/owner\/monorepo\) — monorepo 子包插件。/)
+  // A subdirectory plugin links to its own directory, not the repository root.
+  // Once the crawler collects every package a monorepo publishes, one repository
+  // contributes a whole run of entries, and pointing them all at the same root
+  // would leave the reader with no way to reach any of them but the first.
+  assert.match(zh, /- \[nested-plugin\]\(https:\/\/github\.com\/owner\/monorepo\/tree\/HEAD\/packages\/nested\) — monorepo 子包插件。/)
   assert.match(zh, /自动合并/)
   assert.match(zh, /自动同步/)
   // zh line falls back to English when the Chinese description is missing.

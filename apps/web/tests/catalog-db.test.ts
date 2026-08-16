@@ -4,12 +4,18 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   hydrateCuratedRepositories,
   loadCatalogSnapshotFromD1,
+  loadPendingValidationRepositories,
   normalizeRepositoryName,
+  saveRepositoryInspections,
   syncCuratedEntries,
   upsertDiscoveredRepositories,
   type CuratedCatalogEntry,
 } from '../worker/lib/catalog-db'
-import type { GitHubRepository } from '../worker/lib/github-discovery'
+import type {
+  GitHubRepository,
+  InspectedPackage,
+  RepositoryInspection,
+} from '../worker/lib/github-discovery'
 
 class SqliteD1Statement {
   constructor(
@@ -53,7 +59,7 @@ function sqliteD1(database: DatabaseSync): D1Database {
 function catalogDatabase(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
   for (const migration of ['0002_plugin_catalog.sql', '0005_catalog_plugins.sql',
-    '0006_ai_classification.sql']) {
+    '0006_ai_classification.sql', '0007_manifest_sweep.sql']) {
     database.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'))
   }
   return database
@@ -508,6 +514,402 @@ describe('curated repository hydration', () => {
         validation_status: 'accepted',
       },
     ])
+    database.close()
+  })
+})
+
+function inspectedPackage(
+  path: string,
+  name: string,
+  overrides: Partial<InspectedPackage> = {},
+): InspectedPackage {
+  return {
+    name,
+    version: '1.0.0',
+    path: `${path}/package.json`,
+    patch: `${path}/cordis.patch.yml`,
+    entryPoint: './index.js',
+    entryCommitted: true,
+    hasPrepare: false,
+    gitCode: 'entry_committed',
+    ...overrides,
+  }
+}
+
+function inspection(overrides: Partial<RepositoryInspection> = {}): RepositoryInspection {
+  return {
+    githubId: 42,
+    status: 'accepted',
+    code: null,
+    reason: null,
+    packages: [],
+    sweepRestarted: true,
+    nextManifestCursor: null,
+    ...overrides,
+  }
+}
+
+function pluginRows(database: DatabaseSync): unknown[] {
+  return database.prepare(
+    `SELECT plugin_id, plugin_path, package_name, validation_status, validation_code,
+            git_status, from_pr, curated_name
+       FROM catalog_plugins ORDER BY plugin_path`,
+  ).all()
+}
+
+describe('repository inspection writeback', () => {
+  it('publishes every package a monorepo declares, not just the first', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    // The placeholder upsertDiscoveredRepositories seeds for the queue.
+    seedPlugin(database, 'scan/repo')
+
+    await saveRepositoryInspections(sqliteD1(database), [inspection({
+      packages: [
+        inspectedPackage('packages/dsh-pet', '@owner/dsh-pet'),
+        inspectedPackage('packages/dsh-task-board', '@owner/dsh-task-board'),
+        inspectedPackage('packages/dsh-git-graph', '@owner/dsh-git-graph'),
+      ],
+    })], NOW)
+
+    expect(pluginRows(database)).toEqual([
+      {
+        plugin_id: 'Scan/Repo/packages/dsh-git-graph', plugin_path: 'packages/dsh-git-graph',
+        package_name: '@owner/dsh-git-graph', validation_status: 'accepted', validation_code: null,
+        git_status: 'ok', from_pr: 0, curated_name: null,
+      },
+      {
+        plugin_id: 'Scan/Repo/packages/dsh-pet', plugin_path: 'packages/dsh-pet',
+        package_name: '@owner/dsh-pet', validation_status: 'accepted', validation_code: null,
+        git_status: 'ok', from_pr: 0, curated_name: null,
+      },
+      {
+        plugin_id: 'Scan/Repo/packages/dsh-task-board', plugin_path: 'packages/dsh-task-board',
+        package_name: '@owner/dsh-task-board', validation_status: 'accepted', validation_code: null,
+        git_status: 'ok', from_pr: 0, curated_name: null,
+      },
+    ])
+    // The placeholder is gone rather than left behind as a pending phantom.
+    expect(database.prepare(
+      `SELECT COUNT(*) AS total FROM catalog_plugins WHERE plugin_path = ''`,
+    ).get()).toEqual({ total: 0 })
+    expect(database.prepare(
+      'SELECT manifest_cursor, sweep_started_at, last_scanned_at FROM catalog_repositories',
+    ).get()).toEqual({ manifest_cursor: null, sweep_started_at: null, last_scanned_at: NOW })
+    database.close()
+  })
+
+  it('writes install facts onto a curated plugin without touching its reviewed copy', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    database.prepare(`
+      UPDATE catalog_repositories SET from_topic = 1 WHERE normalized_full_name = 'scan/repo'
+    `).run()
+    await syncCuratedEntries(sqliteD1(database), [curatedEntry({
+      id: 'Scan/Repo/packages/dsh-pet',
+      name: 'Whale Pet',
+      repository: 'https://github.com/Scan/Repo',
+    })], NOW)
+
+    await saveRepositoryInspections(sqliteD1(database), [inspection({
+      packages: [inspectedPackage('packages/dsh-pet', '@owner/dsh-pet')],
+    })], NOW)
+
+    expect(pluginRows(database)).toEqual([{
+      plugin_id: 'Scan/Repo/packages/dsh-pet', plugin_path: 'packages/dsh-pet',
+      package_name: '@owner/dsh-pet', validation_status: 'accepted', validation_code: null,
+      git_status: 'ok',
+      // The submission still owns the row and its copy survived the crawl.
+      from_pr: 1, curated_name: 'Whale Pet',
+    }])
+    database.close()
+  })
+
+  it('retires a package that disappeared, and unpublishes only the crawler row', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    const db = sqliteD1(database)
+    await saveRepositoryInspections(db, [inspection({
+      packages: [
+        inspectedPackage('packages/keeper', '@owner/keeper'),
+        inspectedPackage('packages/goner', '@owner/goner'),
+      ],
+    })], NOW)
+
+    const later = '2026-08-17T00:00:00.000Z'
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('packages/keeper', '@owner/keeper')],
+    })], later)
+
+    expect(pluginRows(database)).toEqual([
+      {
+        plugin_id: 'Scan/Repo/packages/goner', plugin_path: 'packages/goner',
+        package_name: '@owner/goner', validation_status: 'rejected',
+        validation_code: 'bundle_absent', git_status: 'absent', from_pr: 0, curated_name: null,
+      },
+      {
+        plugin_id: 'Scan/Repo/packages/keeper', plugin_path: 'packages/keeper',
+        package_name: '@owner/keeper', validation_status: 'accepted', validation_code: null,
+        git_status: 'ok', from_pr: 0, curated_name: null,
+      },
+    ])
+    database.close()
+  })
+
+  it('does not retire anything while a sweep is still mid-flight', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    const db = sqliteD1(database)
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('packages/first', '@owner/first')],
+      nextManifestCursor: 'packages/first/package.json',
+    })], NOW)
+
+    const later = '2026-08-17T00:00:00.000Z'
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('packages/second', '@owner/second')],
+      sweepRestarted: false,
+      nextManifestCursor: null,
+    })], later)
+
+    // Both survive: the second pass belongs to the sweep the first one opened,
+    // so its sibling counts as re-confirmed rather than vanished.
+    expect(database.prepare(
+      'SELECT plugin_path, validation_status FROM catalog_plugins ORDER BY plugin_path',
+    ).all()).toEqual([
+      { plugin_path: 'packages/first', validation_status: 'accepted' },
+      { plugin_path: 'packages/second', validation_status: 'accepted' },
+    ])
+    database.close()
+  })
+
+  it('records the resume cursor and clears it when the sweep finishes', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    const db = sqliteD1(database)
+
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('packages/first', '@owner/first')],
+      nextManifestCursor: 'packages/first/package.json',
+    })], NOW)
+    expect(database.prepare('SELECT manifest_cursor FROM catalog_repositories').get())
+      .toEqual({ manifest_cursor: 'packages/first/package.json' })
+    expect((await loadPendingValidationRepositories(db)).map((item) => item.manifestCursor))
+      .toEqual(['packages/first/package.json'])
+
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('packages/second', '@owner/second')],
+      sweepRestarted: false,
+    })], '2026-08-17T00:00:00.000Z')
+    expect(database.prepare('SELECT manifest_cursor FROM catalog_repositories').get())
+      .toEqual({ manifest_cursor: null })
+    database.close()
+  })
+
+  it('gives a rejected repository a verdict on every plugin it had', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    const db = sqliteD1(database)
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('packages/only', '@owner/only')],
+    })], NOW)
+
+    await saveRepositoryInspections(db, [inspection({
+      status: 'rejected', code: 'repository_unavailable', reason: 'Not Found',
+    })], '2026-08-17T00:00:00.000Z')
+
+    expect(database.prepare(
+      'SELECT validation_status, validation_code, git_status FROM catalog_plugins',
+    ).all()).toEqual([
+      { validation_status: 'rejected', validation_code: 'repository_unavailable', git_status: 'absent' },
+    ])
+    expect(await loadPendingValidationRepositories(db)).toEqual([])
+    database.close()
+  })
+})
+
+describe('validation queue convergence', () => {
+  it('stops re-inspecting a monorepo once its sweep has finished', async () => {
+    const database = catalogDatabase()
+    const db = sqliteD1(database)
+    const packages = [
+      inspectedPackage('packages/dsh-pet', '@owner/dsh-pet'),
+      inspectedPackage('packages/dsh-ssh', '@owner/dsh-ssh'),
+    ]
+
+    // Scan 1: discovery seeds the placeholder, inspection resolves the packages.
+    await upsertDiscoveredRepositories(db, [repository()], 'run-1', NOW)
+    const first = await loadPendingValidationRepositories(db)
+    expect(first.map((item) => item.repository.full_name)).toEqual(['Owner/Plugin'])
+    await saveRepositoryInspections(db, [inspection({ packages })], NOW)
+
+    // Scans 2 and 3: nothing was pushed, so there is nothing to re-inspect.
+    // This is the regression the phantom root row used to cause — it kept the
+    // repository queued forever and had every run re-download its whole tree.
+    for (const run of ['run-2', 'run-3']) {
+      await upsertDiscoveredRepositories(db, [repository()], run, NOW)
+      expect(await loadPendingValidationRepositories(db)).toEqual([])
+    }
+
+    expect(database.prepare(
+      'SELECT plugin_path, validation_status FROM catalog_plugins ORDER BY plugin_path',
+    ).all()).toEqual([
+      { plugin_path: 'packages/dsh-pet', validation_status: 'accepted' },
+      { plugin_path: 'packages/dsh-ssh', validation_status: 'accepted' },
+    ])
+    database.close()
+  })
+
+  it('re-queues a repository that was pushed since the last scan', async () => {
+    const database = catalogDatabase()
+    const db = sqliteD1(database)
+    await upsertDiscoveredRepositories(db, [repository()], 'run-1', NOW)
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('packages/only', '@owner/only')],
+    })], NOW)
+    expect(await loadPendingValidationRepositories(db)).toEqual([])
+
+    await upsertDiscoveredRepositories(
+      db,
+      [{ ...repository(), pushed_at: '2026-08-18T09:00:00Z' }],
+      'run-2',
+      NOW,
+    )
+
+    // Queued again without being un-published in the meantime: the plugin is
+    // still 'accepted' while it waits for its re-inspection.
+    expect((await loadPendingValidationRepositories(db)).map((item) => item.repository.id))
+      .toEqual([42])
+    expect(database.prepare('SELECT validation_status FROM catalog_plugins').all())
+      .toEqual([{ validation_status: 'accepted' }])
+    database.close()
+  })
+
+  it('queues a curated repository the topic scan never found', async () => {
+    const database = catalogDatabase()
+    seedRepository(database, { from_topic: 0 })
+    seedPlugin(database, 'scan/repo')
+    database.prepare(`UPDATE catalog_plugins SET from_pr = 1`).run()
+
+    expect((await loadPendingValidationRepositories(sqliteD1(database)))
+      .map((item) => item.repository.full_name)).toEqual(['Scan/Repo'])
+    database.close()
+  })
+})
+
+describe('monorepo plugin naming', () => {
+  it('names a subpackage after its directory instead of its repository', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    await saveRepositoryInspections(sqliteD1(database), [inspection({
+      packages: [
+        inspectedPackage('packages/dsh-pet', '@owner/dsh-pet'),
+        inspectedPackage('packages/dsh-ssh', '@owner/dsh-ssh'),
+      ],
+    })], NOW)
+
+    const snapshot = await loadCatalogSnapshotFromD1(sqliteD1(database), NOW)
+
+    // Both used to be published as "Repo", one indistinguishable row per package.
+    expect(snapshot?.plugins.map((plugin) => [plugin.id, plugin.name])).toEqual([
+      ['Scan/Repo/packages/dsh-pet', 'dsh-pet'],
+      ['Scan/Repo/packages/dsh-ssh', 'dsh-ssh'],
+    ])
+    database.close()
+  })
+})
+
+describe('plugin identity collisions', () => {
+  it('survives a directory that only changed case', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    const db = sqliteD1(database)
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('packages/app', '@owner/app')],
+    })], NOW)
+
+    // `normalized_plugin_id` is UNIQUE while the conflict target is the
+    // case-sensitive primary key, so the rename used to raise a constraint
+    // error. A D1 batch is one transaction: that rolled the pass back, left the
+    // cursor untouched, and every later run collided the same way — the whole
+    // catalog stopped updating.
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('packages/App', '@owner/app')],
+    })], '2026-08-17T00:00:00.000Z')
+
+    expect(database.prepare(
+      'SELECT plugin_id, plugin_path, validation_status FROM catalog_plugins',
+    ).all()).toEqual([{
+      plugin_id: 'Scan/Repo/packages/App',
+      plugin_path: 'packages/App',
+      validation_status: 'accepted',
+    }])
+    database.close()
+  })
+
+  it('does not publish one package twice when a duplicate lands in a later pass', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    const db = sqliteD1(database)
+    // Pass 1 takes the shallower copy; pass 2 finds the duplicate tree. Per-pass
+    // de-duplication cannot see across the resume boundary, so the DB has to.
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('packages/a', '@owner/same')],
+      nextManifestCursor: 'packages/a/package.json',
+    })], NOW)
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('vendor/copy', '@owner/same')],
+      sweepRestarted: false,
+    })], '2026-08-17T00:00:00.000Z')
+
+    expect(database.prepare(
+      'SELECT plugin_path, package_name FROM catalog_plugins ORDER BY plugin_path',
+    ).all()).toEqual([{ plugin_path: 'packages/a', package_name: '@owner/same' }])
+    database.close()
+  })
+
+  it('leaves a curated row holding the identity alone', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    await syncCuratedEntries(sqliteD1(database), [curatedEntry({
+      id: 'Scan/Repo/packages/App', name: 'Reviewed App', repository: 'https://github.com/Scan/Repo',
+    })], NOW)
+
+    await saveRepositoryInspections(sqliteD1(database), [inspection({
+      packages: [inspectedPackage('packages/app', '@owner/app')],
+    })], '2026-08-17T00:00:00.000Z')
+
+    // Only a catalog submission may move a curated plugin, so the crawler
+    // stands down rather than deleting the row or failing the batch.
+    expect(database.prepare(
+      'SELECT plugin_path, from_pr, curated_name FROM catalog_plugins',
+    ).all()).toEqual([
+      { plugin_path: 'packages/App', from_pr: 1, curated_name: 'Reviewed App' },
+    ])
+    database.close()
+  })
+})
+
+describe('re-inspection floor', () => {
+  it('brings back a repository that was rejected wholesale', async () => {
+    const database = catalogDatabase()
+    const db = sqliteD1(database)
+    await upsertDiscoveredRepositories(db, [repository()], 'run-1', NOW)
+    await saveRepositoryInspections(db, [inspection({
+      packages: [inspectedPackage('packages/only', '@owner/only')],
+    })], NOW)
+
+    // The repository goes private for an hour and its tree 404s.
+    await saveRepositoryInspections(db, [inspection({
+      status: 'rejected', code: 'repository_unavailable', reason: 'Not Found',
+    })], '2026-08-17T00:00:00.000Z')
+
+    // Every other re-entry clause now misses: nothing is pending, the cursor is
+    // clear, and the last scan is newer than the last push. Without a staleness
+    // floor the repository would never be looked at again.
+    expect(await loadPendingValidationRepositories(db, 20, null)).toEqual([])
+    expect((await loadPendingValidationRepositories(db, 20, '2026-08-24T00:00:00.000Z'))
+      .map((item) => item.repository.id)).toEqual([42])
     database.close()
   })
 })

@@ -5,7 +5,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { assert, isObject, readCategories } from './lib/catalog-entry.mjs'
+import { assert, isObject, readCategories, sourceUrl } from './lib/catalog-entry.mjs'
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 export const defaultBase = 'https://deepseek1024.com'
@@ -130,9 +130,13 @@ function pluginLine(plugin, locale) {
   const preferred = plugin.description[locale]
   const fallback = locale === 'zh' ? plugin.description.en : plugin.description.zh
   const description = preferred.length > 0 ? preferred : fallback
+  // The plugin's own directory, not its repository: a monorepo contributes one
+  // line per package, and pointing them all at the repository root would make
+  // every line but the first a dead end for the reader.
+  const href = sourceUrl(plugin.id)
   return description.length > 0
-    ? `- [${plugin.name}](${plugin.url}) — ${description}`
-    : `- [${plugin.name}](${plugin.url})`
+    ? `- [${plugin.name}](${href}) — ${description}`
+    : `- [${plugin.name}](${href})`
 }
 
 // The homepage screenshot lives on a dedicated orphan `assets` branch that CI

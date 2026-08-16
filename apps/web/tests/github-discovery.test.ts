@@ -3,6 +3,7 @@ import {
   createGitHubClient,
   discoveryInternals,
   discoverRepositories,
+  GitHubApiError,
   incrementalStart,
   inspectRepository,
   type GitHubRepository,
@@ -110,13 +111,285 @@ describe('Cloudflare GitHub discovery', () => {
     expect(result).toMatchObject({
       githubId: 42,
       status: 'accepted',
-      package: {
+      nextManifestCursor: null,
+      packages: [{
         name: '@owner/plugin',
         path: 'packages/plugin/package.json',
         patch: 'packages/plugin/plugin.patch',
-      },
+      }],
     })
     expect(request).toHaveBeenCalledTimes(3)
+  })
+
+  it('collects every package of a monorepo, not just the first one that validates', async () => {
+    const names = ['aionui-panel', 'git-graph', 'pet', 'task-board']
+    const request = vi.fn(async (path: string) => {
+      if (path.includes('/git/trees/')) {
+        return {
+          truncated: false,
+          tree: [
+            { path: 'package.json', mode: '100644', type: 'blob', sha: 'root' },
+            ...names.flatMap((name) => [
+              { path: `packages/${name}/package.json`, mode: '100644', type: 'blob', sha: name },
+              { path: `packages/${name}/cordis.patch.yml`, mode: '100644', type: 'blob', sha: `${name}-patch` },
+            ]),
+          ],
+        }
+      }
+      if (path.endsWith('/root')) {
+        return { encoding: 'base64', content: encodedJson({ name: 'workspace' }) }
+      }
+      const name = path.split('/').at(-1)
+      return {
+        encoding: 'base64',
+        content: encodedJson({
+          name: `@owner/${name}`,
+          version: '1.0.0',
+          dsh: { bundle: { patch: './cordis.patch.yml' } },
+        }),
+      }
+    })
+
+    const result = await inspectRepository(
+      { request } as unknown as ReturnType<typeof createGitHubClient>,
+      repository(),
+    )
+
+    expect(result.status).toBe('accepted')
+    expect(result.nextManifestCursor).toBeNull()
+    expect(result.packages.map((item) => item.path)).toEqual(
+      names.map((name) => `packages/${name}/package.json`),
+    )
+    // The workspace root is read and rejected, then all four packages.
+    expect(request).toHaveBeenCalledTimes(6)
+  })
+
+  it('resumes a sweep that ran out of blob budget instead of discarding the tail', async () => {
+    const names = ['alpha', 'beta', 'gamma']
+    const request = vi.fn(async (path: string) => path.includes('/git/trees/')
+      ? {
+          truncated: false,
+          tree: names.flatMap((name) => [
+            { path: `packages/${name}/package.json`, mode: '100644', type: 'blob', sha: name },
+            { path: `packages/${name}/plugin.patch`, mode: '100644', type: 'blob', sha: `${name}-patch` },
+          ]),
+        }
+      : {
+          encoding: 'base64',
+          content: encodedJson({
+            name: `@owner/${path.split('/').at(-1)}`,
+            dsh: { bundle: { patch: './plugin.patch' } },
+          }),
+        })
+    const client = { request } as unknown as ReturnType<typeof createGitHubClient>
+
+    const first = await inspectRepository(client, repository(), null, 2)
+    expect(first.packages.map((item) => item.name)).toEqual(['@owner/alpha', '@owner/beta'])
+    expect(first.sweepRestarted).toBe(true)
+    expect(first.nextManifestCursor).toBe('packages/beta/package.json')
+
+    const second = await inspectRepository(client, repository(), first.nextManifestCursor, 2)
+    expect(second.packages.map((item) => item.name)).toEqual(['@owner/gamma'])
+    expect(second.sweepRestarted).toBe(false)
+    expect(second.nextManifestCursor).toBeNull()
+  })
+
+  it('resumes by path, so a manifest removed ahead of the cursor cannot shift the window', async () => {
+    const names = ['alpha', 'beta', 'gamma', 'delta']
+    const present = new Set(names)
+    const request = vi.fn(async (path: string) => path.includes('/git/trees/')
+      ? {
+          truncated: false,
+          tree: [...present].flatMap((name) => [
+            { path: `packages/${name}/package.json`, mode: '100644', type: 'blob', sha: name },
+            { path: `packages/${name}/plugin.patch`, mode: '100644', type: 'blob', sha: `${name}-patch` },
+          ]),
+        }
+      : {
+          encoding: 'base64',
+          content: encodedJson({
+            name: `@owner/${path.split('/').at(-1)}`,
+            dsh: { bundle: { patch: './plugin.patch' } },
+          }),
+        })
+    const client = { request } as unknown as ReturnType<typeof createGitHubClient>
+
+    // Sweep order is alpha, beta, delta, gamma (depth then locale compare).
+    const first = await inspectRepository(client, repository(), null, 2)
+    expect(first.packages.map((item) => item.name)).toEqual(['@owner/alpha', '@owner/beta'])
+    expect(first.nextManifestCursor).toBe('packages/beta/package.json')
+
+    // The first package is deleted between passes. A positional cursor would
+    // now point one entry too far and skip `delta`, whose plugin row the
+    // finishing sweep would then retire as if the package had vanished.
+    present.delete('alpha')
+    const second = await inspectRepository(client, repository(), first.nextManifestCursor, 2)
+
+    expect(second.packages.map((item) => item.name)).toEqual(['@owner/delta', '@owner/gamma'])
+    expect(second.nextManifestCursor).toBeNull()
+  })
+
+  it.each([
+    // Representable directory, but the id built from this repository's real
+    // name still overruns the cap — the placeholder prefix pluginPathFromPackagePath
+    // measures against is shorter than the actual `owner/repository`.
+    [`packages/${'d'.repeat(175)}`, `${'a'.repeat(30)}/${'b'.repeat(30)}`, 'plugin_id_too_long'],
+    // No plugin id can carry this directory at all. Answering '' for it would
+    // file the package against the repository-root plugin row instead.
+    ['packages/插件-pet', 'owner/plugin', 'unrepresentable_plugin_path'],
+  ])('refuses a manifest no plugin id can address (%#)', async (directory, fullName, code) => {
+    const request = vi.fn(async (path: string) => path.includes('/git/trees/')
+      ? {
+          truncated: false,
+          tree: [
+            { path: `${directory}/package.json`, mode: '100644', type: 'blob', sha: 'deep' },
+            { path: `${directory}/plugin.patch`, mode: '100644', type: 'blob', sha: 'patch' },
+          ],
+        }
+      : {
+          encoding: 'base64',
+          content: encodedJson({ name: '@owner/deep', dsh: { bundle: { patch: './plugin.patch' } } }),
+        })
+
+    const result = await inspectRepository(
+      { request } as unknown as ReturnType<typeof createGitHubClient>,
+      repository({ full_name: fullName }),
+    )
+
+    // Publishing either would emit an install command that installs something
+    // other than the package it names.
+    expect(result).toMatchObject({ status: 'rejected', code, packages: [] })
+  })
+
+  it('restarts a sweep whose cursor outran a tree that has since shrunk', async () => {
+    const request = vi.fn(async (path: string) => path.includes('/git/trees/')
+      ? {
+          truncated: false,
+          tree: [
+            { path: 'package.json', mode: '100644', type: 'blob', sha: 'manifest' },
+            { path: 'plugin.patch', mode: '100644', type: 'blob', sha: 'patch' },
+          ],
+        }
+      : {
+          encoding: 'base64',
+          content: encodedJson({ name: '@owner/plugin', dsh: { bundle: { patch: './plugin.patch' } } }),
+        })
+
+    const result = await inspectRepository(
+      { request } as unknown as ReturnType<typeof createGitHubClient>,
+      repository(),
+      // A cursor left behind when the repository had far more packages.
+      'packages/zzz-removed/package.json',
+    )
+
+    expect(result.sweepRestarted).toBe(true)
+    expect(result.packages.map((item) => item.name)).toEqual(['@owner/plugin'])
+  })
+
+  it('keeps one plugin per package name and per case-insensitive path', async () => {
+    const request = vi.fn(async (path: string) => {
+      if (path.includes('/git/trees/')) {
+        return {
+          truncated: false,
+          tree: [
+            { path: 'packages/skins/miku/package.json', mode: '100644', type: 'blob', sha: 'a' },
+            { path: 'packages/skins/miku/plugin.patch', mode: '100644', type: 'blob', sha: 'ap' },
+            { path: 'packages/dsh-skins/skins/miku/package.json', mode: '100644', type: 'blob', sha: 'b' },
+            { path: 'packages/dsh-skins/skins/miku/plugin.patch', mode: '100644', type: 'blob', sha: 'bp' },
+            { path: 'packages/Solo/package.json', mode: '100644', type: 'blob', sha: 'c' },
+            { path: 'packages/Solo/plugin.patch', mode: '100644', type: 'blob', sha: 'cp' },
+            { path: 'packages/solo/package.json', mode: '100644', type: 'blob', sha: 'd' },
+            { path: 'packages/solo/plugin.patch', mode: '100644', type: 'blob', sha: 'dp' },
+          ],
+        }
+      }
+      const shaToName: Record<string, string> = {
+        a: '@owner/miku', b: '@owner/miku', c: '@owner/solo-upper', d: '@owner/solo-lower',
+      }
+      return {
+        encoding: 'base64',
+        content: encodedJson({
+          name: shaToName[path.split('/').at(-1) ?? ''],
+          dsh: { bundle: { patch: './plugin.patch' } },
+        }),
+      }
+    })
+
+    const result = await inspectRepository(
+      { request } as unknown as ReturnType<typeof createGitHubClient>,
+      repository(),
+    )
+
+    // The duplicate skin copy loses on name; one of the two case-variant
+    // `solo` directories loses on path, because UNIQUE(normalized_plugin_id)
+    // cannot hold both. Which one wins is decided by the sweep order alone, so
+    // it is stable across passes.
+    expect(result.packages.map((item) => item.path)).toEqual([
+      'packages/solo/package.json',
+      'packages/skins/miku/package.json',
+    ])
+  })
+
+  it('does not publish a scaffold template as a plugin', async () => {
+    const request = vi.fn(async (path: string) => path.includes('/git/trees/')
+      ? {
+          truncated: false,
+          tree: [
+            { path: 'scripts/plugin-template/package.json', mode: '100644', type: 'blob', sha: 'template' },
+            { path: 'scripts/plugin-template/plugin.patch', mode: '100644', type: 'blob', sha: 'patch' },
+          ],
+        }
+      : {
+          encoding: 'base64',
+          content: encodedJson({
+            name: '@owner/dsh-client-ui-__NAME__',
+            dsh: { bundle: { patch: './plugin.patch' } },
+          }),
+        })
+
+    const result = await inspectRepository(
+      { request } as unknown as ReturnType<typeof createGitHubClient>,
+      repository(),
+    )
+
+    expect(result).toMatchObject({ status: 'rejected', code: 'scaffold_template', packages: [] })
+  })
+
+  it('retries a transient blob failure without re-reading the whole repository', async () => {
+    const waiter = vi.fn(async () => undefined)
+    let blobAttempts = 0
+    const request = vi.fn(async (path: string) => {
+      if (path.includes('/git/trees/')) {
+        return {
+          truncated: false,
+          tree: [
+            { path: 'package.json', mode: '100644', type: 'blob', sha: 'manifest' },
+            { path: 'plugin.patch', mode: '100644', type: 'blob', sha: 'patch' },
+          ],
+        }
+      }
+      blobAttempts += 1
+      if (blobAttempts === 1) throw new GitHubApiError(502, path, 'Bad gateway', null, null)
+      return {
+        encoding: 'base64',
+        content: encodedJson({ name: '@owner/plugin', dsh: { bundle: { patch: './plugin.patch' } } }),
+      }
+    })
+
+    const result = await inspectRepository(
+      { request } as unknown as ReturnType<typeof createGitHubClient>,
+      repository(),
+      null,
+      60,
+      waiter,
+    )
+
+    expect(result.packages.map((item) => item.name)).toEqual(['@owner/plugin'])
+    expect(blobAttempts).toBe(2)
+    // The tree was fetched once: the retry is scoped to the failed blob, so a
+    // flaky request costs one request rather than the whole sweep so far.
+    expect(request.mock.calls.filter(([path]) => path.includes('/git/trees/'))).toHaveLength(1)
+    expect(waiter).toHaveBeenCalledTimes(1)
   })
 
   it.each([

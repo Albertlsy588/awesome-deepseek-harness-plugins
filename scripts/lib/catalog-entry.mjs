@@ -53,6 +53,20 @@ export function repositoryUrl(id) {
   return `https://github.com/${owner}/${repository}`
 }
 
+/**
+ * Where a plugin's source actually lives.
+ *
+ * The repository for a repository-level plugin, the subdirectory tree for a
+ * monorepo subpackage — otherwise every package of one monorepo links to the
+ * same repository root and the README cannot tell them apart. Mirrors
+ * pluginSourceUrl in apps/web/worker/lib/plugin-id.ts.
+ */
+export function sourceUrl(id) {
+  const { owner, repository, subPath } = parsePluginId(id)
+  const base = `https://github.com/${owner}/${repository}`
+  return subPath.length === 0 ? base : `${base}/tree/HEAD/${subPath}`
+}
+
 export function installSpec(id) {
   const { owner, repository, subPath } = parsePluginId(id)
   return subPath.length === 0

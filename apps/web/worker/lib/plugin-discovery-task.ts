@@ -33,6 +33,12 @@ const VALIDATION_CHUNK_SIZE = 20
 const NPM_PROBE_BUDGET = 400
 const NPM_PROBE_CONCURRENCY = 6
 const NPM_PROBE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+// Every repository is re-swept at least this often even with no push behind it.
+// It is the only clause that can bring back a repository rejected wholesale —
+// a tree that 404'd while it was briefly private, a stale default branch — and
+// it is what notices a topic added or removed without a commit. At catalog
+// scale this is ~10 repositories per half-hour tick, which the reserve absorbs.
+const VALIDATION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 function npmBatches<T>(items: T[]): T[][] {
   const batches: T[][] = []
@@ -130,30 +136,48 @@ export async function runPluginDiscoveryTask(
     }
 
     let pending = false
+    // The queue is push-driven, so a repository pushed *during* this run has a
+    // pushed_at later than the watermark we stamp on it and would be handed
+    // back on the very next query. Inspecting each repository at most once per
+    // run keeps that from becoming a tight loop that burns the rate limit on a
+    // single repository; the next tick picks it up normally.
+    const inspectedThisRun = new Set<number>()
     while (Date.now() < deadline) {
-      const candidates = await loadPendingValidationRepositories(
+      const queued = await loadPendingValidationRepositories(
         env.CATALOG_DB,
         VALIDATION_CHUNK_SIZE,
+        new Date(Date.parse(end) - VALIDATION_MAX_AGE_MS).toISOString(),
       )
-      if (candidates.length === 0) break
+      const candidates = queued.filter((item) => !inspectedThisRun.has(item.repository.id))
+      if (candidates.length === 0) {
+        if (queued.length > 0) pending = true
+        break
+      }
       const rateLimit = await client.request<RateLimitResponse>('/rate_limit')
       if (rateLimit.resources.core.remaining <= CORE_RATE_LIMIT_RESERVE) {
         pending = true
         break
       }
       const inspections = []
-      for (const repository of candidates) {
+      for (const candidate of candidates) {
         if (Date.now() >= deadline ||
           (client.getRateLimitRemaining() ?? Number.POSITIVE_INFINITY) <= CORE_RATE_LIMIT_RESERVE) {
           pending = true
           break
         }
-        inspections.push(await withRetry(() => inspectRepository(client, repository)))
+        // No withRetry here any more: inspectRepository retries its own
+        // requests, so one flaky blob costs one blob instead of re-fetching
+        // the tree and every manifest read before it — an amplification that
+        // grew with the number of packages a monorepo publishes.
+        inspectedThisRun.add(candidate.repository.id)
+        inspections.push(await inspectRepository(client, candidate.repository, candidate.manifestCursor))
       }
       if (inspections.length === 0) break
       await saveRepositoryInspections(env.CATALOG_DB, inspections, end)
-      counters.accepted += inspections.filter((item) => item.status === 'accepted').length
+      counters.accepted += inspections.reduce((total, item) => total + item.packages.length, 0)
       counters.rejected += inspections.filter((item) => item.status === 'rejected').length
+      // A repository whose sweep ran out of blob budget resumes next tick.
+      if (inspections.some((item) => item.nextManifestCursor !== null)) pending = true
       if (inspections.length < candidates.length) break
     }
     if (Date.now() >= deadline) pending = true
