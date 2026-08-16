@@ -1,3 +1,4 @@
+import type { PluginInstallMethod } from '../../worker/lib/install-methods'
 import { pluginDetailPath } from '../../worker/lib/plugin-id'
 
 export type Language = 'en' | 'zh'
@@ -5,6 +6,8 @@ export type Language = 'en' | 'zh'
 export interface RegistryPlugin {
   /** Full plugin id: `owner/repository[/sub/dir]`. */
   id: string
+  /** Per-method install verification; absent on pre-verification snapshots. */
+  installMethods?: PluginInstallMethod[]
   name: string
   owner: string
   url: string

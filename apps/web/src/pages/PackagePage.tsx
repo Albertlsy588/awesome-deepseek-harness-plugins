@@ -24,6 +24,7 @@ import { Link, useParams } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
 import { CategoryTag } from '../components/CategoryTag'
 import { InstallCommand } from '../components/InstallCommand'
+import { InstallMethods } from '../components/InstallMethods'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
 import { pluginDetailPath, pluginSourceUrl } from '../../worker/lib/plugin-id'
@@ -262,7 +263,9 @@ export function PackagePage() {
         <div className="detail-primary">
           <section className="detail-section install-section" aria-labelledby="install-heading">
             <h2 id="install-heading">{t('install')}</h2>
-            <InstallCommand command={detail.install} prominent />
+            {detail.installMethods && detail.installMethods.length > 0
+              ? <InstallMethods methods={detail.installMethods} />
+              : <InstallCommand command={detail.install} prominent />}
           </section>
 
           <section className="detail-section install-activity-section" aria-labelledby="install-activity-heading">
