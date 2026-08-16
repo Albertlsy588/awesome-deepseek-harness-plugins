@@ -25,10 +25,16 @@ wrong one.
 
 The vector must name a profile (`--profile <name>` or `--profile=<name>`; the
 official CLI has no `-p` alias), use an installing verb (`add`, `i`, `install`),
-carry exactly one target before the `--` separator, and stay inside the profile's
-own dependencies (`-D`, `--save-dev`, `-O`, `--save-optional`, `--save-peer`,
-`-g` and `--global` are not counted, because the dependency lands somewhere the
-profile check cannot see).
+and stay inside the profile's own dependencies (`-D`, `--save-dev`, `-O`,
+`--save-optional`, `--save-peer`, `-g` and `--global` are not counted, because
+the dependency lands somewhere the profile check cannot see).
+
+Extra arguments are forwarded and behave normally — passing `--reporter
+append-only`, `--registry <url>` or anything else changes nothing about the
+install. They only affect counting in one case: if the arguments leave more than
+one possible install target (two repositories in one command, or an option the
+wrapper does not know takes a separate value), the install is not counted rather
+than attributed to a guess.
 
 | Target | Counted as | Where the id comes from |
 | --- | --- | --- |

@@ -10,6 +10,35 @@ const LOCATION_TARGET_PATTERN = /^(?:file:|link:|portal:|https?:|git\+|git:|ssh:
 // Verbs that write dependencies into the profile manifest. `remove`, `update`,
 // `why`, `list`, `link` and friends never produce an install event.
 const ADD_VERBS = new Set(['add', 'i', 'install'])
+// Options that consume the next token as their value. Their value must not be
+// mistaken for an install target, or a perfectly ordinary command such as
+// `add github:owner/repo --reporter append-only` would look like it named two
+// targets and go uncounted. Only options confirmed to take a separate value
+// belong here: listing a boolean would swallow a real target instead.
+// `--flag=value` spellings are unaffected either way.
+const VALUE_OPTIONS = new Set([
+  '--reporter',
+  '--registry',
+  '--store-dir',
+  '--virtual-store-dir',
+  '--modules-dir',
+  '--filter',
+  '--filter-prod',
+  '--dir', '-C',
+  '--workspace-concurrency',
+  '--network-concurrency',
+  '--fetch-retries',
+  '--fetch-retry-factor',
+  '--fetch-retry-mintimeout',
+  '--fetch-retry-maxtimeout',
+  '--fetch-timeout',
+  '--child-concurrency',
+  '--package-import-method',
+  '--resolution-mode',
+  '--save-prefix',
+  '--use-node-version',
+  '--node-linker',
+])
 // Flags that install somewhere other than the profile's own dependencies, so
 // the profile check would report a phantom failure.
 const OFF_PROFILE_FLAGS = new Set([
@@ -87,6 +116,11 @@ export function scanPluginArgs(argv) {
     }
     if (OFF_PROFILE_FLAGS.has(value)) {
       offProfile = true
+      continue
+    }
+    if (VALUE_OPTIONS.has(value)) {
+      const next = argv[index + 1]
+      if (typeof next === 'string' && !next.startsWith('-')) index += 1
       continue
     }
     if (value.startsWith('-')) continue

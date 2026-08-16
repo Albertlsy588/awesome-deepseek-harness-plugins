@@ -83,9 +83,14 @@ npx --yes @deepseek-ai/dsh plugin --profile web add github:owner/repository#v1.2
 目录仓库时才计入；其余情况照常安装但不计数——宁可漏记，也不错记。
 
 向量必须写明 profile（`--profile <name>` 或 `--profile=<name>`；官方没有 `-p`
-简写）、使用安装类动词（`add`、`i`、`install`）、在 `--` 之前只出现一个目标，
-并且装进该 profile 自己的依赖（`-D`、`--save-dev`、`-O`、`--save-optional`、
-`--save-peer`、`-g`、`--global` 一律不计入）。
+简写）、使用安装类动词（`add`、`i`、`install`），并且装进该 profile 自己的依赖
+（`-D`、`--save-dev`、`-O`、`--save-optional`、`--save-peer`、`-g`、`--global`
+一律不计入）。
+
+额外参数照常透传、行为与官方文档一致——写 `--reporter append-only` 之类不会
+影响安装本身。它们只在一种情况下影响统计：当参数让安装目标不唯一时（一条命令
+里出现两个仓库，或用了包装器不知道会带值的选项），该次安装不计入，而不是靠猜
+去归因。
 
 | 目标 | 归因为 | id 来源 |
 | --- | --- | --- |

@@ -86,12 +86,6 @@ test('never reports an install aimed outside the profile dependencies', () => {
 test('never reports when the vector names more than one target', () => {
   const parsed = scanned(['plugin', '--profile', 'web', 'add', 'github:owner/plugin', 'github:owner/other'])
   assert.equal(parsed.attribution, null)
-  // A flag value that is not attached with `=` is indistinguishable from a
-  // second target, so it also stops the count rather than guessing.
-  assert.equal(
-    scanned(['plugin', '--profile', 'web', 'add', 'github:owner/plugin', '--reporter', 'append-only']).attribution,
-    null,
-  )
 })
 
 test('attributes repository targets and the store package itself', () => {
@@ -233,4 +227,54 @@ test('scanPluginArgs never rewrites what it inspects', () => {
   const copy = [...argv]
   scanPluginArgs(copy)
   assert.deepEqual(copy, argv)
+})
+
+test('an option value is never mistaken for a second target', () => {
+  // Separated flag values are ordinary usage — our own docs show this form —
+  // so they must not cost the install its count.
+  const after = scanned(['plugin', '--profile', 'web', 'add', 'github:owner/plugin', '--reporter', 'append-only'])
+  assert.equal(after.target, 'github:owner/plugin')
+  assert.equal(after.attribution?.pluginId, 'owner/plugin')
+
+  // The value may also come before the target.
+  const before = scanned(['plugin', '--profile', 'web', 'add', '--reporter', 'append-only', 'github:owner/plugin'])
+  assert.equal(before.target, 'github:owner/plugin')
+  assert.equal(before.attribution?.pluginId, 'owner/plugin')
+
+  // The `=` spelling was never affected and stays that way.
+  const equals = scanned(['plugin', '--profile', 'web', 'add', 'github:owner/plugin', '--reporter=append-only'])
+  assert.equal(equals.attribution?.pluginId, 'owner/plugin')
+
+  // Every whitelisted option behaves the same.
+  for (const option of [
+    '--registry', '--store-dir', '--virtual-store-dir', '--modules-dir',
+    '--filter', '--filter-prod', '--dir', '-C',
+    '--workspace-concurrency', '--network-concurrency',
+    '--fetch-retries', '--fetch-retry-factor', '--fetch-retry-mintimeout',
+    '--fetch-retry-maxtimeout', '--fetch-timeout', '--child-concurrency',
+    '--package-import-method', '--resolution-mode', '--save-prefix',
+    '--use-node-version', '--node-linker',
+  ]) {
+    const parsed = scanned(['plugin', '--profile', 'web', 'add', 'github:owner/plugin', option, 'some-value'])
+    assert.equal(parsed.attribution?.pluginId, 'owner/plugin', option)
+  }
+})
+
+test('an unknown flag with a separate value still falls back to not counting', () => {
+  // The whitelist only covers options confirmed to take a value; anything else
+  // keeps the conservative behaviour rather than risking a wrong attribution.
+  const parsed = scanned(['plugin', '--profile', 'web', 'add', 'github:owner/plugin', '--unknown-flag', 'some-value'])
+  assert.equal(parsed.attribution, null)
+
+  // A boolean option's neighbour is a real target, and two targets stay uncounted.
+  const boolean = scanned(['plugin', '--profile', 'web', 'add', '--strict-peer-dependencies', 'a/b', 'c/d'])
+  assert.equal(boolean.attribution, null)
+})
+
+test('genuinely multiple targets are still never counted', () => {
+  assert.equal(scanned(['plugin', '--profile', 'web', 'add', 'a/b', 'c/d']).attribution, null)
+  assert.equal(
+    scanned(['plugin', '--profile', 'web', 'add', 'a/b', '--reporter', 'append-only', 'c/d']).attribution,
+    null,
+  )
 })

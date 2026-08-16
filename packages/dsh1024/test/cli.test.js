@@ -1179,3 +1179,53 @@ test('a reported event carries an owner/repository id and nothing path-shaped', 
   }
   assert.match(event.pluginId, /^[a-z0-9_.-]+\/[a-z0-9_.-]+$/)
 })
+
+test('a separated option value does not cost the install its count', async () => {
+  const dshHome = await makeHome()
+  const events = []
+  let invocation
+  const exitCode = await main([
+    'plugin',
+    '--profile',
+    'web',
+    'add',
+    'github:owner/repo',
+    '--reporter',
+    'append-only',
+  ], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+    platform: 'linux',
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn(command, args, options) {
+      invocation = { command, args, options }
+      installProfile(dshHome)
+      return fakeChild()
+    },
+    async fetchImpl(_url, options) {
+      events.push(JSON.parse(options.body))
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  // Still forwarded verbatim...
+  assert.deepEqual(invocation.args, [
+    '--yes',
+    '@deepseek-ai/dsh',
+    'plugin',
+    '--profile',
+    'web',
+    'add',
+    'github:owner/repo',
+    '--reporter',
+    'append-only',
+  ])
+  // ...and now counted, where it used to be silently dropped.
+  assert.equal(events.length, 1)
+  assert.equal(events[0].pluginId, 'owner/repo')
+  assert.equal(events[0].status, 'success')
+})

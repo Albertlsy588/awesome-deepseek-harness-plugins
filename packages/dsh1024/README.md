@@ -100,9 +100,15 @@ and goes uncounted — a missing count is preferred over a wrong one.
 
 The vector must name a profile (`--profile <name>` or `--profile=<name>`; the
 official CLI has no `-p` alias), use an installing verb (`add`, `i`, `install`),
-carry exactly one target before `--`, and install into the profile's own
-dependencies (`-D`, `--save-dev`, `-O`, `--save-optional`, `--save-peer`, `-g`
-and `--global` are not counted).
+and install into the profile's own dependencies (`-D`, `--save-dev`, `-O`,
+`--save-optional`, `--save-peer`, `-g` and `--global` are not counted).
+
+Extra arguments pass through and behave exactly as the official CLI documents
+them; `--reporter append-only` and friends change nothing about the install.
+They matter to counting only when they leave more than one possible install
+target — two repositories in one command, or an option the wrapper does not know
+takes a separate value — in which case the install is not counted rather than
+attributed to a guess.
 
 | Target | Counted as | Where the id comes from |
 | --- | --- | --- |
