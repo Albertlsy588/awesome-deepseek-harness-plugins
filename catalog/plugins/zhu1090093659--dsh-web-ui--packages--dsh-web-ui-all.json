@@ -1,6 +1,6 @@
 {
   "$schema": "../schema/plugin.schema.json",
-  "id": "zhu1090093659/dsh-web-ui",
+  "id": "zhu1090093659/dsh-web-ui/packages/dsh-web-ui-all",
   "name": "dsh-web-ui",
   "repository": "https://github.com/zhu1090093659/dsh-web-ui",
   "category": "ui",

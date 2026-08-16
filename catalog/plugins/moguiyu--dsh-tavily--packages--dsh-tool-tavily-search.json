@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "moguiyu/dsh-tavily/packages/dsh-tool-tavily-search",
+  "name": "dsh-tool-tavily-search",
+  "repository": "https://github.com/moguiyu/dsh-tavily",
+  "category": "tools",
+  "description": {
+    "en": "Tavily search with multiple API keys, key rotation and failover, a usage gauge, and a settings card.",
+    "zh": "Tavily 搜索：多 API key、轮换与故障转移、用量仪表与设置卡片。"
+  },
+  "added": "2026-08-16"
+}

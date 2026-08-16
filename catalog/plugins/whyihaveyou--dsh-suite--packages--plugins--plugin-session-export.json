@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "whyihaveyou/dsh-suite/packages/plugins/plugin-session-export",
+  "name": "plugin-session-export",
+  "repository": "https://github.com/whyihaveyou/dsh-suite",
+  "category": "session",
+  "description": {
+    "en": "Export the append-only session log as human-readable Markdown or HTML, grouped by trajectory source.",
+    "zh": "将只追加的会话日志导出为可读的 Markdown 或 HTML，按轨迹来源分组。"
+  },
+  "added": "2026-08-16"
+}

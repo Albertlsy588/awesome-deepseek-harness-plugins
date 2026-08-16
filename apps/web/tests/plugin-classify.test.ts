@@ -57,54 +57,78 @@ function sqliteD1(database: DatabaseSync): D1Database {
   } as unknown as D1Database
 }
 
+/** 0005 rebuilds the catalog from the 0002 tables, so both must run in order. */
 function migratedDatabase(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
-  for (const file of ['0001_github_star_snapshots.sql', '0002_plugin_catalog.sql',
-    '0005_ai_classification.sql']) {
+  for (const file of [
+    '0001_github_star_snapshots.sql',
+    '0002_plugin_catalog.sql',
+    '0005_catalog_plugins.sql',
+    '0006_ai_classification.sql',
+  ]) {
     database.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'))
   }
   return database
 }
 
-/** Insert a repository plus its discovery source; `curated` adds a github_pr source. */
+const NOW = '2026-08-17T00:00:00Z'
+
 function seedRepository(
   database: DatabaseSync,
   id: number,
   fullName: string,
-  options: { curated?: boolean; description?: string | null; stars?: number } = {},
+  options: { description?: string | null; stars?: number; fromTopic?: boolean } = {},
 ): void {
-  const now = '2026-08-16T00:00:00Z'
   const [owner, name] = fullName.split('/')
   database.prepare(
     `INSERT INTO catalog_repositories (
        id, github_id, full_name, normalized_full_name, owner, repository_name, html_url,
-       description, stars, validation_status, topic_present,
+       github_description, stars, from_topic,
        first_seen_at, last_seen_at, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'accepted', 1, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(id, id * 100, fullName, fullName.toLowerCase(), owner, name,
     `https://github.com/${fullName}`, options.description ?? null, options.stars ?? 0,
-    now, now, now, now)
+    options.fromTopic === false ? 0 : 1, NOW, NOW, NOW, NOW)
+}
+
+/** Adds one plugin row; `curated` fills the curator-owned columns. */
+function seedPlugin(
+  database: DatabaseSync,
+  repositoryId: number,
+  pluginId: string,
+  options: {
+    pluginPath?: string
+    curated?: boolean
+    fromPr?: boolean
+    packageName?: string | null
+    validation?: string
+  } = {},
+): void {
+  const path = options.pluginPath ?? ''
   database.prepare(
-    `INSERT INTO catalog_repository_sources (repository_id, source, first_seen_at, last_seen_at)
-     VALUES (?, 'github_topic', ?, ?)`,
-  ).run(id, now, now)
-  if (options.curated) {
-    database.prepare(
-      `INSERT INTO catalog_repository_sources (repository_id, source, first_seen_at, last_seen_at)
-       VALUES (?, 'github_pr', ?, ?)`,
-    ).run(id, now, now)
-    database.prepare(
-      `INSERT INTO catalog_metadata (
-         repository_id, display_name, category, description_en, description_zh,
-         added, source, updated_at
-       ) VALUES (?, ?, 'tools', ?, ?, '2026-01-01', 'github_pr', ?)`,
-    ).run(id, name, `Curated ${name}.`, `人工描述 ${name}。`, now)
-  }
+    `INSERT INTO catalog_plugins (
+       repository_id, plugin_id, normalized_plugin_id, plugin_path, from_pr,
+       curated_name, curated_category, curated_description_en, curated_description_zh,
+       curated_added, package_name, validation_status,
+       first_seen_at, last_seen_at, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    repositoryId, pluginId, pluginId.toLowerCase(), path,
+    options.curated || options.fromPr ? 1 : 0,
+    options.curated ? 'Curated name' : null,
+    options.curated ? 'tools' : null,
+    options.curated ? 'Curated English blurb.' : null,
+    options.curated ? '人工中文描述。' : null,
+    options.curated ? '2026-01-01' : null,
+    options.packageName ?? null,
+    options.validation ?? 'accepted',
+    NOW, NOW, NOW, NOW,
+  )
 }
 
 const candidate = (over: Partial<ClassificationCandidate> = {}): ClassificationCandidate => ({
-  repositoryId: 1, fullName: 'owner/dsh-x', repositoryName: 'dsh-x',
-  description: null, stars: 0, ...over,
+  repositoryId: 1, pluginPath: '', pluginId: 'owner/dsh-x', packageName: null,
+  repositoryName: 'dsh-x', description: null, stars: 0, ...over,
 })
 const item = (over: Partial<ClassifierItem> = {}): ClassifierItem => ({
   id: 0, category: 'tools', confidence: 0.9,
@@ -112,32 +136,15 @@ const item = (over: Partial<ClassifierItem> = {}): ClassifierItem => ({
   description_zh: '为输入框添加可搜索的命令面板。', ...over,
 })
 
-describe('0005 migration', () => {
-  it('preserves curated rows and keeps column values aligned', () => {
-    const database = new DatabaseSync(':memory:')
-    database.exec(readFileSync(new URL('../migrations/0002_plugin_catalog.sql', import.meta.url), 'utf8'))
-    seedRepository(database, 1, 'owner/curated', { curated: true })
-    database.exec(readFileSync(new URL('../migrations/0005_ai_classification.sql', import.meta.url), 'utf8'))
-
-    const row = database.prepare('SELECT * FROM catalog_metadata WHERE repository_id = 1').get() as
-      Record<string, unknown>
-    expect(row.category).toBe('tools')
-    expect(row.source).toBe('github_pr')
-    expect(row.description_zh).toBe('人工描述 curated。')
-    // updated_at must not have slipped into one of the two new columns
-    expect(row.updated_at).toBe('2026-08-16T00:00:00Z')
-    expect(row.classifier_version).toBeNull()
-    expect(row.description_origin).toBeNull()
-  })
-
-  it('now accepts ai rows that the old CHECK rejected', () => {
+describe('0006 migration', () => {
+  it('adds the ai columns without disturbing curated data', () => {
     const database = migratedDatabase()
-    seedRepository(database, 1, 'owner/discovered')
-    expect(() => database.prepare(
-      `INSERT INTO catalog_metadata (repository_id, display_name, category, description_en,
-         description_zh, added, source, classifier_version, description_origin, updated_at)
-       VALUES (1, 'x', 'ui', 'en', 'zh', '2026-08-16', 'ai', 'v1', 'generated', 'now')`,
-    ).run()).not.toThrow()
+    seedRepository(database, 1, 'owner/curated')
+    seedPlugin(database, 1, 'owner/curated', { curated: true })
+    const row = database.prepare('SELECT * FROM catalog_plugins').get() as Record<string, unknown>
+    expect(row.curated_category).toBe('tools')
+    expect(row.ai_category).toBeNull()
+    expect(row.ai_classifier_version).toBeNull()
   })
 })
 
@@ -145,77 +152,105 @@ describe('loadClassificationQueue', () => {
   let database: DatabaseSync
   beforeEach(() => { database = migratedDatabase() })
 
-  it('excludes curated repositories even when their metadata says source=ai', async () => {
-    seedRepository(database, 1, 'owner/curated', { curated: true })
+  it('skips plugins a curator already categorised', async () => {
+    seedRepository(database, 1, 'owner/curated')
+    seedPlugin(database, 1, 'owner/curated', { curated: true })
     seedRepository(database, 2, 'owner/discovered')
-    // Simulate the syncCuratedEntries quirk: its upsert never rewrites `source`,
-    // so a repo classified before its PR landed still reads as 'ai'.
-    database.prepare("UPDATE catalog_metadata SET source = 'ai' WHERE repository_id = 1").run()
+    seedPlugin(database, 2, 'owner/discovered')
 
     const queue = await loadClassificationQueue(sqliteD1(database), CLASSIFIER_VERSION, 10)
-    expect(queue.map((entry) => entry.repositoryId)).toEqual([2])
+    expect(queue.map((entry) => entry.pluginId)).toEqual(['owner/discovered'])
+  })
+
+  it('still classifies a submitted plugin that carries no curated category', async () => {
+    // from_pr without curated columns: published, but nobody wrote a category.
+    seedRepository(database, 1, 'owner/submitted')
+    seedPlugin(database, 1, 'owner/submitted', { fromPr: true })
+    const queue = await loadClassificationQueue(sqliteD1(database), CLASSIFIER_VERSION, 10)
+    expect(queue).toHaveLength(1)
   })
 
   it('skips rows already classified at the current version, re-enqueues on bump', async () => {
     seedRepository(database, 1, 'owner/discovered')
+    seedPlugin(database, 1, 'owner/discovered')
     const db = sqliteD1(database)
     await saveClassifications(db, [{
-      repositoryId: 1, displayName: 'discovered', category: 'ui',
+      repositoryId: 1, pluginPath: '', category: 'ui',
       descriptionEn: 'en.', descriptionZh: '中文。', descriptionOrigin: 'generated',
-      added: '2026-08-16',
     }], CLASSIFIER_VERSION)
 
     expect(await loadClassificationQueue(db, CLASSIFIER_VERSION, 10)).toHaveLength(0)
     expect(await loadClassificationQueue(db, 'v2-next', 10)).toHaveLength(1)
   })
 
-  it('orders by stars so the most visible plugins are fixed first', async () => {
-    seedRepository(database, 1, 'owner/low', { stars: 3 })
-    seedRepository(database, 2, 'owner/high', { stars: 900 })
+  it('treats each monorepo subpackage as its own candidate', async () => {
+    seedRepository(database, 1, 'owner/mono', { description: 'A monorepo.' })
+    seedPlugin(database, 1, 'owner/mono/packages/a', {
+      pluginPath: 'packages/a', packageName: '@owner/dsh-a',
+    })
+    seedPlugin(database, 1, 'owner/mono/packages/b', {
+      pluginPath: 'packages/b', packageName: '@owner/dsh-b',
+    })
+
     const queue = await loadClassificationQueue(sqliteD1(database), CLASSIFIER_VERSION, 10)
-    expect(queue.map((entry) => entry.repositoryName)).toEqual(['high', 'low'])
+    expect(queue).toHaveLength(2)
+    expect(queue.map((entry) => entry.packageName).sort())
+      .toEqual(['@owner/dsh-a', '@owner/dsh-b'])
   })
 
-  it('ignores repositories that are not accepted', async () => {
-    seedRepository(database, 1, 'owner/discovered')
-    database.prepare("UPDATE catalog_repositories SET validation_status = 'rejected'").run()
+  it('excludes topic plugins that have not been accepted', async () => {
+    seedRepository(database, 1, 'owner/pending')
+    seedPlugin(database, 1, 'owner/pending', { validation: 'rejected' })
     expect(await loadClassificationQueue(sqliteD1(database), CLASSIFIER_VERSION, 10)).toHaveLength(0)
+  })
+
+  it('orders by stars so the most visible plugins are fixed first', async () => {
+    seedRepository(database, 1, 'owner/low', { stars: 3 })
+    seedPlugin(database, 1, 'owner/low')
+    seedRepository(database, 2, 'owner/high', { stars: 900 })
+    seedPlugin(database, 2, 'owner/high')
+    const queue = await loadClassificationQueue(sqliteD1(database), CLASSIFIER_VERSION, 10)
+    expect(queue.map((entry) => entry.pluginId)).toEqual(['owner/high', 'owner/low'])
   })
 })
 
 describe('saveClassifications', () => {
-  it('refuses to overwrite a curated row', async () => {
+  it('cannot touch a curated plugin even when handed one', async () => {
     const database = migratedDatabase()
-    seedRepository(database, 1, 'owner/curated', { curated: true })
-    await saveClassifications(sqliteD1(database), [{
-      repositoryId: 1, displayName: 'hijacked', category: 'fun',
-      descriptionEn: 'AI overwrote this.', descriptionZh: 'AI 覆盖了这个。',
-      descriptionOrigin: 'generated', added: '2026-08-16',
+    seedRepository(database, 1, 'owner/curated')
+    seedPlugin(database, 1, 'owner/curated', { curated: true })
+
+    const written = await saveClassifications(sqliteD1(database), [{
+      repositoryId: 1, pluginPath: '', category: 'fun',
+      descriptionEn: 'AI tried to overwrite this.', descriptionZh: 'AI 想覆盖这个。',
+      descriptionOrigin: 'generated',
     }], CLASSIFIER_VERSION)
 
-    const row = database.prepare('SELECT * FROM catalog_metadata WHERE repository_id = 1').get() as
-      Record<string, unknown>
-    expect(row.category).toBe('tools')
-    expect(row.source).toBe('github_pr')
-    expect(row.description_en).toBe('Curated curated.')
+    expect(written).toBe(0)
+    const row = database.prepare('SELECT * FROM catalog_plugins').get() as Record<string, unknown>
+    expect(row.curated_category).toBe('tools')
+    expect(row.curated_description_en).toBe('Curated English blurb.')
+    expect(row.ai_category).toBeNull()
   })
 
-  it('updates its own rows across versions', async () => {
+  it('writes onto the right subpackage row, not its sibling', async () => {
     const database = migratedDatabase()
-    seedRepository(database, 1, 'owner/discovered')
-    const db = sqliteD1(database)
-    const entry = {
-      repositoryId: 1, displayName: 'discovered', category: 'ui',
-      descriptionEn: 'first.', descriptionZh: '第一版。',
-      descriptionOrigin: 'generated' as const, added: '2026-08-16',
-    }
-    await saveClassifications(db, [entry], 'v1')
-    await saveClassifications(db, [{ ...entry, category: 'theme', descriptionEn: 'second.' }], 'v2')
+    seedRepository(database, 1, 'owner/mono')
+    seedPlugin(database, 1, 'owner/mono/packages/a', { pluginPath: 'packages/a' })
+    seedPlugin(database, 1, 'owner/mono/packages/b', { pluginPath: 'packages/b' })
 
-    const row = database.prepare('SELECT * FROM catalog_metadata WHERE repository_id = 1').get() as
-      Record<string, unknown>
-    expect(row.category).toBe('theme')
-    expect(row.classifier_version).toBe('v2')
+    await saveClassifications(sqliteD1(database), [{
+      repositoryId: 1, pluginPath: 'packages/b', category: 'memory',
+      descriptionEn: 'en.', descriptionZh: '中文。', descriptionOrigin: 'generated',
+    }], CLASSIFIER_VERSION)
+
+    const rows = database.prepare(
+      'SELECT plugin_path, ai_category FROM catalog_plugins ORDER BY plugin_path',
+    ).all() as { plugin_path: string; ai_category: string | null }[]
+    expect(rows).toEqual([
+      { plugin_path: 'packages/a', ai_category: null },
+      { plugin_path: 'packages/b', ai_category: 'memory' },
+    ])
   })
 })
 
@@ -318,6 +353,10 @@ describe('systemPrompt', () => {
       expect(prompt).toContain(`- ${id}:`)
     }
   })
+
+  it('warns that monorepo siblings share one repository blurb', () => {
+    expect(systemPrompt()).toContain('子包')
+  })
 })
 
 describe('runPluginClassifyTask', () => {
@@ -336,6 +375,7 @@ describe('runPluginClassifyTask', () => {
   it('classifies the queue and stops when it empties', async () => {
     const database = migratedDatabase()
     seedRepository(database, 1, 'owner/dsh-a', { description: 'Adds a palette.' })
+    seedPlugin(database, 1, 'owner/dsh-a')
     const run = vi.fn()
       .mockResolvedValueOnce(reply([{ ...item(), id: 0 }]))
       .mockResolvedValue(reply([]))
@@ -344,58 +384,60 @@ describe('runPluginClassifyTask', () => {
     expect(result.written).toBe(1)
     expect(result.neurons).toBe(12)
 
-    const row = database.prepare('SELECT * FROM catalog_metadata WHERE repository_id = 1').get() as
-      Record<string, unknown>
-    expect(row.source).toBe('ai')
-    expect(row.classifier_version).toBe(CLASSIFIER_VERSION)
+    const row = database.prepare('SELECT * FROM catalog_plugins').get() as Record<string, unknown>
+    expect(row.ai_category).toBe('tools')
+    expect(row.ai_classifier_version).toBe(CLASSIFIER_VERSION)
     // Author's own words are preserved; only the Chinese side comes from the model.
-    expect(row.description_en).toBe('Adds a palette.')
-    expect(row.description_origin).toBe('author_en')
+    expect(row.ai_description_en).toBe('Adds a palette.')
+    expect(row.ai_description_origin).toBe('author_en')
   })
 
-  it('leaves unclassified verdicts out of the table', async () => {
+  it('feeds the package name so monorepo siblings are told apart', async () => {
+    const database = migratedDatabase()
+    seedRepository(database, 1, 'owner/mono', { description: 'A monorepo.' })
+    seedPlugin(database, 1, 'owner/mono/packages/a', {
+      pluginPath: 'packages/a', packageName: '@owner/dsh-a',
+    })
+    const run = vi.fn()
+      .mockResolvedValueOnce(reply([{ ...item(), id: 0 }]))
+      .mockResolvedValue(reply([]))
+    await runPluginClassifyTask(envWith(database, run), Date.now(), { batchSize: 5 })
+
+    const [, payload] = run.mock.calls[0] as [string, { messages: { content: string }[] }]
+    const sent = JSON.parse(payload.messages[1].content)
+    expect(sent[0].name).toBe('@owner/dsh-a')
+    expect(sent[0].plugin_id).toBe('owner/mono/packages/a')
+  })
+
+  it('leaves unclassified verdicts out of the ai columns', async () => {
     const database = migratedDatabase()
     seedRepository(database, 1, 'owner/dsh-a')
+    seedPlugin(database, 1, 'owner/dsh-a')
     const run = vi.fn().mockResolvedValue(reply([{ ...item(), category: 'unclassified' }]))
 
     const result = await runPluginClassifyTask(envWith(database, run), Date.now(), { batchSize: 5 })
     expect(result.written).toBe(0)
     expect(result.rejected).toBe(1)
-    expect(database.prepare('SELECT COUNT(*) AS n FROM catalog_metadata').get())
-      .toEqual({ n: 0 })
+    const row = database.prepare('SELECT ai_category FROM catalog_plugins').get()
+    expect(row).toEqual({ ai_category: null })
   })
 
   it('drops an item whose id does not line up instead of misattributing it', async () => {
     const database = migratedDatabase()
     seedRepository(database, 1, 'owner/dsh-a')
+    seedPlugin(database, 1, 'owner/dsh-a')
     const run = vi.fn().mockResolvedValue(reply([{ ...item(), id: 99 }]))
 
     const result = await runPluginClassifyTask(envWith(database, run), Date.now(), { batchSize: 5 })
     expect(result.written).toBe(0)
     expect(result.rejected).toBe(1)
-    expect(database.prepare('SELECT COUNT(*) AS n FROM catalog_metadata').get()).toEqual({ n: 0 })
-  })
-
-  it('writes only the aligned items when a batch is partially malformed', async () => {
-    const database = migratedDatabase()
-    seedRepository(database, 1, 'owner/dsh-a', { stars: 10 })
-    seedRepository(database, 2, 'owner/dsh-b', { stars: 5 })
-    const run = vi.fn()
-      .mockResolvedValueOnce(reply([{ ...item(), id: 0 }, { ...item(), id: 99 }]))
-      .mockResolvedValue(reply([]))
-
-    const result = await runPluginClassifyTask(envWith(database, run), Date.now(), { batchSize: 5 })
-    // dsh-a (id 0) lands; dsh-b has no matching item and stays unclassified.
-    expect(result.written).toBe(1)
-    const rows = database.prepare('SELECT repository_id FROM catalog_metadata').all()
-    expect(rows).toEqual([{ repository_id: 1 }])
   })
 
   it('stops before starting when the daily neuron budget is gone', async () => {
     const database = migratedDatabase()
     seedRepository(database, 1, 'owner/dsh-a')
-    const db = sqliteD1(database)
-    await recordNeuronSpend(db, 9500, new Date().toISOString())
+    seedPlugin(database, 1, 'owner/dsh-a')
+    await recordNeuronSpend(sqliteD1(database), 9500, new Date().toISOString())
     const run = vi.fn()
 
     const result = await runPluginClassifyTask(envWith(database, run), Date.now(), {
@@ -406,17 +448,17 @@ describe('runPluginClassifyTask', () => {
   })
 
   it('accumulates neuron spend per UTC day', async () => {
-    const database = migratedDatabase()
-    const db = sqliteD1(database)
-    await recordNeuronSpend(db, 100, '2026-08-16T01:00:00Z')
-    await recordNeuronSpend(db, 250, '2026-08-16T23:00:00Z')
-    expect(await neuronsSpentToday(db, '2026-08-16T12:00:00Z')).toBe(350)
-    expect(await neuronsSpentToday(db, '2026-08-17T00:00:00Z')).toBe(0)
+    const db = sqliteD1(migratedDatabase())
+    await recordNeuronSpend(db, 100, '2026-08-17T01:00:00Z')
+    await recordNeuronSpend(db, 250, '2026-08-17T23:00:00Z')
+    expect(await neuronsSpentToday(db, '2026-08-17T12:00:00Z')).toBe(350)
+    expect(await neuronsSpentToday(db, '2026-08-18T00:00:00Z')).toBe(0)
   })
 
   it('survives an AI failure without writing anything', async () => {
     const database = migratedDatabase()
     seedRepository(database, 1, 'owner/dsh-a')
+    seedPlugin(database, 1, 'owner/dsh-a')
     const run = vi.fn().mockRejectedValue(new Error('AiError: out of capacity'))
 
     const result = await runPluginClassifyTask(envWith(database, run), Date.now(), { batchSize: 5 })
@@ -427,6 +469,7 @@ describe('runPluginClassifyTask', () => {
   it('disables thinking and asks for a flat json_schema', async () => {
     const database = migratedDatabase()
     seedRepository(database, 1, 'owner/dsh-a')
+    seedPlugin(database, 1, 'owner/dsh-a')
     const run = vi.fn().mockResolvedValue(reply([{ ...item(), id: 0 }]))
     await runPluginClassifyTask(envWith(database, run), Date.now(), { batchSize: 5 })
 

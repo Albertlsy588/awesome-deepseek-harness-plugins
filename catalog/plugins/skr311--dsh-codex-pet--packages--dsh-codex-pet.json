@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "skr311/dsh-codex-pet/packages/dsh-codex-pet",
+  "name": "dsh-codex-pet",
+  "repository": "https://github.com/skr311/dsh-codex-pet",
+  "category": "fun",
+  "description": {
+    "en": "Import Codex-style sprite-sheet pets and render them as a floating shell.overlay with a pet library, interactions, and agent-state linkage.",
+    "zh": "导入 Codex 风格精灵图桌宠并渲染为浮动 shell.overlay：内置桌宠库、互动与 Agent 状态联动。"
+  },
+  "added": "2026-08-16"
+}

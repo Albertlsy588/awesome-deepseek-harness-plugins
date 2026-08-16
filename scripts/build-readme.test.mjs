@@ -9,9 +9,12 @@ import { fileURLToPath } from 'node:url'
 import {
   adaptLegacyRegistry,
   buildReadmeFiles,
+  catalogRevision,
   groupPlugins,
   loadRegistry,
   normalizeRegistry,
+  screenshotBranch,
+  screenshotPaths,
 } from './build-readme.mjs'
 
 const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'build-readme.mjs')
@@ -25,7 +28,7 @@ const categories = [
 const registryFixture = {
   name: 'dsh-1024store-catalog',
   updated: '2026-08-15T04:05:06.000Z',
-  count: 4,
+  count: 5,
   categories: categories.map(category => ({ ...category })),
   plugins: [
     {
@@ -72,6 +75,17 @@ const registryFixture = {
       added: '2026-08-03',
       stars: 0,
     },
+    {
+      id: 'owner/monorepo/packages/nested',
+      name: 'nested-plugin',
+      owner: 'owner',
+      url: 'https://github.com/owner/monorepo',
+      category: 'tools',
+      description: { en: 'A monorepo subpackage plugin.', zh: 'monorepo 子包插件。' },
+      install: 'dsh plugin --profile web add github:owner/monorepo#path:packages/nested',
+      added: '2026-08-16',
+      stars: 1,
+    },
   ],
 }
 
@@ -90,7 +104,7 @@ async function fixtureRoot() {
 test('groups by category order with unclassified last and stable name sorting', () => {
   const groups = groupPlugins(normalizeRegistry(registryFixture), categories)
   assert.deepEqual(groups.map(group => group.id), ['ui', 'tools', 'unclassified'])
-  assert.deepEqual(groups[1].plugins.map(plugin => plugin.name), ['alpha-tool', 'Zeta-Tool'])
+  assert.deepEqual(groups[1].plugins.map(plugin => plugin.name), ['alpha-tool', 'nested-plugin', 'Zeta-Tool'])
   assert.deepEqual(groups.at(-1).label, { en: 'Unclassified', zh: '待分类' })
 })
 
@@ -100,29 +114,194 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   const en = files['catalog/README.md']
 
   assert.match(zh, /# DSH 1024Store/)
-  assert.match(zh, /共收录 \*\*4\*\* 个插件/)
+  assert.match(zh, /共收录 \*\*5\*\* 个插件/)
   assert.match(zh, /2026-08-15/)
-  assert.match(zh, /npx @dsh-1024store\/cli add <owner>\/<repository> --profile web/)
+  assert.match(zh, /npx @dsh-1024store\/cli add <owner>\/<repository>\[\/<sub\/dir>\] --profile web/)
+  // A subdirectory plugin renders like any other entry, linking to its repository root.
+  assert.match(zh, /- \[nested-plugin\]\(https:\/\/github\.com\/owner\/monorepo\) — monorepo 子包插件。/)
   assert.match(zh, /自动合并/)
   assert.match(zh, /自动同步/)
   // zh line falls back to English when the Chinese description is missing.
   assert.match(zh, /- \[alpha-tool\]\(https:\/\/github\.com\/owner\/alpha\) — Alpha tool\./)
   // multi-line descriptions collapse into a single line.
   assert.match(zh, /- \[ui-thing\]\(https:\/\/github\.com\/owner\/ui-thing\) — 界面 增强。/)
-  assert.match(zh, /## 待分类/)
+  assert.match(zh, /<summary><strong>待分类<\/strong> · 1 个插件<\/summary>/)
   assert.doesNotMatch(zh, /stars?:? \d/i)
 
   assert.match(en, /DSH 1024Store/)
-  assert.match(en, /\*\*4\*\* plugins, updated 2026-08-15/)
+  assert.match(en, /\*\*5\*\* plugins, updated 2026-08-15/)
   assert.match(en, /- \[Zeta-Tool\]\(https:\/\/github\.com\/owner\/zeta\) — Zeta tool\./)
   // en line falls back to Chinese when the English description is missing.
   assert.match(en, /- \[ui-thing\]\(https:\/\/github\.com\/owner\/ui-thing\) — 界面 增强。/)
-  assert.match(en, /## Unclassified/)
+  assert.match(en, /<summary><strong>Unclassified<\/strong> · 1 plugins<\/summary>/)
   assert.match(en, /merged submissions are synced/i)
 
   // Category index order and counts.
   const zhIndex = zh.slice(zh.indexOf('## 插件分类'))
-  assert.match(zhIndex, /- \[UI 增强\]\(#ui\) \(1\)\n- \[工具与能力\]\(#tools\) \(2\)\n- \[待分类\]\(#unclassified\) \(1\)/)
+  assert.match(zhIndex, /- \[UI 增强\]\(#ui\) \(1\)\n- \[工具与能力\]\(#tools\) \(3\)\n- \[待分类\]\(#unclassified\) \(1\)/)
+})
+
+test('collapses every category into a default-closed details block', async () => {
+  const files = await buildReadmeFiles(normalizeRegistry(registryFixture), categories)
+
+  for (const [name, content] of Object.entries(files)) {
+    // Default-collapsed: an `open` attribute would defeat the whole point.
+    assert.doesNotMatch(content, /<details[^>]/, `${name} must not open any group by default`)
+    assert.equal((content.match(/<details>/g) ?? []).length, 3, `${name} must wrap all three groups`)
+    assert.equal((content.match(/<\/details>/g) ?? []).length, 3, `${name} must close all three groups`)
+    // GitHub only renders Markdown inside <details> when the summary is followed by a
+    // blank line and the block is not indented.
+    assert.doesNotMatch(content, /^[ \t]+<(details|summary|\/details)/m, `${name} must not indent the HTML`)
+    assert.match(content, /<\/summary>\n\n- \[/, `${name} needs a blank line before the list`)
+    assert.match(content, /\n\n<\/details>/, `${name} needs a blank line before the closing tag`)
+    // The anchor stays outside so the category index can still jump to a closed group.
+    assert.match(content, /<a id="ui"><\/a>\n\n<details>/, `${name} must keep anchors outside the block`)
+  }
+
+  // Category labels contain "&", which must be escaped inside the raw HTML summary.
+  assert.match(files['catalog/README.md'], /<summary><strong>Tools &amp; Capabilities<\/strong> · 3 plugins<\/summary>/)
+  for (const summary of files['catalog/README.md'].match(/<summary>.*<\/summary>/g) ?? []) {
+    assert.doesNotMatch(summary, /&(?!amp;|lt;|gt;)/, `unescaped & in ${summary}`)
+  }
+  assert.match(files['README.md'], /<summary><strong>工具与能力<\/strong> · 3 个插件<\/summary>/)
+})
+
+test('leads with the marketplace, in-app plugin, scheduled validation, API and contribution calls', async () => {
+  const files = await buildReadmeFiles(normalizeRegistry(registryFixture), categories)
+  const zh = files['README.md']
+  const en = files['catalog/README.md']
+
+  // The four things this repository ships beyond the list itself.
+  assert.match(zh, /deepseek1024\.com/)
+  assert.match(zh, /CLOUDFLARE_API_TOKEN/)
+  assert.match(zh, /dsh plugin --profile web add dsh-1024store/)
+  assert.match(zh, /定时收集/)
+  assert.match(zh, /格式校验/)
+  assert.match(zh, /绝不执行仓库代码/)
+  assert.match(zh, /api\.deepseek1024\.com\/v1\/plugins\/search/)
+
+  // Star / issue / PR / fork calls to action.
+  assert.match(zh, /\/stargazers\)/)
+  assert.match(zh, /\/issues\/new\)/)
+  assert.match(zh, /\/pulls\)/)
+  assert.match(zh, /\/fork\)/)
+
+  assert.match(en, /CLOUDFLARE_API_TOKEN/)
+  assert.match(en, /dsh plugin --profile web add dsh-1024store/)
+  assert.match(en, /never installing dependencies or executing repository code/)
+  assert.match(en, /api\.deepseek1024\.com\/v1\/plugins\/search/)
+  for (const suffix of ['/stargazers)', '/issues/new)', '/pulls)', '/fork)']) {
+    assert.ok(en.includes(suffix), `English README is missing the ${suffix} call to action`)
+  }
+  // The review gate has three verdicts; the README must not promise that every
+  // passing pull request merges itself. Kept in sync with CONTRIBUTING.md,
+  // the PR template, SKILL.md and submission-reference.md.
+  assert.match(zh, /维护者人工审核/)
+  assert.match(en, /waits for maintainer approval/)
+
+  // Links in catalog/README.md resolve one directory up.
+  assert.match(en, /\]\(\.\.\/CONTRIBUTING\.md\)/)
+  assert.match(en, /\]\(\.\.\/docs\/api\.md\)/)
+})
+
+test('caps only the unclassified bucket and keeps the projection renderable', async () => {
+  // 3 unclassified entries with a limit of 500 stay uncapped; build a bucket big
+  // enough to trip the cap without depending on the production catalog.
+  const many = Array.from({ length: 620 }, (_, index) => ({
+    id: `scanner/plugin-${String(index).padStart(4, '0')}`,
+    name: `scanned-${String(index).padStart(4, '0')}`,
+    owner: 'scanner',
+    url: `https://github.com/scanner/plugin-${String(index).padStart(4, '0')}`,
+    category: 'unclassified',
+    description: { en: 'Discovered by the topic scan.', zh: '由 topic 扫描发现。' },
+    added: '2026-08-15',
+    stars: null,
+  }))
+  const big = { ...registryFixture, plugins: [...registryFixture.plugins, ...many] }
+  const files = await buildReadmeFiles(normalizeRegistry(big), categories)
+  const zh = files['README.md']
+  const en = files['catalog/README.md']
+
+  // Curated categories keep every entry.
+  assert.match(zh, /<summary><strong>工具与能力<\/strong> · 3 个插件<\/summary>/)
+  assert.match(en, /<summary><strong>Tools &amp; Capabilities<\/strong> · 3 plugins<\/summary>/)
+
+  // The unclassified bucket is capped, and says so instead of pretending to be whole.
+  assert.match(zh, /<summary><strong>待分类<\/strong> · 显示 500 \/ 共 621 个<\/summary>/)
+  assert.match(en, /<summary><strong>Unclassified<\/strong> · showing 500 of 621<\/summary>/)
+  assert.match(zh, /其余 121 个待分类插件未在此列出/)
+  assert.match(en, /The remaining 121 unclassified plugins are not listed here/)
+
+  // The category index still reports the true total, not the truncated one.
+  assert.match(zh, /- \[待分类\]\(#unclassified\) \(621\)/)
+
+  const listed = (zh.match(/^- \[scanned-\d{4}\]/gm) ?? []).length
+  assert.equal(listed, 500, 'exactly the cap should be listed')
+})
+
+test('refuses to emit a projection GitHub would silently truncate', async () => {
+  // One entry whose description alone blows the 500 KiB budget: the guard must throw
+  // rather than ship a file whose tail is invisible on GitHub.
+  const huge = {
+    ...registryFixture,
+    plugins: [{
+      ...registryFixture.plugins[0],
+      description: { en: 'x'.repeat(600 * 1024), zh: 'x'.repeat(600 * 1024) },
+    }],
+  }
+  await assert.rejects(
+    buildReadmeFiles(normalizeRegistry(huge), categories),
+    /GitHub renders at most \d+ and silently drops everything past that offset/,
+  )
+})
+
+test('leads both projections with the homepage screenshot from the assets branch', async () => {
+  const files = await buildReadmeFiles(normalizeRegistry(registryFixture), categories)
+  const revision = catalogRevision(normalizeRegistry(registryFixture))
+  const sourceFor = locale => `https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/${screenshotBranch}/${screenshotPaths[locale]}?v=${revision}`
+
+  // Each projection shows the store in its own language.
+  assert.ok(files['README.md'].includes(sourceFor('zh')), 'zh README must use the Chinese capture')
+  assert.ok(files['catalog/README.md'].includes(sourceFor('en')), 'en README must use the English capture')
+  assert.ok(!files['README.md'].includes(screenshotPaths.en), 'zh README must not use the English capture')
+  assert.ok(!files['catalog/README.md'].includes(screenshotPaths.zh), 'en README must not use the Chinese capture')
+
+  for (const [name, content] of Object.entries(files)) {
+    const source = sourceFor(name === 'README.md' ? 'zh' : 'en')
+    assert.ok(content.includes(source), `${name} must embed the versioned screenshot URL`)
+    // The hero links to the live site and sits above the fold, before the nav links.
+    assert.ok(content.indexOf(source) < content.indexOf('Submit a plugin') || name === 'README.md')
+    assert.match(content, /\]\(https:\/\/deepseek1024\.com\/\)/)
+  }
+  assert.match(files['README.md'], /\[!\[DSH 1024Store 插件市场首页\]/)
+  assert.match(files['catalog/README.md'], /\[!\[The DSH 1024Store plugin marketplace homepage\]/)
+})
+
+test('ties the screenshot URL to catalog contents, not to the clock', () => {
+  const base = normalizeRegistry(registryFixture)
+  // Same catalog → same URL, so an unchanged sync produces no README commit at all.
+  assert.equal(catalogRevision(base), catalogRevision(normalizeRegistry(registryFixture)))
+
+  // A new plugin changes the revision, so readers get a fresh screenshot past camo.
+  const grown = normalizeRegistry({
+    ...registryFixture,
+    plugins: [...registryFixture.plugins, {
+      ...registryFixture.plugins[0],
+      id: 'owner/brand-new',
+      url: 'https://github.com/owner/brand-new',
+      name: 'brand-new',
+    }],
+  })
+  assert.notEqual(catalogRevision(base), catalogRevision(grown))
+
+  // Recategorising an existing plugin also moves it in the list, so it counts too.
+  const recategorised = normalizeRegistry({
+    ...registryFixture,
+    plugins: registryFixture.plugins.map((plugin, index) => (index === 0 ? { ...plugin, category: 'ui' } : plugin)),
+  })
+  assert.notEqual(catalogRevision(base), catalogRevision(recategorised))
+
+  assert.match(catalogRevision(base), /^[0-9a-f]{12}$/)
 })
 
 test('adapts the legacy /plugins.json shape', () => {

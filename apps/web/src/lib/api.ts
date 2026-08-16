@@ -1,6 +1,13 @@
+import type { PluginInstallMethod } from '../../worker/lib/install-methods'
+import { parsePluginId, pluginDetailPath } from '../../worker/lib/plugin-id'
+
 export type Language = 'en' | 'zh'
 
 export interface RegistryPlugin {
+  /** Full plugin id: `owner/repository[/sub/dir]`. */
+  id: string
+  /** Per-method install verification; absent on pre-verification snapshots. */
+  installMethods?: PluginInstallMethod[]
   name: string
   owner: string
   url: string
@@ -104,6 +111,8 @@ export interface PackageDetail extends Omit<RegistryPlugin, 'category'>, Install
     engines: Record<string, string> | null
   } | null
   readme: string | null
+  /** Directory the README came from, relative to the repository root. */
+  readmeBasePath?: string
   verification: {
     repositoryReachable: boolean
     bundleDeclared: boolean
@@ -124,6 +133,21 @@ interface ErrorResponse {
 // Absolute origin for the plugin API; empty keeps same-origin requests for the default deployment.
 export const API_ORIGIN: string = (import.meta.env.VITE_API_ORIGIN ?? '').trim().replace(/\/+$/, '')
 
+/**
+ * Carries the HTTP status so callers can tell "this resource does not exist"
+ * apart from "the request failed". Pages use that distinction to decide whether
+ * to noindex themselves — a transport error must never deindex a real page.
+ */
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 export async function requestJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, {
     signal,
@@ -131,20 +155,43 @@ export async function requestJson<T>(url: string, signal?: AbortSignal): Promise
   })
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as ErrorResponse
-    throw new Error(body.error || `Request failed with HTTP ${response.status}`)
+    throw new ApiError(body.error || `Request failed with HTTP ${response.status}`, response.status)
   }
   return (await response.json()) as T
 }
 
-export function getPackage(owner: string, name: string, signal?: AbortSignal): Promise<PackageDetail> {
-  return requestJson<PackageDetail>(
-    `${API_ORIGIN}/api/v1/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
-    signal,
-  )
+export function getPackage(id: string, signal?: AbortSignal): Promise<PackageDetail> {
+  const encoded = id.split('/').map(encodeURIComponent).join('/')
+  return requestJson<PackageDetail>(`${API_ORIGIN}/api/v1/plugins/${encoded}`, signal)
 }
 
-export function packagePath(plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>): string {
-  return `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
+export function packagePath(plugin: Pick<RegistryPlugin, 'id'>): string {
+  return pluginDetailPath(plugin.id)
+}
+
+export interface PluginListIdentity {
+  /** Distinguishes monorepo subpackages even when discovery only found the repository name. */
+  displayName: string
+  /** Keeps the repository provenance visible without competing with the plugin title. */
+  sourceLabel: string
+}
+
+export function pluginListIdentity(
+  plugin: Pick<RegistryPlugin, 'id' | 'name' | 'owner'>,
+): PluginListIdentity {
+  const parts = parsePluginId(plugin.id)
+  if (parts === null || parts.path.length === 0) {
+    return { displayName: plugin.name, sourceLabel: plugin.owner }
+  }
+
+  const pathLeaf = parts.path.split('/').at(-1) ?? plugin.name
+  const discoveryOnlyFoundRepository =
+    plugin.name.localeCompare(parts.repository, 'en-US', { sensitivity: 'accent' }) === 0
+
+  return {
+    displayName: discoveryOnlyFoundRepository ? pathLeaf : plugin.name,
+    sourceLabel: `${plugin.owner} / ${parts.repository}`,
+  }
 }
 
 export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): string {
@@ -156,10 +203,10 @@ export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): st
   }
 }
 
-export function trackedInstallCommand(
-  plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
-): string {
-  return `npx @dsh-1024store/cli add ${plugin.owner}/${repositoryName(plugin)} --profile web`
+export function trackedInstallCommand(plugin: Pick<RegistryPlugin, 'id'>): string {
+  // The full id (including any monorepo subdirectory) is what the wrapper CLI
+  // maps to the official `github:owner/repo#path:sub/dir` install spec.
+  return `npx @dsh-1024store/cli add ${plugin.id} --profile web`
 }
 
 export function githubAvatar(owner: string): string {

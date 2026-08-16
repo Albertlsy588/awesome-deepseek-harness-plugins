@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { installTarget, loadRegistry, parseGitHubSource } from './registry.js';
+import { installTarget, loadRegistry } from './registry.js';
 import { reportInstallEvent } from './telemetry.js';
 import { checkForUpdate } from './update.js';
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/;
@@ -109,7 +109,9 @@ function failureCode(result) {
     return 'OFFICIAL_CLI_FAILED';
 }
 function pluginEventId(plugin) {
-    return (parseGitHubSource(plugin.url) ?? plugin.id).toLowerCase();
+    // The full id, so a monorepo subpackage's installs are counted against that
+    // plugin rather than folded onto its repository or a sibling.
+    return plugin.id.toLowerCase();
 }
 /** Run one plugin mutation and report its outcome anonymously (fire-and-forget). */
 async function runReportedPluginCommand(profile, plugin, args, progress, action) {
@@ -251,10 +253,12 @@ export function mountMarketRoutes(webServer, config) {
                     return;
                 }
                 try {
+                    // Resolved by id: a repository URL is no longer unique now that one
+                    // monorepo can contribute several plugins.
                     const body = await readJsonBody(request);
-                    const requestedUrl = typeof body.url === 'string' ? body.url : '';
+                    const requestedId = typeof body.id === 'string' ? body.id.toLowerCase() : '';
                     const { registry } = await loadRegistry(config.registryUrl);
-                    const plugin = registry.plugins.find(entry => entry.url.toLowerCase() === requestedUrl.toLowerCase());
+                    const plugin = registry.plugins.find(entry => entry.id.toLowerCase() === requestedId);
                     if (plugin === undefined) {
                         sendJson(response, 400, { error: 'plugin is not in the 1024 Store registry' });
                         return;

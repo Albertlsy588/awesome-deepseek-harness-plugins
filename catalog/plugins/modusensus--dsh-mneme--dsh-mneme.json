@@ -1,6 +1,6 @@
 {
   "$schema": "../schema/plugin.schema.json",
-  "id": "modusensus/dsh-mneme",
+  "id": "modusensus/dsh-mneme/dsh-mneme",
   "name": "dsh-mneme",
   "repository": "https://github.com/modusensus/dsh-mneme",
   "category": "memory",

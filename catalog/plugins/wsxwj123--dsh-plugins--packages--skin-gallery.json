@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "wsxwj123/dsh-plugins/packages/skin-gallery",
+  "name": "skin-gallery",
+  "repository": "https://github.com/wsxwj123/dsh-plugins",
+  "category": "theme",
+  "description": {
+    "en": "Nine complete dsh-web-ui skin replicas with custom skin-pack import, preview, apply, delete, restore-default, and readability fixes for bubbles and code blocks.",
+    "zh": "9 套完整的 dsh-web-ui 皮肤复刻：支持自定义皮肤包导入、预览、应用、删除与恢复默认，并修复气泡与代码块可读性。"
+  },
+  "added": "2026-08-16"
+}

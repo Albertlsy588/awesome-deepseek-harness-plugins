@@ -23,7 +23,15 @@ import { publicAsset } from '../lib/assets'
 import { formatDateTime, formatNumber, formatRelativeUpdate } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { useLiveStats } from '../lib/useLiveStats'
-import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
+import {
+  collectionCopy,
+  collectionPageNode,
+  graph,
+  itemListNode,
+  siteNodes,
+  SITE_ORIGIN,
+} from '../../worker/seo-templates'
+import { usePageSeo } from '../lib/usePageSeo'
 
 const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
 // Directory rows render in bounded batches so a filter click does not mount
@@ -254,32 +262,47 @@ export function CatalogPage({ view }: CatalogPageProps) {
   const catalogHref = query ? `/plugins?q=${encodeURIComponent(query)}` : '/plugins'
   const rankingsHref = query ? `/?q=${encodeURIComponent(query)}` : '/'
   const canonicalPath = view === 'catalog' ? '/plugins' : '/'
-  const seoTitle = t(view === 'catalog' ? 'catalogSeoTitle' : 'rankingsSeoTitle')
-  const seoDescription = t(
-    view === 'catalog' ? 'catalogSeoDescription' : 'rankingsSeoDescription',
+  // Titles, descriptions and JSON-LD come from the same module the Worker uses,
+  // so a client-side navigation cannot disagree with the served HTML.
+  const copy = collectionCopy(
+    view === 'catalog' ? 'catalog' : 'rankings',
+    language,
+    catalog?.meta.catalogTotal ?? 0,
   )
   const hasIndexableFilters = Boolean(query || category || requestedSort)
+  const rankedForSchema = useMemo(
+    () => (view === 'catalog'
+      ? catalog?.rankings.stars ?? []
+      : catalog?.rankings[rankingMode] ?? []).slice(0, 30),
+    [catalog, rankingMode, view],
+  )
 
   usePageSeo({
-    title: seoTitle,
-    description: seoDescription,
+    title: copy.title,
+    description: copy.description,
     path: canonicalPath,
     language,
+    // Until the catalog resolves there is no ItemList and no plugin count, and
+    // writing that emptiness over the Worker's populated metadata is strictly
+    // worse than leaving the served head alone.
+    ready: Boolean(catalog),
     robots: hasIndexableFilters ? 'noindex,follow' : 'index,follow',
-    schema: {
-      '@context': 'https://schema.org',
-      '@type': 'CollectionPage',
-      '@id': `${SITE_ORIGIN}${canonicalPath}#webpage`,
-      url: `${SITE_ORIGIN}${canonicalPath}`,
-      name: seoTitle,
-      description: seoDescription,
-      isPartOf: {
-        '@type': 'WebSite',
-        '@id': `${SITE_ORIGIN}/#website`,
-        name: 'DSH 1024Store',
-        url: `${SITE_ORIGIN}/`,
-      },
-    },
+    canonical: hasIndexableFilters ? null : `${SITE_ORIGIN}${canonicalPath}`,
+    schema: graph([
+      ...siteNodes(),
+      collectionPageNode(
+        canonicalPath,
+        copy,
+        language,
+        `${SITE_ORIGIN}${canonicalPath === '/' ? '/' : canonicalPath}#items`,
+      ),
+      itemListNode(
+        rankedForSchema,
+        canonicalPath,
+        copy.listHeading,
+        catalog?.meta.catalogTotal ?? rankedForSchema.length,
+      ),
+    ]),
   })
 
   return (
@@ -290,7 +313,11 @@ export function CatalogPage({ view }: CatalogPageProps) {
         <div className="page-container catalog-hero-inner">
           <header className="hero-stage">
             <div className="hero-actions" aria-label={t('siteActions')}>
-              <Link className="hero-action-link" to="/docs/api" aria-label={t('apiDocsTitle')}>
+              <Link
+                className="hero-action-link hero-api"
+                to="/docs/api"
+                aria-label={collectionCopy('apiDocs', language).heading}
+              >
                 <Code size={16} aria-hidden="true" />
                 <span>{t('navApi')}</span>
               </Link>
@@ -333,7 +360,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
                   </h1>
                 </div>
               </div>
-              <p>{t('rankingsIntro')}</p>
+              <p>{copy.intro}</p>
             </div>
 
             <dl className="hero-tally">
@@ -431,11 +458,11 @@ export function CatalogPage({ view }: CatalogPageProps) {
         )}
 
         {view === 'rankings' && (
-          <section className="catalog-section ranking-section" aria-label={t('rankings')}>
+          <section className="catalog-section ranking-section" aria-labelledby="rankings-heading">
+            <h2 id="rankings-heading" className="visually-hidden">{copy.listHeading}</h2>
             <div className="view-controls">
               <div className="ranking-mode-groups">
                 <div className="ranking-mode-group">
-                  <span>{t('githubRankings')}</span>
                   <div className="segmented-control" role="group" aria-label={t('githubRankings')}>
                     {GITHUB_RANKING_MODES.map((mode) => (
                       <button
@@ -490,7 +517,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
               <div className={`package-list ranking-list${refreshing ? ' is-refreshing' : ''}`}>
                 {ranking.map((plugin, index) => (
                   <PackageRow
-                    key={`${rankingMode}-${plugin.owner}/${plugin.repository}`}
+                    key={`${rankingMode}-${plugin.id}`}
                     plugin={plugin}
                     category={categoryMap.get(plugin.category)}
                     index={index}
@@ -505,7 +532,8 @@ export function CatalogPage({ view }: CatalogPageProps) {
         )}
 
         {view === 'catalog' && (
-          <section className="catalog-section directory-section" aria-label={t('allPackages')}>
+          <section className="catalog-section directory-section" aria-labelledby="directory-heading">
+            <h2 id="directory-heading" className="section-title">{copy.listHeading}</h2>
             <div className="view-controls">
               <div className="segmented-control sort-segments" role="group" aria-label={t('sort')}>
                 {SORT_MODES.map((mode) => (
@@ -556,7 +584,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 <div className={`package-list${refreshing ? ' is-refreshing' : ''}`} aria-live="polite">
                   {visiblePackages.map((plugin, index) => (
                     <PackageRow
-                      key={`${plugin.owner}/${plugin.repository}`}
+                      key={plugin.id}
                       plugin={plugin}
                       category={categoryMap.get(plugin.category)}
                       index={index}

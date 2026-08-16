@@ -54,9 +54,13 @@ export function systemPrompt(): string {
     '你是 DeepSeek Harness 插件目录的分类助手。对输入数组里的每个插件判断类别，并写中英文各一句简介。',
     '',
     '输入字段说明：',
-    '- name/full_name: 插件包名与 GitHub 仓库全名',
-    '- description: 仓库自述，可能为 null（此时只能从包名推断，宁可给低 confidence）',
+    '- name: 插件的包名（manifest 里声明的），没有时退化为仓库名',
+    '- plugin_id: owner/仓库，monorepo 子包还会带上它在仓库内的目录路径',
+    '- description: 仓库自述，可能为 null（此时只能从包名和路径推断，宁可给低 confidence）',
     '- stars: GitHub 星数',
+    '',
+    '注意：同一仓库的多个子包会共用一条仓库自述。若 plugin_id 带子目录，',
+    '应以 name 和目录路径为准判断这个子包自己做什么，而不是照搬仓库整体的描述。',
     '',
     '类别：',
     ...CATALOG_CATEGORIES.map((category) =>
@@ -191,8 +195,10 @@ export function resolveDescriptions(
 function promptPayload(candidates: ClassificationCandidate[]) {
   return candidates.map((candidate, index) => ({
     id: index,
-    name: candidate.repositoryName,
-    full_name: candidate.fullName,
+    // The manifest package name distinguishes sibling plugins inside a monorepo,
+    // where every subpackage shares one repository name and one GitHub blurb.
+    name: candidate.packageName ?? candidate.repositoryName,
+    plugin_id: candidate.pluginId,
     description: candidate.description && !PLACEHOLDER_DESCRIPTION.test(candidate.description)
       ? candidate.description
       : null,
@@ -303,9 +309,8 @@ export async function runPluginClassifyTask(
       }
       writes.push({
         repositoryId: candidate.repositoryId,
-        displayName: candidate.repositoryName,
+        pluginPath: candidate.pluginPath,
         category: item.category,
-        added: now.slice(0, 10),
         ...resolveDescriptions(candidate, item),
       })
     }

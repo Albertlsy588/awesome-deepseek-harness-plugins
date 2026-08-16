@@ -24,9 +24,44 @@ export function slugPart(value) {
     .replace(/^-+|-+$/g, '')
 }
 
+// A plugin id is owner/repository plus optional in-repo path segments
+// (owner/repo/sub/dir for a monorepo subpackage). Path segments feed pnpm's
+// `github:owner/repo#path:sub/dir` install spec, so `.` and `..` segments are
+// rejected outright — the character class alone would admit them.
+const idSegmentPattern = /^[A-Za-z0-9_.-]+$/
+
+export function parsePluginId(id) {
+  const segments = typeof id === 'string' ? id.split('/') : []
+  if (segments.length < 2 || segments.some(segment => !idSegmentPattern.test(segment) || segment === '.' || segment === '..')) {
+    throw new Error(`Invalid plugin id: ${String(id)}`)
+  }
+  const [owner, repository, ...rest] = segments
+  return { owner, repository, subPath: rest.join('/') }
+}
+
+export function isValidPluginId(id) {
+  try {
+    parsePluginId(id)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function repositoryUrl(id) {
+  const { owner, repository } = parsePluginId(id)
+  return `https://github.com/${owner}/${repository}`
+}
+
+export function installSpec(id) {
+  const { owner, repository, subPath } = parsePluginId(id)
+  return subPath.length === 0
+    ? `github:${owner}/${repository}`
+    : `github:${owner}/${repository}#path:${subPath}`
+}
+
 export function pluginFileName(id) {
-  const [owner, repository] = id.split('/')
-  return `${slugPart(owner)}--${slugPart(repository)}.json`
+  return `${id.split('/').map(slugPart).join('--')}.json`
 }
 
 export function isIsoDate(value) {
@@ -40,10 +75,12 @@ export function validateCatalogEntry(entry, file, categoryIds) {
   assert(isObject(entry), `${label} must contain a JSON object`)
   assertExactKeys(entry, ['$schema', 'id', 'name', 'repository', 'category', 'description', 'added'], label)
   assert(entry.$schema === schemaReference, `${label} must reference ${schemaReference}`)
-  assert(typeof entry.id === 'string' && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(entry.id), `${label} has an invalid id`)
+  // The 201-character cap mirrors the catalog sync endpoint's id bound in
+  // apps/web/worker/app.ts (ENTRY_ID) and install-metrics.ts (PLUGIN_ID).
+  assert(typeof entry.id === 'string' && entry.id.length <= 201 && isValidPluginId(entry.id), `${label} has an invalid id`)
   assert(path.posix.basename(file) === pluginFileName(entry.id), `${label} should be named ${pluginFileName(entry.id)}`)
   assert(typeof entry.name === 'string' && entry.name.trim().length > 0 && entry.name.length <= 120, `${label} has an invalid name`)
-  assert(entry.repository === `https://github.com/${entry.id}`, `${label}.repository must match its id exactly`)
+  assert(entry.repository === repositoryUrl(entry.id), `${label}.repository must be ${repositoryUrl(entry.id)}`)
   assert(categoryIds instanceof Set && categoryIds.has(entry.category), `${label} has an unknown category`)
   assert(isObject(entry.description), `${label}.description must be an object`)
   assertExactKeys(entry.description, ['en', 'zh'], `${label}.description`)

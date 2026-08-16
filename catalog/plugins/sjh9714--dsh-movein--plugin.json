@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "sjh9714/dsh-movein/plugin",
+  "name": "dsh-movein-permissions",
+  "repository": "https://github.com/sjh9714/dsh-movein",
+  "category": "dev",
+  "description": {
+    "en": "Fine grained per tool permission rules for DSH at the tools/pre-execute gate, deny and ask lists in Claude Code rule syntax (Bash(rm -rf:*), Read(_secrets_), mcp__server__tool), works standalone without migrating.",
+    "zh": "在 tools/pre-execute 门为 DSH 提供细粒度按工具权限规则：deny/ask 列表采用 Claude Code 规则语法（Bash(rm -rf:*)、Read(_secrets_)、mcp__server__tool），可独立使用无需迁移。"
+  },
+  "added": "2026-08-16"
+}

@@ -18,6 +18,7 @@ import {
 import { publicAsset } from '../lib/assets'
 import { formatDateTime } from '../lib/format'
 import { useI18n } from '../lib/i18n'
+import { collectionCopy, graph, simplePageNode, siteNodes } from '../../worker/seo-templates'
 import { usePageSeo } from '../lib/usePageSeo'
 
 type SessionState = { status: 'loading' } | { status: 'ready'; user: AuthUser | null }
@@ -35,12 +36,15 @@ export function AccountPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
+  const copy = collectionCopy('account', language)
+
   usePageSeo({
-    title: t('accountSeoTitle'),
-    description: t('accountSeoDescription'),
+    title: copy.title,
+    description: copy.description,
     path: '/account',
     language,
     robots: 'noindex,follow',
+    schema: graph([...siteNodes(), simplePageNode('/account', copy, language)]),
   })
 
   const reload = useCallback(async (signal?: AbortSignal) => {

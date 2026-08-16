@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "KongChengZhi/dsh-pixel-studio/dsh-cli-anything-aseprite",
+  "name": "dsh-cli-anything-aseprite",
+  "repository": "https://github.com/KongChengZhi/dsh-pixel-studio",
+  "category": "fun",
+  "description": {
+    "en": "Aseprite-style pixel art studio: the AI draws sprites stroke by stroke with selections, layers, animation frames, gradients, symmetry and reference layers, each step rendered live as ANSI terminal frames.",
+    "zh": "Aseprite 风格像素画工作室：AI 逐笔绘制精灵图，支持选区、图层、动画帧、渐变、对称与参考图层，每一步以 ANSI 终端帧实时渲染。"
+  },
+  "added": "2026-08-16"
+}

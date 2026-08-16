@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Karbo123/DSH-EvoResearch/packages/evoresearch-plugin",
+  "name": "evoresearch-plugin",
+  "repository": "https://github.com/Karbo123/DSH-EvoResearch",
+  "category": "workflow",
+  "description": {
+    "en": "Research agent suite: long-horizon goal control with auditable evidence chains, cron scheduling, multi-agent expert teams, self-evolving research memory (FTS5 + RRF recall), project workspaces, and a custom workspace UI.",
+    "zh": "研究型 Agent 套件：可审计证据链的长程目标管控、定时调度、多 Agent 专家团队、自进化研究记忆（FTS5 + RRF 召回）、项目工作区与自定义工作区 UI。"
+  },
+  "added": "2026-08-16"
+}

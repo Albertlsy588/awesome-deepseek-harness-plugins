@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "TZHR-invest/dsh-plugins/packages/dsh-vision",
+  "name": "dsh-vision",
+  "repository": "https://github.com/TZHR-invest/dsh-plugins",
+  "category": "tools",
+  "description": {
+    "en": "Agent-callable vision tool that describes local images via any OpenAI-compatible vision endpoint you configure, with an optional multi-model cross-check and no built-in keys.",
+    "zh": "Agent 可调用的视觉工具：通过自行配置的任意 OpenAI 兼容视觉端点描述本地图片，支持可选的多模型交叉校验，不内置密钥。"
+  },
+  "added": "2026-08-16"
+}

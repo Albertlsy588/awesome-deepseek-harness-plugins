@@ -7,16 +7,18 @@ interface TestCatalogRow {
   owner: string
   repository_name: string
   html_url: string
-  description: string | null
+  github_description: string | null
   stars: number | null
   forks: number | null
   pushed_at: string | null
   github_updated_at: string | null
-  display_name: string | null
-  category: string | null
-  description_en: string | null
-  description_zh: string | null
-  added: string | null
+  plugin_path: string
+  plugin_id: string
+  curated_name: string | null
+  curated_category: string | null
+  curated_description_en: string | null
+  curated_description_zh: string | null
+  curated_added: string | null
 }
 
 function catalogRow(overrides: Partial<TestCatalogRow> = {}): TestCatalogRow {
@@ -25,16 +27,18 @@ function catalogRow(overrides: Partial<TestCatalogRow> = {}): TestCatalogRow {
     owner: 'openma-ai',
     repository_name: 'deepseek-harness-tui',
     html_url: 'https://github.com/openma-ai/deepseek-harness-tui',
-    description: null,
+    github_description: null,
     stars: null,
     forks: null,
     pushed_at: null,
     github_updated_at: '2026-08-14T00:00:00Z',
-    display_name: 'deepseek-harness-tui',
-    category: 'ui',
-    description_en: 'Terminal client.',
-    description_zh: '终端客户端。',
-    added: '2026-08-14',
+    plugin_path: '',
+    plugin_id: 'openma-ai/deepseek-harness-tui',
+    curated_name: 'deepseek-harness-tui',
+    curated_category: 'ui',
+    curated_description_en: 'Terminal client.',
+    curated_description_zh: '终端客户端。',
+    curated_added: '2026-08-14',
     ...overrides,
   }
 }
@@ -64,7 +68,7 @@ function snapshotDb(
         return statement
       },
       async all() {
-        if (sql.includes('FROM catalog_repositories')) return { results: rows }
+        if (sql.includes('FROM catalog_plugins')) return { results: rows }
         if (sql.includes('github_star_snapshots')) return { results: [] }
         if (sql.includes('plugin_hourly_stats')) return { results: hourlyRows }
         return { results: installerRows }
@@ -128,12 +132,13 @@ describe('catalog snapshot storage', () => {
           owner: 'scanner',
           repository_name: 'discovered-plugin',
           html_url: 'https://github.com/scanner/discovered-plugin',
-          description: 'Discovered from the topic scan.',
-          display_name: null,
-          category: null,
-          description_en: null,
-          description_zh: null,
-          added: null,
+          github_description: 'Discovered from the topic scan.',
+          plugin_id: 'scanner/discovered-plugin',
+          curated_name: null,
+          curated_category: null,
+          curated_description_en: null,
+          curated_description_zh: null,
+          curated_added: null,
         }),
       ]),
       GITHUB_TOKEN: '',
@@ -228,7 +233,10 @@ describe('catalog snapshot storage', () => {
             owner: 'omdsh-dev',
             repository_name: 'fabric',
             html_url: 'https://github.com/omdsh-dev/fabric',
-            category: 'dev',
+            // Its own id: install metrics are keyed per plugin, so sharing one
+            // would credit this plugin with the other's installs.
+            plugin_id: 'omdsh-dev/fabric',
+            curated_category: 'dev',
           }),
         ],
         [{

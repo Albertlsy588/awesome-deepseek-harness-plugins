@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "lsz-asd/dsh-chameleon/bundle",
+  "name": "dsh-chameleon",
+  "repository": "https://github.com/lsz-asd/dsh-chameleon",
+  "category": "dev",
+  "description": {
+    "en": "Self-editing desktop workbench for DeepSeek Harness: a full dsh web replica with an edit mode in which the agent modifies the workbench (patch layers, plugins, UI) with hot reload.",
+    "zh": "DeepSeek Harness 自编辑桌面工作台：完整的 dsh web 复刻，编辑模式下 Agent 可热重载地修改工作台本身（补丁层、插件、UI）。"
+  },
+  "added": "2026-08-16"
+}

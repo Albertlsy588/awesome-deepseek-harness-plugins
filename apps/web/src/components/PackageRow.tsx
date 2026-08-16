@@ -2,7 +2,7 @@ import { ArrowUpRight, CalendarDays, Download, Star, TrendingUp, Users } from 'l
 import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
-import { packagePath } from '../lib/api'
+import { packagePath, pluginListIdentity } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { CategoryTag } from './CategoryTag'
@@ -50,17 +50,10 @@ export const PackageRow = memo(function PackageRow({
     : ranking === 'newest'
       ? plugin.latestReleaseAt ?? plugin.added
       : plugin.pushedAt ?? plugin.added
+  const listIdentity = pluginListIdentity(plugin)
 
   return (
     <article className={`package-row${ranking ? ' ranking-row' : ''}`}>
-      <Link
-        className="row-link"
-        to={packagePath(plugin)}
-        target="_blank"
-        rel="noreferrer"
-        aria-label={`${t('details')}: ${plugin.name}`}
-      />
-
       <span className={`row-index${index < 3 && ranking ? ' is-leading' : ''}`} aria-label={`${t('rank')} ${index + 1}`}>
         {String(index + 1).padStart(2, '0')}
       </span>
@@ -69,8 +62,14 @@ export const PackageRow = memo(function PackageRow({
 
       <div className="row-identity">
         <div className="row-title-line">
-          <span className="row-title">{plugin.name}</span>
-          <span className="row-owner">{plugin.owner}</span>
+          {/* The plugin name is the link text: a row-wide overlay anchor gave
+              every one of ~2,900 catalog links the same boilerplate label. */}
+          <h3 className="row-title">
+            <Link className="row-link" to={packagePath(plugin)} target="_blank" rel="noreferrer">
+              {listIdentity.displayName}
+            </Link>
+          </h3>
+          <span className="row-owner">{listIdentity.sourceLabel}</span>
         </div>
         <p>{plugin.description[language]}</p>
       </div>

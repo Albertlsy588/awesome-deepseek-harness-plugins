@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "luokai-demo/dsh-plugins/plugins/dsh-balance-plugin",
+  "name": "dsh-balance-plugin",
+  "repository": "https://github.com/luokai-demo/dsh-plugins",
+  "category": "ui",
+  "description": {
+    "en": "DeepSeek wallet balance at the sidebar foot: a credit-card icon with the amount tinted by remaining balance (green over ¥2, amber ¥0–2, red below), refreshed on mount, per turn-end, and on click; a signed delta floats up and fades on each balance change.",
+    "zh": "侧栏底部显示 DeepSeek 钱包余额：信用卡图标按余额着色（¥2 以上绿色、¥0–2 琥珀色、更低红色），加载、回合结束和点击时刷新；余额变化时浮现带符号的增减量并淡出。"
+  },
+  "added": "2026-08-16"
+}

@@ -37,6 +37,15 @@ export declare function validateRegistry(value: unknown): Registry;
  */
 export declare function parseGitHubSource(url: string): string | null;
 /**
+ * The plugin's in-repo directory, taken from its id and cross-checked against
+ * the repository URL. A monorepo subpackage's id extends its repository with
+ * the directory the plugin lives in.
+ * @param id - curated plugin id.
+ * @param repository - owner/repository parsed from the plugin's URL.
+ * @returns the subdirectory, or `''` for a repository-level plugin.
+ */
+export declare function pluginSubPath(id: string, repository: string): string;
+/**
  * Derive a pnpm package spec without trusting the registry's display command.
  * @param plugin - validated curated plugin.
  * @returns an immutable GitHub package spec.

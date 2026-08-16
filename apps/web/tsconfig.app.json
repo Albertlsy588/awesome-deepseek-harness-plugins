@@ -19,5 +19,13 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "worker/lib/catalog.ts", "worker/types.ts"]
+  "include": [
+    "src",
+    "worker/lib/catalog.ts",
+    "worker/lib/plugin-id.ts",
+    "worker/lib/install-methods.ts",
+    "worker/lib/visit-id.ts",
+    "worker/types.ts",
+    "worker/seo-templates.ts"
+  ]
 }

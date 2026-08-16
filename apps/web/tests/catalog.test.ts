@@ -27,7 +27,7 @@ describe('catalog queries', () => {
     })
 
     expect(result.packages.map((plugin) => plugin.name)).toEqual(['dsh-bash-terminal'])
-    expect(result.meta).toMatchObject({ total: 1, catalogTotal: 7 })
+    expect(result.meta).toMatchObject({ total: 1, catalogTotal: TEST_PLUGINS.length })
     expect(result.categories).toHaveLength(7)
     expect(result.meta).not.toHaveProperty('page')
   })
