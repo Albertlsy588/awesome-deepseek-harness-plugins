@@ -6,6 +6,7 @@ import {
   neuronsSpentToday,
   recordNeuronSpend,
   saveClassifications,
+  setCatalogState,
   type ClassificationCandidate,
 } from '../worker/lib/catalog-db'
 import {
@@ -468,6 +469,37 @@ describe('runPluginClassifyTask', () => {
     const result = await runPluginClassifyTask(envWith(database, run), Date.now(), {
       dailyBudget: 9000,
     })
+    expect(result.budgetExhausted).toBe(true)
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('reads the daily budget from catalog_state so draining a backlog needs no deploy', async () => {
+    const database = migratedDatabase()
+    seedRepository(database, 1, 'owner/dsh-a')
+    seedPlugin(database, 1, 'owner/dsh-a')
+    const db = sqliteD1(database)
+    await recordNeuronSpend(db, 9500, new Date().toISOString())
+    // Default 9000 would stop here; an override of 0 removes the cap.
+    await setCatalogState(db, 'classify_daily_neuron_budget', '0')
+    const run = vi.fn()
+      .mockResolvedValueOnce(reply([{ ...item(), id: 0 }]))
+      .mockResolvedValue(reply([]))
+
+    const result = await runPluginClassifyTask(envWith(database, run), Date.now())
+    expect(result.budgetExhausted).toBeUndefined()
+    expect(result.written).toBe(1)
+  })
+
+  it('ignores a malformed budget override instead of disabling the cap', async () => {
+    const database = migratedDatabase()
+    seedRepository(database, 1, 'owner/dsh-a')
+    seedPlugin(database, 1, 'owner/dsh-a')
+    const db = sqliteD1(database)
+    await recordNeuronSpend(db, 9500, new Date().toISOString())
+    await setCatalogState(db, 'classify_daily_neuron_budget', 'unlimited')
+    const run = vi.fn()
+
+    const result = await runPluginClassifyTask(envWith(database, run), Date.now())
     expect(result.budgetExhausted).toBe(true)
     expect(run).not.toHaveBeenCalled()
   })
