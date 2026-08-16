@@ -2,7 +2,6 @@ import { DurableObject } from 'cloudflare:workers'
 import {
   HEARTBEAT_TIMEOUT_MS,
   partitionConnections,
-  summarizeConnections,
   type LiveConnection,
 } from './lib/live-connections'
 import type { LiveStatsPayload } from './types'
@@ -162,29 +161,9 @@ export class LiveStats extends DurableObject<Env> {
     this.broadcast()
   }
 
-  // Aggregate only — no visitor identifiers — so it is safe in the log stream.
-  private logSweep(evicted: number): void {
-    const now = Date.now()
-    const rows = this.ctx.getWebSockets().flatMap((socket) => {
-      if (socket.readyState !== 1) return []
-      const attachment = socket.deserializeAttachment() as ConnectionAttachment | null
-      return [{
-        visitId: attachment?.visitId ?? '',
-        lastBeatAt: this.ctx.getWebSocketAutoResponseTimestamp(socket)?.getTime() ?? null,
-        connectedAt: attachment?.connectedAt ?? null,
-      }]
-    })
-    console.log(JSON.stringify({
-      message: 'live_stats_sweep',
-      ...summarizeConnections(rows, now, evicted),
-    }))
-  }
-
   async alarm(): Promise<void> {
     this.ctx.storage.sql.exec('DELETE FROM recent_visits WHERE expires_at <= ?', Date.now())
-    const evicted = this.evictStaleConnections()
-    if (evicted > 0) this.broadcast()
-    this.logSweep(evicted)
+    if (this.evictStaleConnections() > 0) this.broadcast()
     await this.scheduleNextSweep()
   }
 }
