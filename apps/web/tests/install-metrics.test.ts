@@ -248,3 +248,17 @@ describe('installation rollup migration', () => {
     database.close()
   })
 })
+
+describe('monorepo plugin ids', () => {
+  it('accepts a subdirectory id and keeps it in the stored event', () => {
+    const parsed = parseInstallationEvent({ ...VALID_EVENT, pluginId: 'owner/mono/packages/foo' })
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok) expect(parsed.event.pluginId).toBe('owner/mono/packages/foo')
+  })
+
+  it('still refuses ids that could escape the repository', () => {
+    for (const pluginId of ['owner/mono/../etc', 'owner/mono/./foo', 'owner', 'owner//foo']) {
+      expect(parseInstallationEvent({ ...VALID_EVENT, pluginId }).ok, pluginId).toBe(false)
+    }
+  })
+})

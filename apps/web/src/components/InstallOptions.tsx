@@ -2,7 +2,7 @@ import { officialInstallCommand, trackedInstallCommand, type RegistryPlugin } fr
 import { useI18n } from '../lib/i18n'
 import { InstallCommand } from './InstallCommand'
 
-export function InstallOptions({ plugin }: { plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'> }) {
+export function InstallOptions({ plugin }: { plugin: Pick<RegistryPlugin, 'id'> }) {
   const { t } = useI18n()
   return (
     <div className="install-options">

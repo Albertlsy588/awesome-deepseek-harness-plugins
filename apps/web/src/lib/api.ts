@@ -1,5 +1,5 @@
 import type { PluginInstallMethod } from '../../worker/lib/install-methods'
-import { pluginDetailPath } from '../../worker/lib/plugin-id'
+import { pluginDetailPath, pluginInstallSpec, normalizePluginId } from '../../worker/lib/plugin-id'
 
 export type Language = 'en' | 'zh'
 
@@ -178,28 +178,36 @@ export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): st
   }
 }
 
+export const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
 export const SELF_TRACKED_COMMAND = 'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024'
 export const SELF_OFFICIAL_COMMAND = 'dsh plugin --profile web add dsh1024'
 
-// The catalog lists this monorepo itself as the store client plugin; generic
-// `owner/repository` command templates would produce a broken "install the
-// whole monorepo" command for it, so it gets the dedicated dsh1024 commands.
-function isSelfPlugin(plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>): boolean {
-  return plugin.owner === 'imsai-sh' && repositoryName(plugin) === 'awesome-deepseek-harness-plugins'
+// The catalog lists this repository itself as the store client plugin; the
+// generic spec would tell people to install the whole catalog repository, so it
+// gets the published package name instead.
+function isSelfPlugin(plugin: Pick<RegistryPlugin, 'id'>): boolean {
+  return normalizePluginId(plugin.id) === SELF_PLUGIN_ID
 }
 
-export function trackedInstallCommand(
-  plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
-): string {
+/**
+ * The bare official install spec for a plugin.
+ *
+ * Derived from the plugin id, never from the repository URL: a monorepo
+ * subpackage's URL is its repository root, so reverse-engineering the spec from
+ * it would silently install the wrong package.
+ */
+export function installSpec(plugin: Pick<RegistryPlugin, 'id'>): string {
+  return pluginInstallSpec(plugin.id)
+}
+
+export function trackedInstallCommand(plugin: Pick<RegistryPlugin, 'id'>): string {
   if (isSelfPlugin(plugin)) return SELF_TRACKED_COMMAND
-  return `dsh1024 plugin --profile web add github:${plugin.owner}/${repositoryName(plugin)}`
+  return `dsh1024 plugin --profile web add ${installSpec(plugin)}`
 }
 
-export function officialInstallCommand(
-  plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>,
-): string {
+export function officialInstallCommand(plugin: Pick<RegistryPlugin, 'id'>): string {
   if (isSelfPlugin(plugin)) return SELF_OFFICIAL_COMMAND
-  return `dsh plugin --profile web add github:${plugin.owner}/${repositoryName(plugin)}`
+  return `dsh plugin --profile web add ${installSpec(plugin)}`
 }
 
 

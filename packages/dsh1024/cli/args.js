@@ -185,38 +185,72 @@ export function attributeTarget(target) {
   return { kind: 'npm', packageName: name }
 }
 
+/**
+ * A plugin's identity is `owner/repository[/sub/dir]`, and the subdirectory can
+ * reach the official CLI two ways: as extra id segments (`owner/repo/sub/dir`)
+ * or as pnpm's spec fragment (`github:owner/repo#path:sub/dir`, optionally
+ * `#ref&path:sub/dir`). Both fold into the same id, so monorepo siblings are
+ * counted separately instead of all landing on the repository root.
+ */
 function attributeRepositoryTarget(target) {
   let value = target.startsWith('github:') ? target.slice('github:'.length) : target
   if (LOCATION_TARGET_PATTERN.test(value)) return null
 
   const hashIndex = value.indexOf('#')
-  const requestedRef = hashIndex === -1 ? null : value.slice(hashIndex + 1)
+  const fragment = hashIndex === -1 ? null : value.slice(hashIndex + 1)
   value = hashIndex === -1 ? value : value.slice(0, hashIndex)
   value = value.endsWith('.git') ? value.slice(0, -4) : value
 
-  const parts = value.split('/')
-  if (parts.length !== 2 || !parts.every((part) => REPOSITORY_PART_PATTERN.test(part))) return null
-  if (requestedRef !== null && (!requestedRef || requestedRef.length > 200 || /[\s\x00-\x1f\x7f]/.test(requestedRef))) {
-    return null
+  const segments = value.split('/')
+  if (segments.length < 2 || !segments.every(isIdSegment)) return null
+  const [owner, repository, ...rest] = segments
+
+  let requestedRef = null
+  let fragmentPath = ''
+  if (fragment !== null) {
+    if (!fragment || fragment.length > 200 || /[\s\x00-\x1f\x7f]/.test(fragment)) return null
+    for (const part of fragment.split('&')) {
+      if (part.startsWith('path:')) {
+        fragmentPath = part.slice('path:'.length).replace(/^\/+|\/+$/g, '')
+      } else if (requestedRef === null && part.length > 0) {
+        requestedRef = part
+      } else {
+        return null
+      }
+    }
   }
+
+  const idPath = rest.join('/')
+  // Declared twice with different values: too ambiguous to attribute.
+  if (idPath.length > 0 && fragmentPath.length > 0 && idPath !== fragmentPath) return null
+  const subPath = idPath.length > 0 ? idPath : fragmentPath
+  if (subPath.length > 0 && !subPath.split('/').every(isIdSegment)) return null
+
+  const pluginId = subPath.length === 0
+    ? `${owner}/${repository}`
+    : `${owner}/${repository}/${subPath}`
 
   return {
     kind: 'plugin',
-    pluginId: `${parts[0]}/${parts[1]}`.toLowerCase(),
+    pluginId: pluginId.toLowerCase(),
     requestedRef,
     knownPackageNames: [],
   }
+}
+
+function isIdSegment(part) {
+  return REPOSITORY_PART_PATTERN.test(part) && part !== '.' && part !== '..'
 }
 
 /**
  * Read a catalog plugin id out of a package manifest's `repository` field.
  *
  * Accepts the string and object spellings npm allows, but only github.com
- * hosts. A monorepo `directory` is ignored: the repository root is the identity
- * the catalog uses.
+ * hosts. A monorepo `directory` is part of the identity: sibling packages in
+ * one repository are separate plugins and must not share a counter.
  *
- * @returns the lowercased `owner/repository`, or null when it is not a GitHub
- *   repository, so an unrecognised manifest simply goes uncounted.
+ * @returns the lowercased `owner/repository[/sub/dir]`, or null when it is not
+ *   a GitHub repository, so an unrecognised manifest simply goes uncounted.
  */
 export function pluginIdFromRepositoryField(repository) {
   const raw = typeof repository === 'string'
@@ -226,15 +260,22 @@ export function pluginIdFromRepositoryField(repository) {
       : null)
   if (raw === null) return null
 
+  const directory = repository !== null && typeof repository === 'object' && typeof repository.directory === 'string'
+    ? repository.directory.replace(/^\/+|\/+$/g, '')
+    : ''
+  if (directory.length > 0 && !directory.split('/').every(isIdSegment)) return null
+
   let value = raw.trim()
-  if (value.startsWith('github:')) return repositoryPathToPluginId(value.slice('github:'.length))
+  if (value.startsWith('github:')) {
+    return withDirectory(repositoryPathToPluginId(value.slice('github:'.length)), directory)
+  }
 
   value = value.startsWith('git+') ? value.slice('git+'.length) : value
 
   // scp-style: git@github.com:owner/repository.git
   const scp = /^[A-Za-z0-9_.-]+@([^:/]+):(.+)$/.exec(value)
   if (scp !== null) {
-    return isGitHubHost(scp[1]) ? repositoryPathToPluginId(scp[2]) : null
+    return isGitHubHost(scp[1]) ? withDirectory(repositoryPathToPluginId(scp[2]), directory) : null
   }
 
   let url
@@ -245,7 +286,12 @@ export function pluginIdFromRepositoryField(repository) {
   }
   if (!['http:', 'https:', 'git:', 'ssh:'].includes(url.protocol)) return null
   if (!isGitHubHost(url.hostname)) return null
-  return repositoryPathToPluginId(url.pathname)
+  return withDirectory(repositoryPathToPluginId(url.pathname), directory)
+}
+
+function withDirectory(repositoryId, directory) {
+  if (repositoryId === null) return null
+  return directory.length === 0 ? repositoryId : `${repositoryId}/${directory}`.toLowerCase()
 }
 
 function isGitHubHost(hostname) {

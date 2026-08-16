@@ -143,7 +143,6 @@ test('never attributes a target that is not a package or GitHub repository', () 
     'git+ssh://git@github.com/owner/plugin.git',
     'ssh://git@github.com/owner/plugin.git',
     'git@github.com:owner/plugin.git',
-    'owner/plugin/extra',
     'owner/plugin#bad ref',
     'UPPER-CASE-PACKAGE',
   ]) {
@@ -184,7 +183,6 @@ test('reads a plugin id out of every repository field spelling', () => {
     'ssh://git@github.com/Owner/Plugin.git',
     'git@github.com:Owner/Plugin.git',
     { type: 'git', url: 'git+https://github.com/Owner/Plugin.git' },
-    { type: 'git', url: 'https://github.com/Owner/Plugin.git', directory: 'packages/plugin' },
     'https://www.github.com/Owner/Plugin',
   ]) {
     assert.equal(pluginIdFromRepositoryField(repository), 'owner/plugin', JSON.stringify(repository))
@@ -197,7 +195,6 @@ test('refuses repository fields that are not GitHub repositories', () => {
     'git@gitlab.com:owner/plugin.git',
     'https://github.enterprise.internal/owner/plugin.git',
     'https://github.com/owner',
-    'https://github.com/owner/plugin/extra',
     'not a url',
     '',
     { type: 'git' },
@@ -277,4 +274,68 @@ test('genuinely multiple targets are still never counted', () => {
     scanned(['plugin', '--profile', 'web', 'add', 'a/b', '--reporter', 'append-only', 'c/d']).attribution,
     null,
   )
+})
+
+test('a monorepo subdirectory becomes part of the plugin id', () => {
+  const expected = {
+    kind: 'plugin',
+    pluginId: 'owner/monorepo/packages/foo',
+    requestedRef: null,
+    knownPackageNames: [],
+  }
+  // Both spellings the official CLI accepts fold into the same identity.
+  assert.deepEqual(attributeTarget('github:Owner/Monorepo#path:packages/foo'), expected)
+  assert.deepEqual(attributeTarget('Owner/Monorepo/packages/foo'), expected)
+  assert.deepEqual(attributeTarget('github:Owner/Monorepo/packages/foo'), expected)
+  // A ref and a path can travel together.
+  assert.deepEqual(attributeTarget('github:Owner/Monorepo#v1.2.0&path:packages/foo'), {
+    ...expected,
+    requestedRef: 'v1.2.0',
+  })
+  // Declaring it twice is fine when both agree, ambiguous when they disagree.
+  assert.deepEqual(attributeTarget('github:Owner/Monorepo/packages/foo#path:packages/foo'), expected)
+  assert.equal(attributeTarget('github:Owner/Monorepo/packages/a#path:packages/b'), null)
+})
+
+test('a subdirectory can never escape the repository', () => {
+  for (const target of [
+    'github:owner/repo#path:../etc',
+    'github:owner/repo#path:./secret',
+    'github:owner/repo#path:a/../..',
+    'owner/repo/../..',
+    'owner/repo/.',
+  ]) {
+    assert.equal(attributeTarget(target), null, target)
+  }
+  // Order inside the fragment does not matter: whichever part is not `path:`
+  // is the git ref, exactly as the official spec reads it.
+  assert.deepEqual(attributeTarget('github:owner/repo#path:packages/foo&v1'), {
+    kind: 'plugin',
+    pluginId: 'owner/repo/packages/foo',
+    requestedRef: 'v1',
+    knownPackageNames: [],
+  })
+  // Two refs, however, are ambiguous.
+  assert.equal(attributeTarget('github:owner/repo#v1&v2'), null)
+})
+
+test('a package manifest directory joins the plugin id', () => {
+  assert.equal(
+    pluginIdFromRepositoryField({ type: 'git', url: 'https://github.com/Owner/Mono.git', directory: 'packages/foo' }),
+    'owner/mono/packages/foo',
+  )
+  assert.equal(
+    pluginIdFromRepositoryField({ url: 'git+ssh://git@github.com/Owner/Mono.git', directory: '/packages/foo/' }),
+    'owner/mono/packages/foo',
+  )
+  // A repository-root package keeps the two-segment id.
+  assert.equal(pluginIdFromRepositoryField({ url: 'https://github.com/Owner/Mono.git' }), 'owner/mono')
+  // A traversal in the manifest is refused outright rather than sanitised.
+  for (const directory of ['../evil', 'packages/../..', './x', '..']) {
+    assert.equal(
+      pluginIdFromRepositoryField({ url: 'https://github.com/Owner/Mono.git', directory }),
+      null,
+      directory,
+    )
+  }
 })

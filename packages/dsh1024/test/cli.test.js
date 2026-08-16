@@ -1229,3 +1229,74 @@ test('a separated option value does not cost the install its count', async () =>
   assert.equal(events[0].pluginId, 'owner/repo')
   assert.equal(events[0].status, 'success')
 })
+
+test('a monorepo subpackage is reported under its own plugin id', async () => {
+  const dshHome = await makeHome()
+  const events = []
+  const exitCode = await main([
+    'plugin',
+    '--profile',
+    'web',
+    'add',
+    'github:owner/mono#path:packages/foo',
+  ], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn() {
+      const directory = join(dshHome, 'profiles', 'web')
+      const moduleDirectory = join(directory, 'node_modules', 'foo-plugin')
+      mkdirSync(moduleDirectory, { recursive: true })
+      writeFileSync(join(directory, 'package.json'), JSON.stringify({
+        dependencies: {
+          'bar-plugin': 'github:owner/mono#path:packages/bar',
+          'foo-plugin': 'github:owner/mono#path:packages/foo',
+        },
+        dsh: { profile: { bundles: ['foo-plugin'] } },
+      }))
+      writeFileSync(join(moduleDirectory, 'package.json'), JSON.stringify({ name: 'foo-plugin', version: '1.0.0' }))
+      return fakeChild()
+    },
+    async fetchImpl(_url, options) {
+      events.push(JSON.parse(options.body))
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(events.length, 1)
+  assert.equal(events[0].pluginId, 'owner/mono/packages/foo')
+  // The sibling already in the profile must not turn this into a reinstall.
+  assert.equal(events[0].operation, 'install')
+  assert.equal(events[0].status, 'success')
+})
+
+test('a published subpackage resolves through its manifest directory', async () => {
+  const dshHome = await makeHome()
+  const events = []
+  await main(['plugin', '--profile', 'web', 'add', '@owner/foo-plugin'], {
+    dshHome,
+    env: { DSH1024_TELEMETRY_URL: 'http://telemetry.invalid/api/v1/install-events' },
+    io: ioCapture().io,
+    now: clock(),
+    uuid: uuidSequence(),
+    canExecute: () => false,
+    spawn() {
+      installNpmPlugin(dshHome, 'web', '@owner/foo-plugin', {
+        repository: { type: 'git', url: 'git+https://github.com/Owner/Mono.git', directory: 'packages/foo' },
+        version: '1.0.0',
+      })
+      return fakeChild()
+    },
+    async fetchImpl(_url, options) {
+      events.push(JSON.parse(options.body))
+      return { ok: true, status: 202 }
+    },
+  })
+
+  assert.equal(events.length, 1)
+  assert.equal(events[0].pluginId, 'owner/mono/packages/foo')
+})

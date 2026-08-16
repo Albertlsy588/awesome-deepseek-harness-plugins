@@ -148,3 +148,41 @@ test('the installed-manifest reader refuses traversal segments', async () => {
     assert.equal(await readInstalledPluginId(dshHome, 'web', name), null, name)
   }
 })
+
+test('monorepo siblings never claim each other installs', () => {
+  const state = (dependencies) => ({
+    exists: true,
+    profileDirectory: '/profiles/web',
+    dependencies,
+    bundles: [],
+    installedVersions: {},
+  })
+  const foo = 'github:owner/mono#path:packages/foo'
+  const bar = 'github:owner/mono#path:packages/bar'
+
+  // Installing `foo` must not read as a reinstall just because `bar` is present.
+  const fresh = inspectInstallation(state({ bar }), state({ bar, foo }), 'owner/mono/packages/foo')
+  assert.equal(fresh.beforePresent, false)
+  assert.equal(fresh.afterPresent, true)
+
+  // ...and `bar` keeps its own identity in the same profile.
+  const sibling = inspectInstallation(state({ foo }), state({ foo, bar }), 'owner/mono/packages/bar')
+  assert.equal(sibling.beforePresent, false)
+  assert.equal(sibling.afterPresent, true)
+
+  // A repository-root plugin is not satisfied by a subdirectory install.
+  const root = inspectInstallation(state({}), state({ foo }), 'owner/mono')
+  assert.equal(root.afterPresent, false)
+
+  // ...and a subdirectory plugin is not satisfied by the repository root.
+  const rootSpec = inspectInstallation(state({}), state({ p: 'github:owner/mono' }), 'owner/mono/packages/foo')
+  assert.equal(rootSpec.afterPresent, false)
+
+  // A ref alongside the path still matches.
+  const withRef = inspectInstallation(
+    state({}),
+    state({ foo: 'github:owner/mono#v1.2.0&path:packages/foo' }),
+    'owner/mono/packages/foo',
+  )
+  assert.equal(withRef.afterPresent, true)
+})

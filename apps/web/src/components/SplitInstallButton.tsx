@@ -23,7 +23,7 @@ const VIEWPORT_MARGIN = 8
 // The menu overlaps the toggle slightly, the way the anchored version did.
 const ANCHOR_OVERLAP = 6
 
-export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'> }) {
+export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'id'> }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState<Kind | null>(null)
