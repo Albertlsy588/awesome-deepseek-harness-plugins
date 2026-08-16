@@ -1,4 +1,4 @@
-import { KeyRound } from 'lucide-react'
+import { ExternalLink, KeyRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { publicAsset } from '../lib/assets'
@@ -85,6 +85,22 @@ export function ApiDocsPage() {
           {t('apiDocsBaseUrl')}: <code>{PUBLIC_API_ORIGIN}</code>
         </p>
       </header>
+
+      <section className="api-docs-contact" aria-labelledby="api-docs-contact-heading">
+        <div>
+          <h2 id="api-docs-contact-heading">{t('apiDocsContactHeading')}</h2>
+          <p>{t('apiDocsContactBody')}</p>
+        </div>
+        <a
+          className="button button-secondary api-docs-contact-link"
+          href="https://www.imsai.cc/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          {t('apiDocsContactLink')}
+          <ExternalLink size={15} aria-hidden="true" />
+        </a>
+      </section>
 
       <section className="api-docs-section">
         <h2>{t('apiDocsAuthHeading')}</h2>
