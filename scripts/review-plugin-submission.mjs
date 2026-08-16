@@ -40,6 +40,58 @@ function resolvePatchPath(packagePath, patch) {
   return resolved
 }
 
+/**
+ * The entry point a git install has to be able to import, taken from the
+ * manifest's `exports["."]` or `main`. Returns undefined when the manifest
+ * declares none — Node then falls back to `index.js`, but a bundle may load
+ * purely through its patch, so an undeclared entry is not treated as a defect.
+ */
+export function declaredEntryPoint(manifest) {
+  const exported = manifest.exports
+  if (typeof exported === 'string') return exported
+  if (isObject(exported)) {
+    const root = exported['.']
+    if (typeof root === 'string') return root
+    if (isObject(root)) {
+      for (const condition of ['default', 'import', 'node', 'require']) {
+        if (typeof root[condition] === 'string') return root[condition]
+      }
+    }
+  }
+  return typeof manifest.main === 'string' ? manifest.main : undefined
+}
+
+/**
+ * Whether a git install of this manifest yields a loadable package.
+ *
+ * pnpm runs `prepare` after a git install and otherwise ships only what is
+ * committed. A plugin whose entry point is a build artifact that is neither
+ * committed nor produced by `prepare` installs successfully and then fails at
+ * profile boot with a module-not-found error — the failure surfaces far from
+ * its cause, so the gate catches it here.
+ *
+ * @returns an error message, or undefined when the manifest is installable.
+ */
+function gitInstallDefect(packagePath, manifest, files) {
+  const prepare = isObject(manifest.scripts) ? manifest.scripts.prepare : undefined
+  if (typeof prepare === 'string' && prepare.trim().length > 0) return undefined
+
+  const entry = declaredEntryPoint(manifest)
+  if (entry === undefined) return undefined
+  let entryPath
+  try {
+    entryPath = resolvePatchPath(packagePath, entry)
+  } catch {
+    return `${packagePath} declares an entry point outside the repository: ${entry}`
+  }
+  if (files.has(entryPath)) return undefined
+  return [
+    `${packagePath}: the entry point ${entry} is not committed and the package has no prepare script,`,
+    'so installing it from GitHub produces a package with no loadable module.',
+    'Commit the built entry point, or add a self-contained prepare script that builds it on install.',
+  ].join(' ')
+}
+
 export async function findHarnessBundle(tree, readBlob, subPath = '') {
   const files = new Map(tree.filter(item => item.type === 'blob').map(item => [item.path, item]))
   const allPackages = [...files.values()]
@@ -89,6 +141,11 @@ export async function findHarnessBundle(tree, readBlob, subPath = '') {
       const patchPath = resolvePatchPath(packageFile.path, bundle.patch.trim())
       if (!files.has(patchPath)) {
         invalidBundles.push(`${packageFile.path}: dsh.bundle.patch does not exist: ${patchPath}`)
+        continue
+      }
+      const installDefect = gitInstallDefect(packageFile.path, manifest, files)
+      if (installDefect !== undefined) {
+        invalidBundles.push(installDefect)
         continue
       }
       return { packagePath: packageFile.path, patchPath }

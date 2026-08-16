@@ -330,6 +330,80 @@ test('reviews a subdirectory entry against its pinned manifest path', async () =
   )
 })
 
+test('rejects a bundle whose entry point is neither committed nor built on install', async () => {
+  // The shape that broke a real install: main points at a build artifact, the
+  // artifact is not committed, and there is no prepare script to produce it.
+  const tree = [
+    { path: 'package.json', type: 'blob', sha: 'package' },
+    { path: 'cordis.patch.yml', type: 'blob', sha: 'patch' },
+  ]
+  await assert.rejects(
+    findHarnessBundle(tree, async () => blob({
+      name: 'plugin',
+      main: 'lib/index.js',
+      files: ['lib'],
+      scripts: { build: 'tsdown' },
+      dsh: { bundle: { patch: './cordis.patch.yml' } },
+    })),
+    /entry point lib\/index\.js is not committed[\s\S]*no prepare script/,
+  )
+})
+
+test('accepts an entry point that is committed or produced by prepare', async () => {
+  const patch = { path: 'cordis.patch.yml', type: 'blob', sha: 'patch' }
+  const manifest = { path: 'package.json', type: 'blob', sha: 'package' }
+
+  // Committed build output.
+  const committed = await findHarnessBundle(
+    [manifest, patch, { path: 'lib/index.js', type: 'blob', sha: 'entry' }],
+    async () => blob({ main: 'lib/index.js', dsh: { bundle: { patch: './cordis.patch.yml' } } }),
+  )
+  assert.equal(committed.packagePath, 'package.json')
+
+  // Built at install time instead.
+  const prepared = await findHarnessBundle([manifest, patch], async () => blob({
+    main: 'lib/index.js',
+    scripts: { prepare: 'tsdown' },
+    dsh: { bundle: { patch: './cordis.patch.yml' } },
+  }))
+  assert.equal(prepared.packagePath, 'package.json')
+
+  // exports takes precedence over main, and a bundle that declares no entry at
+  // all is left alone — it may load purely through its patch.
+  await assert.rejects(
+    findHarnessBundle([manifest, patch], async () => blob({
+      exports: { '.': { default: './lib/index.js' } },
+      dsh: { bundle: { patch: './cordis.patch.yml' } },
+    })),
+    /entry point \.\/lib\/index\.js is not committed/,
+  )
+  const undeclared = await findHarnessBundle([manifest, patch], async () => blob({
+    dsh: { bundle: { patch: './cordis.patch.yml' } },
+  }))
+  assert.equal(undeclared.packagePath, 'package.json')
+})
+
+test('checks the entry point of a subdirectory bundle against its own directory', async () => {
+  const tree = [
+    { path: 'packages/foo/package.json', type: 'blob', sha: 'foo' },
+    { path: 'packages/foo/cordis.patch.yml', type: 'blob', sha: 'patch' },
+    // Only the sibling ships a built entry; the requested package does not.
+    { path: 'packages/bar/lib/index.js', type: 'blob', sha: 'bar-entry' },
+  ]
+  const manifest = blob({ main: 'lib/index.js', dsh: { bundle: { patch: './cordis.patch.yml' } } })
+  await assert.rejects(
+    findHarnessBundle(tree, async () => manifest, 'packages/foo'),
+    /packages\/foo\/package\.json: the entry point lib\/index\.js is not committed/,
+  )
+
+  const withEntry = await findHarnessBundle(
+    [...tree, { path: 'packages/foo/lib/index.js', type: 'blob', sha: 'foo-entry' }],
+    async () => manifest,
+    'packages/foo',
+  )
+  assert.equal(withEntry.packagePath, 'packages/foo/package.json')
+})
+
 test('rejects a repository without dsh.bundle.patch', async () => {
   const tree = [{ path: 'package.json', type: 'blob', sha: 'package' }]
   await assert.rejects(
