@@ -52,7 +52,8 @@ function sqliteD1(database: DatabaseSync): D1Database {
 /** The migrated production shape: a repository, and the plugins it publishes. */
 function catalogDatabase(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
-  for (const migration of ['0002_plugin_catalog.sql', '0005_catalog_plugins.sql']) {
+  for (const migration of ['0002_plugin_catalog.sql', '0005_catalog_plugins.sql',
+    '0006_ai_classification.sql']) {
     database.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'))
   }
   return database

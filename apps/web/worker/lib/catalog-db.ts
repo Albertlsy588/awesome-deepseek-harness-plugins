@@ -53,6 +53,9 @@ interface CatalogRow {
   curated_description_en: string | null
   curated_description_zh: string | null
   curated_added: string | null
+  ai_category: string | null
+  ai_description_en: string | null
+  ai_description_zh: string | null
   git_code: string | null
   git_has_prepare: number
   git_head_sha: string | null
@@ -715,6 +718,7 @@ export async function loadCatalogSnapshotFromD1(
             p.plugin_path, p.plugin_id,
             p.curated_name, p.curated_category,
             p.curated_description_en, p.curated_description_zh, p.curated_added,
+            p.ai_category, p.ai_description_en, p.ai_description_zh,
             p.git_code, p.git_has_prepare, p.git_head_sha, p.git_checked_at,
             p.npm_package_name, p.npm_binding, p.npm_bundle_declared,
             p.npm_version, p.npm_checked_at
@@ -727,7 +731,11 @@ export async function loadCatalogSnapshotFromD1(
   if (result.results.length === 0) return null
 
   const categories = categoryLabelMap()
-  if (result.results.some((row) => row.curated_category === null)) {
+  // A plugin counts as unclassified only when neither a curator nor the
+  // classifier has given it a category. The `?? null` mirrors the fallback used
+  // to build each row below, so this stays true for a row whose ai_category is
+  // absent rather than null.
+  if (result.results.some((row) => (row.curated_category ?? row.ai_category ?? null) === null)) {
     categories[UNCLASSIFIED_CATEGORY.id] = { ...UNCLASSIFIED_CATEGORY.label }
   }
   const plugins = result.results.map<CatalogPlugin>((row) => {
@@ -743,10 +751,12 @@ export async function loadCatalogSnapshotFromD1(
       owner: row.owner,
       url: row.html_url,
       repository: row.repository_name,
-      category: row.curated_category ?? UNCLASSIFIED_CATEGORY.id,
+      // curated → ai → GitHub blurb. A curator always outranks the classifier,
+      // and dropping a curated entry lets the AI value take over on its own.
+      category: row.curated_category ?? row.ai_category ?? UNCLASSIFIED_CATEGORY.id,
       description: {
-        en: row.curated_description_en ?? description,
-        zh: row.curated_description_zh ?? description,
+        en: row.curated_description_en ?? row.ai_description_en ?? description,
+        zh: row.curated_description_zh ?? row.ai_description_zh ?? description,
       },
       install: pluginInstallCommand(id),
       // Facts in, verdicts out: the badge is derived here rather than stored,
@@ -973,4 +983,131 @@ export async function hydrateCuratedRepositories(
     hydrated += 1
   }
   return hydrated
+}
+
+/** A plugin awaiting AI classification, with the only signals the classifier gets. */
+export interface ClassificationCandidate {
+  repositoryId: number
+  pluginPath: string
+  pluginId: string
+  /** Manifest package name when known — the sharpest signal for a monorepo subpackage. */
+  packageName: string | null
+  repositoryName: string
+  description: string | null
+  stars: number | null
+}
+
+/** One classifier verdict, ready to be written onto the plugin's `ai_*` columns. */
+export interface ClassificationResult {
+  repositoryId: number
+  pluginPath: string
+  category: string
+  descriptionEn: string
+  descriptionZh: string
+  descriptionOrigin: 'author_en' | 'author_zh' | 'generated'
+}
+
+/**
+ * Plugins that still need an AI verdict, highest-starred first.
+ *
+ * Curated plugins are skipped on `curated_category IS NULL` alone: the column
+ * ownership set up by 0005 means a curator's columns and the classifier's
+ * columns cannot collide, so no source-table bookkeeping is needed.
+ *
+ * The published predicate matches `loadCatalogSnapshotFromD1`, so the queue can
+ * never classify something the catalog does not show, nor skip something it does.
+ *
+ * Bumping `classifierVersion` re-enqueues every AI-owned row.
+ */
+export async function loadClassificationQueue(
+  db: D1Database,
+  classifierVersion: string,
+  limit: number,
+): Promise<ClassificationCandidate[]> {
+  const result = await db.prepare(
+    `SELECT p.repository_id, p.plugin_path, p.plugin_id, p.package_name,
+            r.repository_name, r.github_description, r.stars
+       FROM catalog_plugins p
+       JOIN catalog_repositories r ON r.id = p.repository_id
+      WHERE (p.from_pr = 1 OR (r.from_topic = 1 AND p.validation_status = 'accepted'))
+        AND p.curated_category IS NULL
+        AND (p.ai_classifier_version IS NULL OR p.ai_classifier_version <> ?)
+      ORDER BY r.stars DESC, p.plugin_id
+      LIMIT ?`,
+  ).bind(classifierVersion, limit).all<{
+    repository_id: number
+    plugin_path: string
+    plugin_id: string
+    package_name: string | null
+    repository_name: string
+    github_description: string | null
+    stars: number | null
+  }>()
+  return result.results.map((row) => ({
+    repositoryId: row.repository_id,
+    pluginPath: row.plugin_path,
+    pluginId: row.plugin_id,
+    packageName: row.package_name,
+    repositoryName: row.repository_name,
+    description: row.github_description,
+    stars: row.stars,
+  }))
+}
+
+/**
+ * Write verdicts onto the plugin rows.
+ *
+ * An UPDATE rather than an upsert: the plugin row is created by the crawler or
+ * by a catalog submission, and the classifier has no business inventing one.
+ * `curated_category IS NULL` is repeated here so that a submission landing
+ * between the queue read and this write cannot be overwritten.
+ */
+export async function saveClassifications(
+  db: D1Database,
+  entries: ClassificationResult[],
+  classifierVersion: string,
+  now = new Date().toISOString(),
+): Promise<number> {
+  let written = 0
+  for (const group of chunks(entries, 40)) {
+    const results = await db.batch(group.map((entry) => db.prepare(
+      `UPDATE catalog_plugins
+          SET ai_category = ?, ai_description_en = ?, ai_description_zh = ?,
+              ai_description_origin = ?, ai_classifier_version = ?, ai_classified_at = ?,
+              updated_at = ?
+        WHERE repository_id = ? AND plugin_path = ? AND curated_category IS NULL`,
+    ).bind(
+      entry.category,
+      entry.descriptionEn,
+      entry.descriptionZh,
+      entry.descriptionOrigin,
+      classifierVersion,
+      now,
+      now,
+      entry.repositoryId,
+      entry.pluginPath,
+    )))
+    written += results.reduce((sum, item) => sum + Number(item.meta?.changes ?? 0), 0)
+  }
+  return written
+}
+
+/** Neurons already spent on classification during the UTC day containing `now`. */
+export async function neuronsSpentToday(
+  db: D1Database,
+  now = new Date().toISOString(),
+): Promise<number> {
+  const value = await getCatalogState(db, `classify_neurons_${now.slice(0, 10)}`)
+  return value === null ? 0 : Number(value) || 0
+}
+
+/** Add this round's neuron spend to the running UTC-day total. */
+export async function recordNeuronSpend(
+  db: D1Database,
+  neurons: number,
+  now = new Date().toISOString(),
+): Promise<number> {
+  const total = (await neuronsSpentToday(db, now)) + neurons
+  await setCatalogState(db, `classify_neurons_${now.slice(0, 10)}`, String(Math.round(total)), now)
+  return total
 }
