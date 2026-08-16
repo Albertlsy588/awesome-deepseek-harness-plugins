@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  hydrateCuratedRepositories,
   loadCatalogSnapshotFromD1,
   normalizeRepositoryName,
   syncCuratedEntries,
@@ -422,6 +423,90 @@ describe('catalog snapshot', () => {
       description: { en: 'GitHub blurb', zh: 'GitHub blurb' },
       install: 'dsh plugin --profile web add github:Scan/Repo',
     })
+    database.close()
+  })
+})
+
+describe('curated repository hydration', () => {
+  function githubClient(repositories: Record<string, unknown>) {
+    return {
+      async request<T>(path: string): Promise<T> {
+        const key = path.replace('/repos/', '')
+        const found = repositories[key]
+        if (!found) throw new Error(`404 ${path}`)
+        return found as T
+      },
+    }
+  }
+
+  const payload = (id: number, fullName: string) => ({
+    id,
+    name: fullName.split('/')[1],
+    full_name: fullName,
+    html_url: `https://github.com/${fullName}`,
+    description: 'from github',
+    default_branch: 'main',
+    stargazers_count: 5,
+    forks_count: 1,
+    language: 'TypeScript',
+    license: { spdx_id: 'MIT' },
+    updated_at: NOW,
+    pushed_at: NOW,
+  })
+
+  it('fills in the GitHub facts a submission could not supply', async () => {
+    const database = catalogDatabase()
+    await syncCuratedEntries(sqliteD1(database), [curatedEntry()], NOW)
+
+    const hydrated = await hydrateCuratedRepositories(
+      sqliteD1(database),
+      githubClient({ 'Owner/curated-plugin': payload(500, 'Owner/curated-plugin') }),
+      10,
+      NOW,
+    )
+
+    expect(hydrated).toBe(1)
+    expect(database.prepare('SELECT github_id, stars FROM catalog_repositories').get())
+      .toEqual({ github_id: 500, stars: 5 })
+    database.close()
+  })
+
+  // GitHub redirects a renamed repository to its current name, so the id we
+  // fetch can already belong to the row the topic scan created under that new
+  // name. Failing on UNIQUE(github_id) would stall the queue forever.
+  it('merges onto the existing row when the id is already taken', async () => {
+    const database = catalogDatabase()
+    seedRepository(database, {
+      github_id: 900, full_name: 'Owner/new-name', normalized_full_name: 'owner/new-name',
+      owner: 'Owner', repository_name: 'new-name',
+    })
+    seedPlugin(database, 'owner/new-name', { validation_status: 'accepted' })
+    await syncCuratedEntries(sqliteD1(database), [curatedEntry({
+      id: 'Owner/old-name', name: 'old-name', repository: 'https://github.com/Owner/old-name',
+    })], NOW)
+
+    const hydrated = await hydrateCuratedRepositories(
+      sqliteD1(database),
+      // The old name redirects to the new one, which already has id 900.
+      githubClient({ 'Owner/old-name': payload(900, 'Owner/new-name') }),
+      10,
+      NOW,
+    )
+
+    expect(hydrated).toBe(1)
+    // One repository survives, carrying both the discovery and the curation.
+    expect(database.prepare('SELECT full_name, github_id FROM catalog_repositories').all())
+      .toEqual([{ full_name: 'Owner/new-name', github_id: 900 }])
+    expect(database.prepare(
+      'SELECT plugin_id, from_pr, curated_name, validation_status FROM catalog_plugins',
+    ).all()).toEqual([
+      {
+        plugin_id: 'Owner/new-name',
+        from_pr: 1,
+        curated_name: 'old-name',
+        validation_status: 'accepted',
+      },
+    ])
     database.close()
   })
 })

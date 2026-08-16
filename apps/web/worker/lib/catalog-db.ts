@@ -903,17 +903,69 @@ export async function hydrateCuratedRepositories(
     try {
       repository = await client.request<GitHubRepository>(`/repos/${encoded}`)
     } catch {
-      // A renamed or deleted repository must not stall the queue behind it; the
+      // A deleted or private repository must not stall the queue behind it; the
       // next run tries again, and the plugin stays published meanwhile.
       continue
     }
+
+    // GitHub redirects a renamed repository to its current name, so the id we
+    // just fetched may already belong to another row — the same repository the
+    // topic scan found under its new name. The two rows are one repository:
+    // move this row's plugins onto the surviving one and drop the duplicate,
+    // rather than failing on UNIQUE(github_id) forever.
+    const clash = await db.prepare(
+      'SELECT id, full_name, normalized_full_name FROM catalog_repositories WHERE github_id = ? AND id <> ?',
+    ).bind(repository.id, row.id).first<{ id: number; full_name: string; normalized_full_name: string }>()
+
+    if (clash !== null) {
+      await db.batch([
+        db.prepare(
+          `INSERT INTO catalog_plugins (
+             repository_id, plugin_id, normalized_plugin_id, plugin_path,
+             from_pr, pr_reference,
+             curated_name, curated_category, curated_description_en, curated_description_zh,
+             curated_added, curated_updated_at,
+             manifest_path, package_name, package_version, bundle_patch,
+             validation_status, validation_code, validation_reason,
+             first_seen_at, last_seen_at, created_at, updated_at
+           )
+           SELECT ?, ? || CASE WHEN p.plugin_path = '' THEN '' ELSE '/' || p.plugin_path END,
+                  lower(? || CASE WHEN p.plugin_path = '' THEN '' ELSE '/' || p.plugin_path END),
+                  p.plugin_path, p.from_pr, p.pr_reference,
+                  p.curated_name, p.curated_category, p.curated_description_en, p.curated_description_zh,
+                  p.curated_added, p.curated_updated_at,
+                  p.manifest_path, p.package_name, p.package_version, p.bundle_patch,
+                  p.validation_status, p.validation_code, p.validation_reason,
+                  p.first_seen_at, p.last_seen_at, p.created_at, ?
+             FROM catalog_plugins p
+            WHERE p.repository_id = ?
+           ON CONFLICT(repository_id, plugin_path) DO UPDATE SET
+             from_pr = MAX(catalog_plugins.from_pr, excluded.from_pr),
+             pr_reference = COALESCE(excluded.pr_reference, catalog_plugins.pr_reference),
+             curated_name = COALESCE(excluded.curated_name, catalog_plugins.curated_name),
+             curated_category = COALESCE(excluded.curated_category, catalog_plugins.curated_category),
+             curated_description_en = COALESCE(excluded.curated_description_en, catalog_plugins.curated_description_en),
+             curated_description_zh = COALESCE(excluded.curated_description_zh, catalog_plugins.curated_description_zh),
+             curated_added = COALESCE(excluded.curated_added, catalog_plugins.curated_added),
+             updated_at = excluded.updated_at`,
+        ).bind(clash.id, clash.full_name, clash.normalized_full_name, now, row.id),
+        // Cascades this row's remaining plugins away.
+        db.prepare('DELETE FROM catalog_repositories WHERE id = ?').bind(row.id),
+      ])
+      hydrated += 1
+      continue
+    }
+
     await db.prepare(
       `UPDATE catalog_repositories
-          SET github_id = ?, github_description = ?, default_branch = ?, stars = ?, forks = ?,
+          SET github_id = ?, full_name = ?, normalized_full_name = ?, owner = ?, repository_name = ?,
+              github_description = ?, default_branch = ?, stars = ?, forks = ?,
               language = ?, license = ?, github_updated_at = ?, pushed_at = ?, updated_at = ?
         WHERE id = ?`,
     ).bind(
-      repository.id, repository.description, repository.default_branch,
+      repository.id, repository.full_name, normalizeRepositoryName(repository.full_name),
+      repository.full_name.split('/')[0] ?? '', repository.name,
+      repository.description, repository.default_branch,
       repository.stargazers_count, repository.forks_count, repository.language,
       repository.license?.spdx_id ?? null, repository.updated_at, repository.pushed_at,
       now, row.id,

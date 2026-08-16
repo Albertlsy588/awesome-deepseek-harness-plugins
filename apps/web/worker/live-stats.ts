@@ -4,11 +4,11 @@ import {
   partitionConnections,
   type LiveConnection,
 } from './lib/live-connections'
+import { VISIT_ID_PATTERN } from './lib/visit-id'
 import type { LiveStatsPayload } from './types'
 
 const VISIT_DEDUPE_MS = 60 * 60 * 1000
 const SWEEP_INTERVAL_MS = HEARTBEAT_TIMEOUT_MS / 3
-const VISIT_ID = /^[A-Za-z0-9-]{16,80}$/
 
 interface ConnectionAttachment {
   visitId: string
@@ -125,7 +125,7 @@ export class LiveStats extends DurableObject<Env> {
     }
 
     const visitId = new URL(request.url).searchParams.get('visit') ?? ''
-    if (!VISIT_ID.test(visitId)) {
+    if (!VISIT_ID_PATTERN.test(visitId)) {
       return Response.json({ error: 'Invalid visit identifier.' }, { status: 400 })
     }
 
