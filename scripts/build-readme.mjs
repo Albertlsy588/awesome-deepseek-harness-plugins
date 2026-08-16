@@ -143,7 +143,9 @@ function pluginLine(plugin, locale) {
 // exactly when the plugin list changes, which keeps the screenshot in step with the
 // list without producing a README commit on every no-op sync.
 export const screenshotBranch = 'assets'
-export const screenshotPath = 'homepage.png'
+// One capture per language: the site picks its locale from navigator.language, so each
+// projection shows the store in the language its readers are reading.
+export const screenshotPaths = { zh: 'homepage.zh.png', en: 'homepage.en.png' }
 const screenshotRepository = 'imsai-sh/awesome-deepseek-harness-plugins'
 
 export function catalogRevision(registry) {
@@ -153,7 +155,7 @@ export function catalogRevision(registry) {
 
 function heroImage(registry, locale) {
   const alt = locale === 'zh' ? 'DSH 1024Store 插件市场首页' : 'The DSH 1024Store plugin marketplace homepage'
-  const source = `https://raw.githubusercontent.com/${screenshotRepository}/${screenshotBranch}/${screenshotPath}?v=${catalogRevision(registry)}`
+  const source = `https://raw.githubusercontent.com/${screenshotRepository}/${screenshotBranch}/${screenshotPaths[locale]}?v=${catalogRevision(registry)}`
   return `[![${alt}](${source})](https://deepseek1024.com/)`
 }
 

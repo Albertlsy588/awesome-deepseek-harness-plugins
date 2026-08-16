@@ -14,6 +14,7 @@ import {
   loadRegistry,
   normalizeRegistry,
   screenshotBranch,
+  screenshotPaths,
 } from './build-readme.mjs'
 
 const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'build-readme.mjs')
@@ -244,9 +245,16 @@ test('refuses to emit a projection GitHub would silently truncate', async () => 
 test('leads both projections with the homepage screenshot from the assets branch', async () => {
   const files = await buildReadmeFiles(normalizeRegistry(registryFixture), categories)
   const revision = catalogRevision(normalizeRegistry(registryFixture))
-  const source = `https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/${screenshotBranch}/homepage.png?v=${revision}`
+  const sourceFor = locale => `https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/${screenshotBranch}/${screenshotPaths[locale]}?v=${revision}`
+
+  // Each projection shows the store in its own language.
+  assert.ok(files['README.md'].includes(sourceFor('zh')), 'zh README must use the Chinese capture')
+  assert.ok(files['catalog/README.md'].includes(sourceFor('en')), 'en README must use the English capture')
+  assert.ok(!files['README.md'].includes(screenshotPaths.en), 'zh README must not use the English capture')
+  assert.ok(!files['catalog/README.md'].includes(screenshotPaths.zh), 'en README must not use the Chinese capture')
 
   for (const [name, content] of Object.entries(files)) {
+    const source = sourceFor(name === 'README.md' ? 'zh' : 'en')
     assert.ok(content.includes(source), `${name} must embed the versioned screenshot URL`)
     // The hero links to the live site and sits above the fold, before the nav links.
     assert.ok(content.indexOf(source) < content.indexOf('Submit a plugin') || name === 'README.md')
