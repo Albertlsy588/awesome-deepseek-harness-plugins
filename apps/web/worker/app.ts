@@ -56,7 +56,14 @@ const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
 // snapshot does; the detail endpoint carries live install counters and keeps
 // the shorter TTL above.
 const LIST_CACHE_HEADER = 'public, max-age=300, s-maxage=900, stale-while-revalidate=3600'
-const REGISTRY_CACHE_HEADER = 'public, max-age=300, s-maxage=3600'
+// The registry feeds the in-app store's plugin list, so a newly listed plugin
+// should reach it without waiting out a full edge TTL. Serving stale while the
+// edge refreshes in the background keeps every response instant and bounds the
+// staleness to one revalidation instead of an hour.
+const REGISTRY_CACHE_HEADER = 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600'
+// robots.txt is static, but the catalog-derived crawler documents below are
+// not: without revalidation they can sit a whole day behind the catalog.
+const CRAWLER_CACHE_HEADER = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400'
 const DEFAULT_SEARCH_LIMIT = 20
 const MAX_SEARCH_LIMIT = 100
 const MAX_SEARCH_PAGE = 1_000_000
@@ -270,7 +277,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       context.header('Cache-Control', 'no-store')
       return context.text('Catalog temporarily unavailable.', 503)
     }
-    context.header('Cache-Control', 'public, max-age=3600, s-maxage=86400')
+    context.header('Cache-Control', CRAWLER_CACHE_HEADER)
     context.header('Content-Type', 'application/xml; charset=UTF-8')
     return context.body(buildSitemap(seoCatalog(result.snapshot)))
   })
@@ -284,7 +291,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       context.header('Cache-Control', 'no-store')
       return context.text('Catalog temporarily unavailable.', 503)
     }
-    context.header('Cache-Control', 'public, max-age=3600, s-maxage=86400')
+    context.header('Cache-Control', CRAWLER_CACHE_HEADER)
     context.header('Content-Type', 'text/plain; charset=UTF-8')
     return context.body(buildLlmsFullTxt(seoCatalog(result.snapshot)))
   })

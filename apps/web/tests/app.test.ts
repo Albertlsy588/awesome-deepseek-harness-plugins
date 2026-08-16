@@ -130,6 +130,8 @@ describe('market API', () => {
     expect(root.headers.get('Location')).toBeNull()
     expect(await robots.text()).toContain('Sitemap: https://deepseek1024.com/sitemap.xml')
     expect(sitemap.headers.get('Content-Type')).toContain('application/xml')
+    // Catalog-derived, so it must revalidate rather than sit a day behind.
+    expect(sitemap.headers.get('Cache-Control')).toContain('stale-while-revalidate=')
     const sitemapBody = await sitemap.text()
     expect(sitemapBody).toContain('<loc>https://deepseek1024.com/plugins</loc>')
     expect((sitemapBody.match(/<url>/g) ?? []).length).toBe(TEST_PLUGINS.length + 3)
@@ -140,6 +142,7 @@ describe('market API', () => {
 
     expect(response.status).toBe(200)
     expect(response.headers.get('Content-Type')).toContain('text/plain')
+    expect(response.headers.get('Cache-Control')).toContain('stale-while-revalidate=')
     const body = await response.text()
     expect(body).toContain(TEST_PLUGINS[0]!.name)
     expect(body).toContain('dsh plugin --profile web add github:')
@@ -396,6 +399,9 @@ describe('market API', () => {
     })
     expect(response.status).toBe(200)
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    // The in-app store reads this endpoint; without revalidation a newly listed
+    // plugin waits out the full edge TTL before it can appear there.
+    expect(response.headers.get('Cache-Control')).toContain('stale-while-revalidate=')
     const body = (await response.json()) as {
       name: string
       updated: string
