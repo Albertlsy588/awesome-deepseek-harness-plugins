@@ -129,7 +129,7 @@ describe('market API', () => {
     expect(sitemap.headers.get('Content-Type')).toContain('application/xml')
     const sitemapBody = await sitemap.text()
     expect(sitemapBody).toContain('<loc>https://deepseek1024.com/plugins</loc>')
-    expect((sitemapBody.match(/<url>/g) ?? []).length).toBe(TEST_PLUGINS.length + 2)
+    expect((sitemapBody.match(/<url>/g) ?? []).length).toBe(TEST_PLUGINS.length + 3)
   })
 
   it('reports service health without exposing internals', async () => {

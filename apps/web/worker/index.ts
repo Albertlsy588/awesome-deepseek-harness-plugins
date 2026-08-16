@@ -1,4 +1,5 @@
 import { createApp } from './app'
+import { cleanupExpiredAuthRows } from './lib/auth'
 import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
 import { runPluginDiscoveryTask } from './lib/plugin-discovery-task'
 import { metadataForPath, rewriteHtmlResponse, seoCatalog } from './seo'
@@ -66,6 +67,12 @@ const worker = {
   scheduled(controller, env, ctx) {
     if (controller.cron === FULL_DISCOVERY_CRON) {
       ctx.waitUntil(runPluginDiscoveryTask(env, 'full', controller.scheduledTime).then(logDiscovery))
+      ctx.waitUntil(cleanupExpiredAuthRows(env.CATALOG_DB, controller.scheduledTime).catch((error) => {
+        console.error(JSON.stringify({
+          message: 'auth_cleanup_failed',
+          error: error instanceof Error ? error.message : String(error),
+        }))
+      }))
       return
     }
     if (INCREMENTAL_DISCOVERY_CRONS.has(controller.cron)) {

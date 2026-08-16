@@ -40,8 +40,9 @@ describe('SEO metadata', () => {
   it('lists every snapshot plugin in the sitemap and keeps APIs out of search', () => {
     const sitemap = buildSitemap(testSeoCatalog())
     const urlCount = (sitemap.match(/<url>/g) ?? []).length
-    expect(urlCount).toBe(TEST_PLUGINS.length + 2)
+    expect(urlCount).toBe(TEST_PLUGINS.length + 3)
     expect(sitemap).toContain('<loc>https://deepseek1024.com/</loc>')
+    expect(sitemap).toContain('<loc>https://deepseek1024.com/docs/api</loc>')
     expect(sitemap).not.toContain('<loc>https://deepseek1024.com/rankings</loc>')
     for (const plugin of TEST_PLUGINS) {
       expect(sitemap).toContain(`/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(plugin.repository)}</loc>`)

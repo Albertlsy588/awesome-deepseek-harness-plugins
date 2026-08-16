@@ -165,3 +165,68 @@ export function trackedInstallCommand(
 export function githubAvatar(owner: string): string {
   return `https://github.com/${encodeURIComponent(owner)}.png?size=96`
 }
+
+export interface AuthUser {
+  githubLogin: string
+  githubName: string | null
+  avatarUrl: string | null
+}
+
+export interface ApiKeySummary {
+  id: number
+  name: string
+  keyPrefix: string
+  createdAt: string
+  lastUsedAt: string | null
+}
+
+export interface CreatedApiKey extends ApiKeySummary {
+  /** Full secret, returned exactly once at creation time. */
+  key: string
+}
+
+async function requestMutation<T>(url: string, method: string, body?: unknown): Promise<T> {
+  const response = await fetch(url, {
+    method,
+    headers: body === undefined
+      ? { Accept: 'application/json' }
+      : { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!response.ok) {
+    const parsed = (await response.json().catch(() => ({}))) as ErrorResponse
+    throw new Error(parsed.error || `Request failed with HTTP ${response.status}`)
+  }
+  return (await response.json()) as T
+}
+
+export function githubLoginUrl(returnTo: string): string {
+  return `${API_ORIGIN}/api/v1/auth/github/login?returnTo=${encodeURIComponent(returnTo)}`
+}
+
+export async function getAuthUser(signal?: AbortSignal): Promise<AuthUser | null> {
+  const payload = await requestJson<{ user: AuthUser | null }>(`${API_ORIGIN}/api/v1/auth/me`, signal)
+  return payload.user
+}
+
+export async function logoutUser(): Promise<void> {
+  await requestMutation<{ ok: boolean }>(`${API_ORIGIN}/api/v1/auth/logout`, 'POST')
+}
+
+export async function getApiKeys(signal?: AbortSignal): Promise<ApiKeySummary[]> {
+  const payload = await requestJson<{ apiKeys: ApiKeySummary[] }>(`${API_ORIGIN}/api/v1/api-keys`, signal)
+  return payload.apiKeys
+}
+
+export async function createApiKey(name: string): Promise<CreatedApiKey> {
+  const payload = await requestMutation<{ apiKey: CreatedApiKey }>(
+    `${API_ORIGIN}/api/v1/api-keys`,
+    'POST',
+    name.trim().length > 0 ? { name: name.trim() } : undefined,
+  )
+  return payload.apiKey
+}
+
+export async function revokeApiKey(id: number): Promise<void> {
+  await requestMutation<{ ok: boolean }>(`${API_ORIGIN}/api/v1/api-keys/${id}`, 'DELETE')
+}

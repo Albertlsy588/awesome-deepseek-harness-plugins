@@ -14,6 +14,57 @@ Query parameters: `q` (search), `category`, `sort`.
 Returns the catalog listing used by the website: `packages`, `rankings`, `categories`, and
 `meta`. The response structure matches the previous catalog payload; only the path changed.
 
+## GET /api/v1/plugins/search
+
+Rate-limited keyword search over the catalog snapshot, mirrored on the website at
+[`/docs/api`](https://deepseek1024.com/docs/api). `q` is required; matches package name,
+owner, repository, category, and both description languages.
+
+Query parameters: `q` (required, ≤120 chars), `page` (default 1), `limit` (default 20, max
+100), `sortBy` (`stars` default, `recent` as an alias of `newest`, or any catalog sort),
+`category` (must be a known category id, otherwise `400 INVALID_CATEGORY`).
+
+Authentication is optional: anonymous callers get 50 requests/day and 10/minute (keyed by
+HMAC-hashed client IP; the raw IP is never stored), while requests carrying
+`Authorization: Bearer dsh_live_…` from a GitHub-login account get 500/day and 30/minute.
+Every response carries `X-RateLimit-Daily-Limit` / `X-RateLimit-Daily-Remaining`; `429`
+responses add `Retry-After`. Unlike the other read endpoints the search response is
+`Cache-Control: no-store`.
+
+Error codes (JSON `{"error": "…", "code": "…"}`): `MISSING_QUERY` (400),
+`INVALID_CATEGORY` (400), `INVALID_API_KEY` (401), `RATE_LIMITED` (429, minute window —
+does not consume daily quota), `DAILY_QUOTA_EXCEEDED` (429), `SERVICE_UNAVAILABLE` (503).
+
+Response: `{"query", "page", "limit", "sortBy", "total", "totalPages", "results": [...]}`
+where each result carries the registry projection fields (`id`, `name`, `owner`, `url`,
+`category`, `description`, `install`, `added`, `stars`) plus `installCount`, `growth24h`,
+and `pushedAt`.
+
+## Account & API-key endpoints
+
+GitHub OAuth is the only sign-in method; the Worker needs the `GITHUB_OAUTH_CLIENT_ID` and
+`GITHUB_OAUTH_CLIENT_SECRET` secrets (endpoints answer `503` until both are set). Sessions
+are 30-day `dsh_session` cookies (HttpOnly, Secure, SameSite=Lax) whose SHA-256 hash lives
+in D1; API keys are shown once at creation and stored only as hashes.
+
+- `GET /api/v1/auth/github/login?returnTo=/account` — redirects to GitHub authorize with a
+  state cookie; `returnTo` accepts same-site absolute paths only.
+- `GET /api/v1/auth/github/callback` — validates state, exchanges the code, upserts the
+  user by GitHub id, sets the session cookie, redirects to `returnTo` (or
+  `/account?login=error` on failure).
+- `GET /api/v1/auth/me` — `{"user": {"githubLogin", "githubName", "avatarUrl"}}` or
+  `{"user": null}`; always 200, `Cache-Control: no-store`.
+- `POST /api/v1/auth/logout` — deletes the session row and clears the cookie.
+- `GET /api/v1/api-keys` — lists the caller's active keys (id, name, `keyPrefix`,
+  timestamps; never the secret).
+- `POST /api/v1/api-keys` — body `{"name"?}`; returns the full key exactly once
+  (`dsh_live_` + 40 hex chars). At most 5 active keys per user
+  (`400 KEY_LIMIT_REACHED`).
+- `DELETE /api/v1/api-keys/:id` — revokes (soft-deletes) the key.
+
+Cookie-authenticated mutations reject mismatched `Origin` headers (`403`); expired
+sessions and stale rate counters are purged by the weekly cron.
+
 ## GET /api/v1/plugins/:owner/:name
 
 Returns the plugin detail payload, extended with the plugin's category definition so clients
