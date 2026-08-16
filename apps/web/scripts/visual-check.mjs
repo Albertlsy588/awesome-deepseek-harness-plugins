@@ -37,6 +37,27 @@ async function assertNoHorizontalOverflow(page, label) {
   if (overflow) throw new Error(`${label} has horizontal overflow`)
 }
 
+async function assertVisibleSubdirectorySiblingsHaveDistinctTitles(page, label) {
+  const duplicateTitles = await page.locator('.package-row').evaluateAll((rows) => {
+    const siblings = new Map()
+    for (const row of rows) {
+      const link = row.querySelector('.row-link')
+      const href = link?.getAttribute('href') ?? ''
+      const segments = href.split('/').filter(Boolean)
+      if (segments.length <= 3) continue
+      const repositoryPath = segments.slice(0, 3).join('/')
+      const titles = siblings.get(repositoryPath) ?? []
+      titles.push(link?.textContent?.trim() ?? '')
+      siblings.set(repositoryPath, titles)
+    }
+    return [...siblings.entries()]
+      .filter(([, titles]) => titles.length > 1 && new Set(titles).size !== titles.length)
+  })
+  if (duplicateTitles.length > 0) {
+    throw new Error(`${label} repeats titles for subdirectory siblings: ${JSON.stringify(duplicateTitles)}`)
+  }
+}
+
 async function assertMobileEnvironment(page, label) {
   const result = await page.evaluate(() => ({
     maxTouchPoints: navigator.maxTouchPoints,
@@ -197,6 +218,7 @@ try {
   await assertLiveStats(desktop)
   await assertSeo(desktop, 'desktop catalog', '/plugins')
   await assertNoHorizontalOverflow(desktop, 'desktop catalog')
+  await assertVisibleSubdirectorySiblingsHaveDistinctTitles(desktop, 'desktop catalog')
   if (await desktop.locator('.hero-heading h1 a[href="https://deepseek1024.com/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
     throw new Error('catalog hero does not show the linked DeepSeek Harness Plugin 1024Store title')
   }
@@ -241,6 +263,13 @@ try {
   }
   if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 4) {
     throw new Error('rankings should only expose the four GitHub activity modes')
+  }
+  if (
+    (await rankings.locator('.ranking-section > .section-title').count()) !== 0
+    || await rankings.locator('#rankings-heading').getAttribute('class') !== 'visually-hidden'
+    || (await rankings.locator('.ranking-mode-group > span').count()) !== 0
+  ) {
+    throw new Error('rankings still show the redundant list heading or GitHub activity label')
   }
   if (await rankings.locator('.ranking-section .segmented-control button').first().getAttribute('aria-pressed') !== 'true') {
     throw new Error('rankings should default to the 24h growth mode')
@@ -340,6 +369,7 @@ try {
   await mobile.waitForURL((url) => !url.searchParams.has('category'))
   await assertMobileEnvironment(mobile, 'mobile catalog')
   await assertNoHorizontalOverflow(mobile, 'mobile catalog')
+  await assertVisibleSubdirectorySiblingsHaveDistinctTitles(mobile, 'mobile catalog')
   await assertMinTouchTargets(mobile, 'mobile catalog', [
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',

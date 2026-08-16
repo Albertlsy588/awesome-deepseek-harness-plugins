@@ -1177,16 +1177,6 @@ main {
 .ranking-mode-group {
   display: grid;
   min-width: 0;
-  gap: 5px;
-}
-
-.ranking-mode-group > span {
-  padding-left: 7px;
-  color: var(--subtle);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
 }
 
 .directory-section {

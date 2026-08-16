@@ -459,11 +459,10 @@ export function CatalogPage({ view }: CatalogPageProps) {
 
         {view === 'rankings' && (
           <section className="catalog-section ranking-section" aria-labelledby="rankings-heading">
-            <h2 id="rankings-heading" className="section-title">{copy.listHeading}</h2>
+            <h2 id="rankings-heading" className="visually-hidden">{copy.listHeading}</h2>
             <div className="view-controls">
               <div className="ranking-mode-groups">
                 <div className="ranking-mode-group">
-                  <span>{t('githubRankings')}</span>
                   <div className="segmented-control" role="group" aria-label={t('githubRankings')}>
                     {GITHUB_RANKING_MODES.map((mode) => (
                       <button

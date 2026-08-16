@@ -1,5 +1,5 @@
 import type { PluginInstallMethod } from '../../worker/lib/install-methods'
-import { pluginDetailPath } from '../../worker/lib/plugin-id'
+import { parsePluginId, pluginDetailPath } from '../../worker/lib/plugin-id'
 
 export type Language = 'en' | 'zh'
 
@@ -167,6 +167,31 @@ export function getPackage(id: string, signal?: AbortSignal): Promise<PackageDet
 
 export function packagePath(plugin: Pick<RegistryPlugin, 'id'>): string {
   return pluginDetailPath(plugin.id)
+}
+
+export interface PluginListIdentity {
+  /** Distinguishes monorepo subpackages even when discovery only found the repository name. */
+  displayName: string
+  /** Keeps the repository provenance visible without competing with the plugin title. */
+  sourceLabel: string
+}
+
+export function pluginListIdentity(
+  plugin: Pick<RegistryPlugin, 'id' | 'name' | 'owner'>,
+): PluginListIdentity {
+  const parts = parsePluginId(plugin.id)
+  if (parts === null || parts.path.length === 0) {
+    return { displayName: plugin.name, sourceLabel: plugin.owner }
+  }
+
+  const pathLeaf = parts.path.split('/').at(-1) ?? plugin.name
+  const discoveryOnlyFoundRepository =
+    plugin.name.localeCompare(parts.repository, 'en-US', { sensitivity: 'accent' }) === 0
+
+  return {
+    displayName: discoveryOnlyFoundRepository ? pathLeaf : plugin.name,
+    sourceLabel: `${plugin.owner} / ${parts.repository}`,
+  }
 }
 
 export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): string {
