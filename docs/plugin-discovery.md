@@ -13,12 +13,16 @@ GitHub topic search ──> repository validation ──────> D1 catalog
 checked-in PR catalog ──> CI POST /api/v1/catalog/sync ─┘
 ```
 
-D1 layers plugin-level identity over repository-level facts. Repository rows carry GitHub
-facts: a GitHub numeric repository ID is the stable identity across renames, and the
-normalized `owner/repository` key deduplicates rows before their numeric ID is known.
-Plugin entries are keyed by the normalized full plugin id — `owner/repository`, or
-`owner/repository/sub/dir` for a monorepo subpackage — and reference their repository row,
-so one repository may host several plugin entries. If both sources cover the same plugin id
+D1 holds two tables: `catalog_repositories` (one row per GitHub repository) and
+`catalog_plugins` (one row per plugin, referencing its repository). A GitHub numeric
+repository ID is the stable identity across renames, and the normalized `owner/repository`
+key deduplicates rows before that ID is known. Plugins are keyed by the normalized full
+plugin id — `owner/repository`, or `owner/repository/sub/dir` for a monorepo subpackage —
+so one repository may host several. Which channel found it is a column, not a table:
+`from_topic` on the repository (the scan discovers repositories) and `from_pr` on the plugin
+(a submission contributes one plugin). Column ownership decides who may overwrite what —
+`curated_*` only from a submission, `github_*`/`git_*`/`npm_*` only from the crawler — so a
+refresh cannot clobber a reviewed description. If both sources cover the same plugin id
 (a topic-scanned repository whose accepted manifest directory matches a curated entry's
 path), GitHub owns repository facts and PR metadata owns the display name, category,
 bilingual descriptions, and added date; curated subdirectory entries with other paths
@@ -114,14 +118,21 @@ primary catalog. Apply migrations before deploying code that starts the schedule
 npm ci
 npm run typecheck
 npm test
-npm run db:migrate:remote
+npx wrangler d1 export CATALOG_DB --remote --output=catalog-backup-$(date +%Y%m%d-%H%M).sql
+npm run db:migrate:remote --workspace @dsh-1024store/web
 npm run deploy
 ```
 
-Migrating first is required, not merely recommended, for
-`0005_catalog_plugin_paths.sql`: it rebuilds `catalog_metadata` as one row per plugin, and a
-Worker deployed against the pre-0005 shape writes curated metadata through a statement whose
-`ON CONFLICT` target no longer exists.
+Nothing deploys on a push: publishing is this local sequence, run deliberately.
+
+Take the export before every migration and check that it restores (`sqlite3 tmp.db < backup.sql`).
+It is the only way back: a Worker cannot read a schema it predates, so rolling one back means
+rolling back both.
+
+Migrating before deploying is required, not merely recommended, for
+`0005_catalog_plugins.sql`: it collapses `catalog_metadata` and
+`catalog_repository_sources` into one row per plugin, and a Worker built against the older
+shape queries tables that no longer exist.
 
 `GITHUB_TOKEN` must be a Cloudflare Worker secret, never a Wrangler plaintext variable or a
 committed `.dev.vars` value. Check Cron invocations and D1 row metrics in the Cloudflare

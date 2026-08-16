@@ -30,13 +30,6 @@ on:
       - 'catalog/categories.json'
   schedule:
     - cron: '15 5 * * *'
-  # Re-run after every successful Worker deploy: a sync racing an in-flight
-  # deploy (old Worker: 404 route or stale baked-in category table) is
-  # automatically retried once the new Worker is live. Extra runs are harmless
-  # because the sync endpoint is an idempotent full reconciliation.
-  workflow_run:
-    workflows: [Deploy]
-    types: [completed]
   workflow_dispatch:
     inputs:
       refresh_screenshot:

@@ -235,7 +235,8 @@ Apply D1 migrations and set a high-entropy Worker secret before deploying:
 
 ```bash
 cd apps/web
-npx wrangler d1 migrations apply dsh-store-star-history --remote
+npx wrangler d1 export CATALOG_DB --remote --output=../../catalog-backup-$(date +%Y%m%d-%H%M).sql
+npx wrangler d1 migrations apply CATALOG_DB --remote
 openssl rand -hex 32 | npx wrangler secret put INSTALL_CLIENT_HASH_SECRET
 cd ../..
 npm run build
