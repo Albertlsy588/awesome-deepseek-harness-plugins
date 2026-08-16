@@ -117,7 +117,7 @@ npx --yes @deepseek-ai/dsh plugin --profile web add github:owner/repository#v1.2
 fire-and-forget，失败静默，可通过 `DO_NOT_TRACK=1`、`DSH1024_TELEMETRY=0`
 （旧写法 `DSH_1024STORE_TELEMETRY=0` 永久兼容）或
 `npx dsh1024 telemetry disable` 完全关闭（关闭时不会创建任何身份）。详见
-[docs/install-analytics.md](../../docs/install-analytics.md)。
+[docs/install-analytics.md](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/docs/install-analytics.md)。
 
 遥测控制命令：
 

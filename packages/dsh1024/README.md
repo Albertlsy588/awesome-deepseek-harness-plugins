@@ -163,7 +163,7 @@ install exit code. Client identity, queue, and receipt updates use short-lived
 cross-process locks so concurrent installs sharing one `DSH_HOME` do not
 overwrite each other; network requests run outside those locks.
 
-Details: [docs/install-analytics.md](../../docs/install-analytics.md).
+Details: [docs/install-analytics.md](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/docs/install-analytics.md).
 
 ## Controls
 

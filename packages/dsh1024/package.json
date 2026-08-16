@@ -16,7 +16,7 @@
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "bin": {
-    "dsh1024": "./bin/dsh1024.js"
+    "dsh1024": "bin/dsh1024.js"
   },
   "exports": {
     ".": {

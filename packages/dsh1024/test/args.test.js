@@ -193,7 +193,7 @@ test('refuses repository fields that are not GitHub repositories', () => {
   for (const repository of [
     'https://gitlab.com/owner/plugin.git',
     'git@gitlab.com:owner/plugin.git',
-    'https://github.enterprise.internal/owner/plugin.git',
+    'https://github.example.com/owner/plugin.git',
     'https://github.com/owner',
     'not a url',
     '',
