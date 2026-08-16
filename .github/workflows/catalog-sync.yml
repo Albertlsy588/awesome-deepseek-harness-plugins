@@ -38,6 +38,11 @@ on:
     workflows: [Deploy]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      refresh_screenshot:
+        description: 'Republish the homepage screenshot even when the catalog is unchanged (use after a site redesign)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -102,11 +107,14 @@ jobs:
       # image. The screenshot is published as a single parentless commit that force
       # replaces the `assets` branch: the previous blob becomes unreachable instead of
       # accumulating, so republishing it on every catalog change never grows the clone.
+      # A redesign that does not touch the catalog leaves the URL (and therefore the
+      # camo-cached image) unchanged, so `refresh_screenshot` republishes on demand;
+      # readers pick it up on the next catalog change.
       # Cosmetic by nature — a site outage must not block the catalog README, so this
       # step is allowed to fail without failing the job (the previous screenshot simply
       # stays up, and capture-homepage.mjs refuses to publish a blank capture).
       - name: Refresh the homepage screenshot on the assets branch
-        if: steps.projections.outputs.changed == 'true'
+        if: steps.projections.outputs.changed == 'true' || inputs.refresh_screenshot
         continue-on-error: true
         env:
           GIT_AUTHOR_NAME: github-actions[bot]
