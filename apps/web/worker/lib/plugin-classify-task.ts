@@ -168,7 +168,13 @@ export function resolveDescriptions(
   candidate: ClassificationCandidate,
   item: ClassifierItem,
 ): Pick<ClassificationResult, 'descriptionEn' | 'descriptionZh' | 'descriptionOrigin'> {
-  const original = candidate.description && !PLACEHOLDER_DESCRIPTION.test(candidate.description)
+  // Only a repository-level plugin may claim the repository blurb as its own.
+  // For a monorepo subpackage that text describes the whole repository — every
+  // sibling would end up with the same sentence — so it is generated instead.
+  const ownsRepositoryBlurb = candidate.pluginPath === ''
+  const original = ownsRepositoryBlurb &&
+    candidate.description &&
+    !PLACEHOLDER_DESCRIPTION.test(candidate.description)
     ? candidate.description
     : null
   if (original === null) {
@@ -227,6 +233,10 @@ export interface ClassifyCounters {
   batchFailures: number
   neurons: number
   budgetExhausted?: boolean
+  /** Why items were rejected, e.g. `{ en_truncated: 2 }`. Empty when all passed. */
+  rejectReasons?: Record<string, number>
+  /** Set when a whole batch was rejected, which stops the round to avoid spinning. */
+  stalled?: boolean
 }
 
 /**
@@ -248,6 +258,7 @@ export async function runPluginClassifyTask(
   const counters: ClassifyCounters = {
     processed: 0, written: 0, rejected: 0, batchFailures: 0, neurons: 0,
   }
+  const rejectReasons: Record<string, number> = {}
   const now = new Date(scheduledTime).toISOString()
 
   let spentToday = await neuronsSpentToday(env.CATALOG_DB, now)
@@ -305,6 +316,11 @@ export async function runPluginClassifyTask(
       // keeps the plugin in "待分类" instead of inventing a category.
       if (reasons.length > 0 || !item || item.category === 'unclassified') {
         counters.rejected += 1
+        // Without this the queue silently stalls on a plugin the model keeps
+        // failing, with no way to tell which one or why.
+        for (const reason of reasons.length > 0 ? reasons : ['unclassified_verdict']) {
+          rejectReasons[reason] = (rejectReasons[reason] ?? 0) + 1
+        }
         continue
       }
       writes.push({
@@ -321,11 +337,16 @@ export async function runPluginClassifyTask(
     }
     // Every candidate was rejected and none was written: the queue would hand
     // back the same rows forever, so stop rather than spin.
-    if (writes.length === 0) break
+    if (writes.length === 0) {
+      counters.stalled = true
+      break
+    }
   }
 
   // The verdicts are already committed; a failed snapshot refresh only delays
   // their visibility until the next */15 refresh, so it must not fail the round.
+  if (Object.keys(rejectReasons).length > 0) counters.rejectReasons = rejectReasons
+
   if (counters.written > 0) {
     try {
       await refreshCatalogSnapshot(env, fetch, Date.now())

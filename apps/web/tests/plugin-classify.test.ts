@@ -275,6 +275,31 @@ describe('resolveDescriptions', () => {
     expect(result.descriptionOrigin).toBe('author_zh')
   })
 
+  it('does not let a monorepo subpackage claim the repository blurb', () => {
+    // Every sibling shares one repository description; handing it to each of
+    // them verbatim would give the whole monorepo one identical blurb.
+    const result = resolveDescriptions(
+      candidate({
+        pluginPath: 'packages/dsh-theme-nord',
+        pluginId: 'owner/mono/packages/dsh-theme-nord',
+        description: 'Monorepo of design system packages.',
+      }),
+      item({ description_en: 'Ships the Nord palette.', description_zh: '提供 Nord 配色。' }),
+    )
+    expect(result.descriptionOrigin).toBe('generated')
+    expect(result.descriptionEn).toBe('Ships the Nord palette.')
+    expect(result.descriptionZh).toBe('提供 Nord 配色。')
+  })
+
+  it('still lets a repository-level plugin claim it', () => {
+    const result = resolveDescriptions(
+      candidate({ pluginPath: '', description: 'A single-plugin repository.' }),
+      item(),
+    )
+    expect(result.descriptionOrigin).toBe('author_en')
+    expect(result.descriptionEn).toBe('A single-plugin repository.')
+  })
+
   it('treats the synthesised placeholder as no description at all', () => {
     const result = resolveDescriptions(
       candidate({ description: 'owner/dsh-x discovered from GitHub.' }),
