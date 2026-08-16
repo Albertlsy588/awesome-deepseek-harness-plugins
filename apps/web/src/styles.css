@@ -80,44 +80,13 @@ body {
   padding: 18px 0 28px;
 }
 
-.hero-topline {
-  display: flex;
-  min-height: 48px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding-bottom: 17px;
-  border-bottom: 1px solid rgba(69, 64, 52, 0.14);
-}
-
-.hero-brand {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 11px;
-}
-
-.hero-brand-copy {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 8px;
-  line-height: 1;
-}
-
-.hero-brand-copy strong {
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: -0.015em;
-  white-space: nowrap;
-}
-
 .hero-actions {
   display: flex;
+  align-self: start;
   align-items: center;
+  justify-self: end;
   gap: 7px;
+  grid-area: actions;
 }
 
 .hero-action-link {
@@ -181,17 +150,17 @@ body {
   box-shadow: none;
 }
 
-/* Masthead grid: the tally card spans both rows so its top edge locks to the
-   heading and its bottom edge locks to the search bar. */
+/* Asymmetric masthead grid: brand and actions share a starting edge, while the
+   tally sits below the actions. List controls live in the content area. */
 .hero-stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 310px;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: auto 1fr;
   grid-template-areas:
-    "heading tally"
-    "search tally";
-  gap: 26px 56px;
-  padding: 30px 0 26px;
+    "heading actions"
+    "heading tally";
+  column-gap: 56px;
+  row-gap: 14px;
 }
 
 .hero-heading {
@@ -236,7 +205,8 @@ body {
   text-transform: uppercase;
 }
 
-.hero-heading h1 {
+.hero-heading h1,
+.hero-heading h1 a {
   display: flex;
   margin: 0;
   flex-direction: column;
@@ -245,6 +215,10 @@ body {
   font-family: var(--font-display);
   font-weight: 850;
   line-height: 1.04;
+}
+
+.hero-heading h1 a:hover em {
+  color: var(--brand-dark);
 }
 
 .hero-heading h1 span {
@@ -270,6 +244,7 @@ body {
 .hero-tally {
   position: relative;
   display: grid;
+  min-height: 218px;
   margin: 0;
   grid-area: tally;
   padding: 15px 20px 16px;
@@ -349,6 +324,18 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.hero-updated {
+  position: absolute;
+  bottom: 17px;
+  left: 20px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .hero-tally-value {
   align-self: center;
   justify-self: center;
@@ -390,8 +377,7 @@ body {
   .hero-heading h1,
   .hero-heading > p:last-child,
   .hero-tally,
-  .catalog-hero .catalog-toolbar,
-  .hero-footer {
+  .catalog-navigation {
     animation: hero-rise 620ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 
@@ -407,12 +393,8 @@ body {
     animation-delay: 150ms;
   }
 
-  .catalog-hero .catalog-toolbar {
+  .catalog-navigation {
     animation-delay: 200ms;
-  }
-
-  .hero-footer {
-    animation-delay: 250ms;
   }
 }
 
@@ -429,17 +411,17 @@ body {
 .hero-static .hero-heading h1,
 .hero-static .hero-heading > p:last-child,
 .hero-static .hero-tally,
-.hero-static .catalog-toolbar,
-.hero-static .hero-footer {
+.hero-static .catalog-navigation {
   animation: none;
 }
 
-.catalog-hero .catalog-toolbar {
-  align-self: end;
-  grid-area: search;
+.catalog-navigation {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 24px;
 }
 
-.catalog-hero .search-control {
+.catalog-navigation .search-control {
   height: 56px;
   padding: 0 18px;
   border: 1px solid var(--ink);
@@ -448,24 +430,17 @@ body {
   box-shadow: 4px 4px 0 rgba(36, 35, 31, 0.17);
 }
 
-.catalog-hero .search-control:focus-within {
+.catalog-navigation .search-control:focus-within {
   border-color: var(--brand);
   box-shadow: 4px 4px 0 rgba(63, 96, 246, 0.24), 0 0 0 3px rgba(63, 96, 246, 0.08);
 }
 
-.catalog-hero .search-control input {
+.catalog-navigation .search-control input {
   font-size: 15px;
 }
 
-.hero-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin-top: 20px;
-}
-
-.hero-footer .catalog-view-tabs {
+.catalog-navigation .catalog-view-tabs {
+  justify-self: start;
   margin: 0;
   padding: 3px;
   border-color: rgba(45, 43, 37, 0.22);
@@ -474,14 +449,14 @@ body {
   box-shadow: none;
 }
 
-.hero-footer .catalog-view-tabs a {
+.catalog-navigation .catalog-view-tabs a {
   min-height: 35px;
   padding: 0 13px;
   border-radius: 6px;
   font-size: 12px;
 }
 
-.hero-footer .catalog-view-tabs a.selected {
+.catalog-navigation .catalog-view-tabs a.selected {
   background: var(--ink);
   box-shadow: none;
 }
@@ -562,28 +537,6 @@ body {
     padding: 12px 0 20px;
   }
 
-  .hero-topline {
-    align-items: flex-start;
-    gap: 12px;
-    padding-bottom: 12px;
-  }
-
-  .hero-brand {
-    gap: 8px;
-  }
-
-  .hero-brand-copy {
-    display: grid;
-    align-self: center;
-    gap: 4px;
-  }
-
-  .hero-brand-copy strong {
-    font-size: 13px;
-    line-height: 1.25;
-    white-space: normal;
-  }
-
   .hero-actions {
     gap: 5px;
   }
@@ -610,11 +563,10 @@ body {
     grid-template-columns: 1fr;
     grid-template-rows: auto;
     grid-template-areas:
+      "actions"
       "heading"
-      "tally"
-      "search";
-    gap: 22px;
-    padding: 26px 0 20px;
+      "tally";
+    gap: 18px;
   }
 
   .hero-lockup {
@@ -646,6 +598,7 @@ body {
   }
 
   .hero-tally {
+    min-height: 0;
     padding: 13px 16px 14px;
     border-radius: 12px;
     box-shadow: 4px 4px 0 rgba(36, 35, 31, 0.16);
@@ -669,42 +622,44 @@ body {
     bottom: 11px;
   }
 
+  .hero-updated {
+    bottom: 15px;
+    left: 16px;
+    font-size: 12px;
+  }
+
   .hero-tally-value {
     padding: 12px 0 26px;
     font-size: 52px;
   }
 
-  .catalog-hero .search-control {
+  .catalog-navigation {
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .catalog-navigation .search-control {
     height: 50px;
     padding: 0 14px;
     border-radius: 11px;
     box-shadow: 3px 3px 0 rgba(36, 35, 31, 0.17);
   }
 
-  .catalog-hero .search-control input {
-    font-size: 13px;
+  .catalog-navigation .search-control input {
+    font-size: 16px;
   }
 
-  .hero-footer {
-    display: block;
-    margin-top: 17px;
-  }
-
-  .hero-footer .catalog-view-tabs {
+  .catalog-navigation .catalog-view-tabs {
     display: flex;
     width: 100%;
   }
 
-  .hero-footer .catalog-view-tabs a {
-    min-height: 38px;
+  .catalog-navigation .catalog-view-tabs a {
+    min-height: 44px;
     flex: 1;
     justify-content: center;
     padding: 0 8px;
-    font-size: 11px;
-  }
-
-  .hero-footer > p {
-    display: none;
+    font-size: 13px;
   }
 
   .catalog-content {
@@ -1314,6 +1269,19 @@ main {
   background: rgba(77, 107, 254, 0.045);
 }
 
+.row-link {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.row-link:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
 .ranking-row {
   grid-template-columns: 38px 36px minmax(270px, 1fr) minmax(120px, auto) minmax(230px, auto) 54px 30px;
 }
@@ -1409,7 +1377,7 @@ main {
   gap: 8px;
 }
 
-.row-title-line a {
+.row-title {
   min-width: 0;
   overflow: hidden;
   color: #242a3b;
@@ -1420,11 +1388,12 @@ main {
   white-space: nowrap;
 }
 
-.row-title-line a:hover {
+.package-row:hover .row-title,
+.package-row:has(.row-link:focus-visible) .row-title {
   color: var(--brand-dark);
 }
 
-.row-title-line span {
+.row-owner {
   overflow: hidden;
   color: #9299aa;
   font-family: var(--font-mono);
@@ -1575,6 +1544,8 @@ main {
 }
 
 .install-command-compact {
+  position: relative;
+  z-index: 2;
   display: block;
   width: 32px;
   height: 32px;
@@ -1740,6 +1711,9 @@ main {
 }
 
 .split-install {
+  /* Sits above the full-row .row-link overlay so both buttons stay clickable. */
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: stretch;
 }
@@ -1835,8 +1809,8 @@ main {
   color: #98a0b0;
 }
 
-.row-open:hover {
-  background: var(--brand-soft);
+.package-row:hover .row-open,
+.package-row:has(.row-link:focus-visible) .row-open {
   color: var(--brand-dark);
 }
 
@@ -2790,11 +2764,11 @@ main {
     grid-row: 1;
   }
 
-  .row-title-line a {
+  .row-title {
     font-size: 14px;
   }
 
-  .row-title-line span {
+  .row-owner {
     font-size: 11px;
   }
 
@@ -3196,11 +3170,11 @@ main {
     gap: 10px;
   }
 
-  .row-title-line a {
+  .row-title {
     font-size: 15px;
   }
 
-  .row-title-line span,
+  .row-owner,
   .category-tag {
     font-size: 11px;
   }
@@ -3384,7 +3358,6 @@ main {
     margin-left: max(12px, env(safe-area-inset-left));
   }
 
-  .hero-brand,
   .detail-brand {
     min-height: 44px;
   }
@@ -3408,11 +3381,11 @@ main {
     font-size: 11px;
   }
 
-  .catalog-hero .search-control input {
+  .catalog-navigation .search-control input {
     font-size: 16px;
   }
 
-  .hero-footer .catalog-view-tabs a {
+  .catalog-navigation .catalog-view-tabs a {
     min-height: 44px;
     font-size: 13px;
   }

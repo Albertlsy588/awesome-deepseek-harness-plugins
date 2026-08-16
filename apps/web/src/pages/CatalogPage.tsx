@@ -20,15 +20,15 @@ import {
   loadCatalog,
 } from '../lib/catalog-cache'
 import { publicAsset } from '../lib/assets'
-import { formatNumber } from '../lib/format'
+import { formatDateTime, formatNumber, formatRelativeUpdate } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { useLiveStats } from '../lib/useLiveStats'
 import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
-// Directory rows render incrementally so a filter click re-renders dozens of
-// rows instead of the full multi-thousand plugin list in one commit.
-const PAGE_SIZE = 60
+// Directory rows render in bounded batches so a filter click does not mount
+// the full multi-thousand-plugin list in one commit.
+const PAGE_SIZE = 100
 // growth7d / growth30d stay available in the API but are hidden here until
 // enough snapshot history accumulates to make those windows meaningful.
 const GITHUB_RANKING_MODES: RankingMode[] = [
@@ -100,6 +100,24 @@ function TallyCount({ total, language, animate }: {
 }) {
   const value = useCountUp(total, animate)
   return <>{value === null ? '--' : formatNumber(value, language)}</>
+}
+
+function CatalogUpdatedAt({ value, language }: { value: string; language: Language }) {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  const label = formatRelativeUpdate(value, language, now)
+  if (!label) return null
+
+  return (
+    <time className="hero-updated" dateTime={value} title={formatDateTime(value, language)}>
+      {label}
+    </time>
+  )
 }
 
 // Play the hero entrance (CSS rise + count-up) once per page load, not every
@@ -211,23 +229,6 @@ export function CatalogPage({ view }: CatalogPageProps) {
     [catalog, visibleCount],
   )
   const hasMorePackages = (catalog?.packages.length ?? 0) > visibleCount
-  const loadMoreRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (view !== 'catalog' || !hasMorePackages) return
-    const node = loadMoreRef.current
-    if (!node) return
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setDirectoryPage({ key: directoryKey, count: visibleCount + PAGE_SIZE })
-        }
-      },
-      { rootMargin: '600px 0px' },
-    )
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [directoryKey, hasMorePackages, view, visibleCount])
 
   function updateFilter(key: 'category' | 'sort', value: string) {
     const next = new URLSearchParams(searchParams)
@@ -287,13 +288,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
     >
       <section className="catalog-hero">
         <div className="page-container catalog-hero-inner">
-          <div className="hero-topline">
-            <Link className="hero-brand" to="/" aria-label="DeepSeek Harness Plugin 1024Store homepage">
-              <span className="hero-brand-copy">
-                <strong>DeepSeek Harness Plugin 1024Store</strong>
-              </span>
-            </Link>
-
+          <header className="hero-stage">
             <div className="hero-actions" aria-label={t('siteActions')}>
               <a
                 className="hero-action-link github-link"
@@ -316,9 +311,6 @@ export function CatalogPage({ view }: CatalogPageProps) {
               </a>
               <LanguageSwitch className="hero-language" />
             </div>
-          </div>
-
-          <header className="hero-stage">
             <div className="hero-heading">
               <div className="hero-lockup">
                 <span className="hero-lockup-mark" aria-hidden="true">
@@ -326,13 +318,18 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 </span>
                 <div className="hero-lockup-copy">
                   <p className="hero-eyebrow">{t('heroEyebrow')}</p>
-                  <h1 aria-label={`DeepSeek Harness Plugin ${t(view === 'catalog' ? 'catalog' : 'rankings')}`}>
-                    <span>DeepSeek Harness Plugin</span>
-                    <em>{t(view === 'catalog' ? 'catalog' : 'rankings')}</em>
+                  <h1>
+                    <a
+                      href="https://deepseek1024.com/"
+                      aria-label="DeepSeek Harness Plugin 1024Store"
+                    >
+                      <span>DeepSeek Harness Plugin</span>
+                      <em>1024Store</em>
+                    </a>
                   </h1>
                 </div>
               </div>
-              <p>{t(view === 'catalog' ? 'catalogIntro' : 'rankingsIntro')}</p>
+              <p>{t('rankingsIntro')}</p>
             </div>
 
             <dl className="hero-tally">
@@ -355,46 +352,50 @@ export function CatalogPage({ view }: CatalogPageProps) {
                   {stats ? formatNumber(stats.online, language) : '--'}
                 </dd>
               </div>
+              {catalog?.meta.generatedAt && (
+                <CatalogUpdatedAt value={catalog.meta.generatedAt} language={language} />
+              )}
             </dl>
 
-            <section className="catalog-toolbar" aria-label={t('search')}>
-              <label className="search-control">
-                <Search size={19} aria-hidden="true" />
-                <span className="visually-hidden">{t('search')}</span>
-                <input
-                  type="search"
-                  value={draftQuery}
-                  onChange={(event) => setDraftQuery(event.target.value)}
-                  placeholder={t('searchPlaceholder')}
-                />
-                {catalog && (
-                  <small>
-                    {catalog.meta.total} {t(catalog.meta.total === 1 ? 'result' : 'results')}
-                  </small>
-                )}
-              </label>
-            </section>
           </header>
-
-          <div className="hero-footer">
-            <nav className="catalog-view-tabs" aria-label={`${t('catalog')} / ${t('rankings')}`}>
-              <Link to={rankingsHref} className={view === 'rankings' ? 'selected' : undefined} aria-current={view === 'rankings' ? 'page' : undefined}>
-                <Trophy size={16} aria-hidden="true" />
-                {t('rankings')}
-              </Link>
-              <Link to={catalogHref} className={view === 'catalog' ? 'selected' : undefined} aria-current={view === 'catalog' ? 'page' : undefined}>
-                <ListFilter size={16} aria-hidden="true" />
-                <span>
-                  {t('catalog')}{catalog ? ` (${formatNumber(catalog.meta.catalogTotal, language)})` : ''}
-                </span>
-              </Link>
-            </nav>
-          </div>
         </div>
       </section>
 
       <div className="page-container catalog-content">
         <SelfInstallBanner />
+
+        <section className="catalog-navigation" aria-label={`${t('search')} / ${t('catalog')} / ${t('rankings')}`}>
+          <section className="catalog-toolbar" aria-label={t('search')}>
+            <label className="search-control">
+              <Search size={19} aria-hidden="true" />
+              <span className="visually-hidden">{t('search')}</span>
+              <input
+                type="search"
+                value={draftQuery}
+                onChange={(event) => setDraftQuery(event.target.value)}
+                placeholder={t('searchPlaceholder')}
+              />
+              {catalog && (
+                <small>
+                  {catalog.meta.total} {t(catalog.meta.total === 1 ? 'result' : 'results')}
+                </small>
+              )}
+            </label>
+          </section>
+
+          <nav className="catalog-view-tabs" aria-label={`${t('catalog')} / ${t('rankings')}`}>
+            <Link to={rankingsHref} className={view === 'rankings' ? 'selected' : undefined} aria-current={view === 'rankings' ? 'page' : undefined}>
+              <Trophy size={16} aria-hidden="true" />
+              {t('rankings')}
+            </Link>
+            <Link to={catalogHref} className={view === 'catalog' ? 'selected' : undefined} aria-current={view === 'catalog' ? 'page' : undefined}>
+              <ListFilter size={16} aria-hidden="true" />
+              <span>
+                {t('catalog')}{catalog ? ` (${formatNumber(catalog.meta.catalogTotal, language)})` : ''}
+              </span>
+            </Link>
+          </nav>
+        </section>
 
         {view === 'catalog' && (
           <section className="category-section" aria-labelledby="categories-heading">
@@ -561,7 +562,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
                   ))}
                 </div>
                 {hasMorePackages && (
-                  <div className="load-more-row" ref={loadMoreRef}>
+                  <div className="load-more-row">
                     <button
                       className="button button-secondary"
                       type="button"

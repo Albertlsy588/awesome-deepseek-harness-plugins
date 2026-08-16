@@ -53,6 +53,14 @@ export const PackageRow = memo(function PackageRow({
 
   return (
     <article className={`package-row${ranking ? ' ranking-row' : ''}`}>
+      <Link
+        className="row-link"
+        to={packagePath(plugin)}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`${t('details')}: ${plugin.name}`}
+      />
+
       <span className={`row-index${index < 3 && ranking ? ' is-leading' : ''}`} aria-label={`${t('rank')} ${index + 1}`}>
         {String(index + 1).padStart(2, '0')}
       </span>
@@ -61,8 +69,8 @@ export const PackageRow = memo(function PackageRow({
 
       <div className="row-identity">
         <div className="row-title-line">
-          <Link to={packagePath(plugin)}>{plugin.name}</Link>
-          <span>{plugin.owner}</span>
+          <span className="row-title">{plugin.name}</span>
+          <span className="row-owner">{plugin.owner}</span>
         </div>
         <p>{plugin.description[language]}</p>
       </div>
@@ -142,14 +150,12 @@ export const PackageRow = memo(function PackageRow({
 
       <SplitInstallButton plugin={plugin} />
 
-      <Link
+      <span
         className="row-open"
-        to={packagePath(plugin)}
-        aria-label={`${t('details')}: ${plugin.name}`}
-        title={t('details')}
+        aria-hidden="true"
       >
         <ArrowUpRight size={17} aria-hidden="true" />
-      </Link>
+      </span>
     </article>
   )
 })
