@@ -20,19 +20,10 @@ export interface RegistryPlugin {
   added: string
 }
 
-export interface Registry {
-  updated: string
-  count: number
-  revision: string
-  categories: Record<string, RegistryCategory>
-  plugins: RegistryPlugin[]
-}
-
-export type RegistrySource = 'bundled'
-
-export interface RegistryResult {
-  registry: Registry
-  source: RegistrySource
+export interface CategoryDescriptor {
+  id: string
+  order: number
+  label: LocalizedText
 }
 
 export interface RepositoryMetric {
@@ -49,7 +40,21 @@ export interface StarGrowth {
   growth30d: number | null
 }
 
-export interface CatalogPlugin extends RegistryPlugin, RepositoryMetric, StarGrowth {
+export interface InstallMetrics {
+  installCount: number
+  installerCount: number
+  firstInstallCount: number
+  reinstallCount: number
+  updateCount: number
+  removeCount: number
+  failureCount: number
+  installs24h: number
+  installs7d: number
+  installs30d: number
+  latestInstallAt: string | null
+}
+
+export interface CatalogPlugin extends RegistryPlugin, RepositoryMetric, StarGrowth, InstallMetrics {
   repository: string
 }
 
@@ -62,7 +67,7 @@ export interface StoredCatalogSnapshot {
   plugins: CatalogPlugin[]
 }
 
-export type CatalogSource = 'bundled' | 'kv' | 'stale'
+export type CatalogSource = 'd1' | 'kv' | 'stale' | 'empty'
 
 export interface CatalogSnapshotResult {
   snapshot: StoredCatalogSnapshot
@@ -76,6 +81,10 @@ export interface CategoryResult extends RegistryCategory {
 
 export type CatalogSort =
   | 'stars'
+  | 'installs'
+  | 'installs24h'
+  | 'installs7d'
+  | 'installs30d'
   | 'growth24h'
   | 'growth7d'
   | 'growth30d'
@@ -87,6 +96,10 @@ export interface CatalogResponse {
   packages: CatalogPlugin[]
   rankings: {
     stars: CatalogPlugin[]
+    installs: CatalogPlugin[]
+    installs24h: CatalogPlugin[]
+    installs7d: CatalogPlugin[]
+    installs30d: CatalogPlugin[]
     growth24h: CatalogPlugin[]
     growth7d: CatalogPlugin[]
     growth30d: CatalogPlugin[]
@@ -103,6 +116,26 @@ export interface CatalogResponse {
     source: CatalogSource
     metricCoverage: number
   }
+}
+
+export interface RegistryProjectionPlugin {
+  id: string
+  name: string
+  owner: string
+  url: string
+  category: string
+  description: LocalizedText
+  install: string
+  added: string
+  stars: number | null
+}
+
+export interface RegistryProjection {
+  name: string
+  updated: string
+  count: number
+  categories: CategoryDescriptor[]
+  plugins: RegistryProjectionPlugin[]
 }
 
 export interface PackageManifestSummary {
@@ -127,7 +160,7 @@ export interface GitHubSummary {
   avatarUrl: string
 }
 
-export interface PackageDetail extends RegistryPlugin {
+export interface PackageDetail extends RegistryPlugin, InstallMetrics {
   github: GitHubSummary | null
   manifest: PackageManifestSummary | null
   readme: string | null

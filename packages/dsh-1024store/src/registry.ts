@@ -1,0 +1,150 @@
+/** Fetch and validate the public 1024 Store registry API. */
+
+export interface RegistryCategory {
+  id: string
+  order: number
+  label: Record<string, string>
+}
+
+export interface RegistryPlugin {
+  id: string
+  name: string
+  owner: string
+  url: string
+  category: string
+  description: Record<string, string>
+  install: string
+  added: string
+  stars?: number | null
+}
+
+export interface Registry {
+  name: string
+  updated: string
+  count: number
+  categories: RegistryCategory[]
+  plugins: RegistryPlugin[]
+}
+
+export type RegistrySource = 'api' | 'cache'
+
+export const DEFAULT_REGISTRY_URL = 'https://deepseek1024.com/api/v1/registry'
+const CACHE_TTL_MS = 5 * 60 * 1000
+const FETCH_TIMEOUT_MS = 8_000
+
+let cache: { url: string; at: number; registry: Registry } | null = null
+
+function isStringMap(value: unknown): value is Record<string, string> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  return Object.values(value).every(item => typeof item === 'string')
+}
+
+function isCategory(value: unknown): value is RegistryCategory {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  const category = value as Record<string, unknown>
+  return typeof category.id === 'string'
+    && typeof category.order === 'number'
+    && isStringMap(category.label)
+}
+
+function isPlugin(value: unknown, categoryIds: Set<string>): value is RegistryPlugin {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  const plugin = value as Record<string, unknown>
+  return typeof plugin.id === 'string'
+    && typeof plugin.name === 'string'
+    && typeof plugin.owner === 'string'
+    && typeof plugin.url === 'string'
+    && parseGitHubSource(plugin.url) !== null
+    && typeof plugin.category === 'string'
+    && categoryIds.has(plugin.category)
+    && isStringMap(plugin.description)
+    && typeof plugin.install === 'string'
+    && typeof plugin.added === 'string'
+    && (plugin.stars === undefined || plugin.stars === null || typeof plugin.stars === 'number')
+}
+
+/**
+ * Validate untrusted registry JSON before it can become an installation allowlist.
+ * @param value - parsed `/api/v1/registry` response.
+ * @returns the validated registry.
+ */
+export function validateRegistry(value: unknown): Registry {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('registry must be an object')
+  }
+  const registry = value as Record<string, unknown>
+  if (typeof registry.name !== 'string' || typeof registry.updated !== 'string' || typeof registry.count !== 'number') {
+    throw new Error('registry metadata is invalid')
+  }
+  if (!Array.isArray(registry.categories) || !registry.categories.every(isCategory)) {
+    throw new Error('registry categories are invalid')
+  }
+  const categoryIds = new Set(registry.categories.map(category => category.id))
+  if (!Array.isArray(registry.plugins) || registry.plugins.length === 0) {
+    throw new Error('registry plugins are empty')
+  }
+  if (registry.count !== registry.plugins.length) throw new Error('registry count does not match plugins')
+  if (!registry.plugins.every(plugin => isPlugin(plugin, categoryIds))) {
+    throw new Error('registry contains an invalid plugin')
+  }
+  return registry as unknown as Registry
+}
+
+/**
+ * Parse the only repository URL form accepted by the installer.
+ * @param url - curated plugin repository URL.
+ * @returns the GitHub owner/repository pair, or null for an unsupported URL.
+ */
+export function parseGitHubSource(url: string): string | null {
+  const match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/?$/.exec(url)
+  return match?.[1] ?? null
+}
+
+/**
+ * Derive a pnpm package spec without trusting the registry's display command.
+ * @param plugin - validated curated plugin.
+ * @returns an immutable GitHub package spec.
+ */
+export function installTarget(plugin: RegistryPlugin): string {
+  const repository = parseGitHubSource(plugin.url)
+  if (repository === null) throw new Error('unsupported plugin repository URL')
+  return `github:${repository}`
+}
+
+/** Clear process-local registry state for deterministic tests. */
+export function clearRegistryCache(): void {
+  cache = null
+}
+
+/**
+ * Load the registry from the configured HTTPS API, with a last-good response cache.
+ * @param registryUrl - public 1024 Store registry API endpoint.
+ * @param fetcher - injectable fetch implementation for deterministic tests.
+ * @returns the registry and whether it is fresh API data or a stale fallback cache.
+ */
+export async function loadRegistry(
+  registryUrl: string = DEFAULT_REGISTRY_URL,
+  fetcher: typeof fetch = fetch,
+): Promise<{ registry: Registry; source: RegistrySource }> {
+  if (cache !== null && cache.url === registryUrl && Date.now() - cache.at < CACHE_TTL_MS) {
+    return { registry: cache.registry, source: 'api' }
+  }
+  try {
+    const url = new URL(registryUrl)
+    if (url.protocol !== 'https:') throw new Error('registry API URL must use HTTPS')
+    const response = await fetcher(url, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    })
+    if (!response.ok) throw new Error(`registry API HTTP ${response.status}`)
+    const registry = validateRegistry(await response.json() as unknown)
+    cache = { url: registryUrl, at: Date.now(), registry }
+    return { registry, source: 'api' }
+  } catch (error) {
+    if (cache !== null && cache.url === registryUrl) {
+      return { registry: cache.registry, source: 'cache' }
+    }
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new Error(`registry API unavailable: ${detail}`)
+  }
+}

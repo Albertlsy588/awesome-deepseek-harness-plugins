@@ -27,7 +27,7 @@ export function metricKey(plugin: Pick<RegistryPlugin, 'owner' | 'name' | 'url'>
 function githubHeaders(token?: string): Record<string, string> {
   return {
     Accept: 'application/vnd.github+json',
-    'User-Agent': 'dsh-store-worker',
+    'User-Agent': 'dsh-1024store-worker',
     'X-GitHub-Api-Version': '2022-11-28',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
@@ -77,7 +77,7 @@ async function fetchGraphMetrics(
         ...githubHeaders(token),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ query: `query DshStoreCatalog { ${fields} }` }),
+      body: JSON.stringify({ query: `query Dsh1024StoreCatalog { ${fields} }` }),
     })
     if (!response.ok) throw new Error(`GitHub GraphQL returned HTTP ${response.status}`)
 

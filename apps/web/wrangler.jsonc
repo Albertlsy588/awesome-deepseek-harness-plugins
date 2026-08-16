@@ -4,17 +4,38 @@
   "main": "./worker/index.ts",
   "compatibility_date": "2026-08-14",
   "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "deepseek1024.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.deepseek1024.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "api.deepseek1024.com",
+      "custom_domain": true
+    }
+  ],
   "secrets": {
-    "required": ["GITHUB_TOKEN"]
+    "required": [
+      "GITHUB_TOKEN",
+      "INSTALL_CLIENT_HASH_SECRET",
+      "CATALOG_SYNC_TOKEN",
+      "GITHUB_OAUTH_CLIENT_ID",
+      "GITHUB_OAUTH_CLIENT_SECRET"
+    ]
   },
   "kv_namespaces": [
     {
-      "binding": "CATALOG_CACHE"
+      "binding": "CATALOG_CACHE",
+      "id": "50a780cc01f9435d86b82ab46004f691"
     }
   ],
   "d1_databases": [
     {
-      "binding": "STAR_HISTORY",
+      "binding": "CATALOG_DB",
       "database_name": "dsh-store-star-history",
       "database_id": "57006b9f-17e1-466f-b941-71c35cbff092",
       "migrations_dir": "migrations"
@@ -35,7 +56,11 @@
     }
   ],
   "triggers": {
-    "crons": ["*/15 * * * *"]
+    "crons": ["*/15 * * * *", "7 * * * *", "37 * * * *", "17 3 * * SUN"]
+  },
+  "limits": {
+    "cpu_ms": 300000,
+    "subrequests": 10000
   },
   "assets": {
     "binding": "ASSETS",

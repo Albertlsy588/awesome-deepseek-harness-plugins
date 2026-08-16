@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { LiveStats } from './api'
+import { API_ORIGIN, type LiveStats } from './api'
 
 interface LiveStatsState {
   stats: LiveStats | null
@@ -59,8 +59,9 @@ export function useLiveStats(): LiveStatsState {
     let attempt = 0
 
     function connect() {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      socket = new WebSocket(`${protocol}//${window.location.host}/api/live?visit=${visitId()}`)
+      const httpOrigin = API_ORIGIN || window.location.origin
+      const wsOrigin = httpOrigin.replace(/^http/, 'ws')
+      socket = new WebSocket(`${wsOrigin}/api/live?visit=${visitId()}`)
       socket.addEventListener('open', () => {
         attempt = 0
         setState((current) => ({ ...current, connected: true }))

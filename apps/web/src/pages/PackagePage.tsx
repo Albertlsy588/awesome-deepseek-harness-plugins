@@ -1,15 +1,22 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowUp,
   CalendarDays,
   CheckCircle2,
   CircleDot,
+  Clock3,
   Code2,
+  Download,
   ExternalLink,
   GitFork,
   Package,
+  RefreshCw,
   ShieldAlert,
   Star,
+  Trash2,
+  Users,
+  XCircle,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -19,36 +26,39 @@ import { CategoryTag } from '../components/CategoryTag'
 import { InstallCommand } from '../components/InstallCommand'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
-import { getPackage, repositoryName, type CategoryResult, type PackageDetail } from '../lib/api'
-import { formatDate, formatNumber } from '../lib/format'
+import { ApiError, getPackage, repositoryName, type PackageDetail } from '../lib/api'
+import { publicAsset } from '../lib/assets'
+import { formatDate, formatDateTime, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
-import { fitSeoText, SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
-
-const CATEGORY_LABELS: Record<string, CategoryResult> = {
-  ui: { id: 'ui', en: 'UI Enhancements', zh: 'UI 增强', count: 0 },
-  session: { id: 'session', en: 'Sessions & Messages', zh: '会话与消息', count: 0 },
-  tools: { id: 'tools', en: 'Tools & Capabilities', zh: '工具与能力', count: 0 },
-  workflow: { id: 'workflow', en: 'Workflow & Automation', zh: '工作流与自动化', count: 0 },
-  notify: { id: 'notify', en: 'Notifications & Integrations', zh: '通知与集成', count: 0 },
-  dev: { id: 'dev', en: 'Development & Runtime', zh: '开发与运行时', count: 0 },
-  fun: { id: 'fun', en: 'Just for Fun', zh: '娱乐', count: 0 },
-}
+import {
+  graph,
+  pluginDescription,
+  pluginNodes,
+  pluginTitle,
+  siteNodes,
+} from '../../worker/seo-templates'
+import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
 export function PackagePage() {
   const { owner = '', name = '' } = useParams()
   const { language, t } = useI18n()
   const [detail, setDetail] = useState<PackageDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [missing, setMissing] = useState(false)
   const [reload, setReload] = useState(0)
 
   useEffect(() => {
     const controller = new AbortController()
     setDetail(null)
     setError(null)
+    setMissing(false)
     getPackage(owner, name, controller.signal)
       .then(setDetail)
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+        // Only a 404 proves the plugin is gone. Anything else is a failure of
+        // this request, and must not be allowed to noindex a live page.
+        if (requestError instanceof ApiError && requestError.status === 404) setMissing(true)
         setError(requestError instanceof Error ? requestError.message : t('notFoundBody'))
       })
     return () => controller.abort()
@@ -56,70 +66,47 @@ export function PackagePage() {
 
   const canonicalOwner = detail?.owner ?? owner
   const canonicalRepository = detail ? repositoryName(detail) : name
-  const canonicalPath = `/plugin/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`
+  const canonicalPath = `/plugins/${encodeURIComponent(canonicalOwner)}/${encodeURIComponent(canonicalRepository)}`
   const canonicalUrl = `${SITE_ORIGIN}${canonicalPath}`
+  const categoryLabel = detail?.category?.label[language] ?? ''
   const seoTitle = detail
-    ? fitSeoText(
-        language === 'zh'
-          ? `${detail.name} DeepSeek Harness 插件 | DSH 插件市场`
-          : `${detail.name} DeepSeek Harness Plugin | DSH Store`,
-        60,
-      )
-    : error
-      ? language === 'zh' ? '插件未找到 | DSH 插件市场' : 'Plugin not found | DSH Store'
-      : language === 'zh' ? 'DeepSeek Harness 插件 | DSH 插件市场' : 'DeepSeek Harness Plugin | DSH Store'
+    ? pluginTitle(detail.name, detail.owner, language)
+    : missing
+      ? language === 'zh' ? '插件未找到 | DSH 1024Store' : 'Plugin not found | DSH 1024Store'
+      : pluginTitle(name || 'DeepSeek Harness', owner || 'DSH 1024Store', language)
   const seoDescription = detail
-    ? fitSeoText(
-        language === 'zh'
-          ? `了解由 ${detail.owner} 开发的 DeepSeek Harness 插件 ${detail.name}。${detail.description.zh}`
-          : `Explore ${detail.name}, a DeepSeek Harness plugin by ${detail.owner}. ${detail.description.en}`,
-        160,
-      )
-    : language === 'zh'
-      ? '浏览 DeepSeek Harness 社区插件的功能、安装命令与仓库信息。'
-      : 'Explore features, install commands, and repository details for a DeepSeek Harness community plugin.'
+    ? pluginDescription(detail.name, detail.owner, detail.description[language], categoryLabel, language)
+    : missing
+      ? language === 'zh'
+        ? '该插件不在 DeepSeek Harness 社区插件目录中。'
+        : 'This plugin is not in the DeepSeek Harness community plugin catalog.'
+      : language === 'zh'
+        ? '浏览 DeepSeek Harness 社区插件的功能、安装命令与仓库信息。'
+        : 'Explore features, install commands, and repository details for a DeepSeek Harness community plugin.'
   const schema = detail
-    ? {
-        '@context': 'https://schema.org',
-        '@graph': [
+    ? graph([
+        ...siteNodes(),
+        ...pluginNodes(
           {
-            '@type': 'WebPage',
-            '@id': `${canonicalUrl}#webpage`,
-            url: canonicalUrl,
-            name: seoTitle,
-            description: seoDescription,
-            isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
-            mainEntity: { '@id': `${canonicalUrl}#software` },
-          },
-          {
-            '@type': 'SoftwareSourceCode',
-            '@id': `${canonicalUrl}#software`,
             name: detail.name,
+            owner: detail.owner,
+            url: detail.url,
             description: detail.description[language],
-            codeRepository: detail.url,
-            runtimePlatform: 'DeepSeek Harness',
-            dateCreated: detail.added,
-            license: detail.manifest?.license ?? detail.github?.license ?? undefined,
+            categoryLabel,
+            added: detail.added,
+            stars: detail.github?.stars ?? null,
+            pushedAt: detail.github?.pushedAt ?? null,
+            updatedAt: detail.github?.updatedAt ?? null,
+            license: detail.manifest?.license ?? detail.github?.license ?? null,
+            repository: canonicalRepository,
           },
-          {
-            '@type': 'BreadcrumbList',
-            itemListElement: [
-              {
-                '@type': 'ListItem',
-                position: 1,
-                name: t('catalog'),
-                item: `${SITE_ORIGIN}/plugin`,
-              },
-              {
-                '@type': 'ListItem',
-                position: 2,
-                name: detail.name,
-                item: canonicalUrl,
-              },
-            ],
-          },
-        ],
-      }
+          canonicalUrl,
+          seoTitle,
+          seoDescription,
+          language,
+          t('catalog'),
+        ),
+      ])
     : null
 
   usePageSeo({
@@ -127,8 +114,12 @@ export function PackagePage() {
     description: seoDescription,
     path: canonicalPath,
     language,
-    robots: detail ? 'index,follow' : 'noindex,follow',
+    // Only a confirmed 404 deindexes. While the fetch is in flight the Worker's
+    // own metadata stays untouched, so a crawler never snapshots a placeholder.
+    robots: missing ? 'noindex,follow' : 'index,follow',
+    canonical: missing ? null : canonicalUrl,
     schema,
+    ready: Boolean(detail || missing),
   })
 
   if (error) {
@@ -138,7 +129,7 @@ export function PackagePage() {
         <h1>{t('notFound')}</h1>
         <p>{error}</p>
         <div className="state-actions">
-          <Link className="button button-primary" to="/plugin">
+          <Link className="button button-primary" to="/plugins">
             <ArrowLeft size={16} aria-hidden="true" />
             {t('back')}
           </Link>
@@ -163,12 +154,15 @@ export function PackagePage() {
 
   const github = detail.github
   const manifest = detail.manifest
+  const category = detail.category
+    ? { id: detail.category.id, en: detail.category.label.en, zh: detail.category.label.zh, count: 0 }
+    : undefined
   const runtime = manifest?.engines
     ? Object.entries(manifest.engines)
         .map(([engine, version]) => `${engine} ${version}`)
         .join(', ')
     : null
-  const reportUrl = `${detail.url}/issues/new?title=${encodeURIComponent(`[DSH Store] ${detail.name}`)}`
+  const reportUrl = `${detail.url}/issues/new?title=${encodeURIComponent(`[DSH 1024Store] ${detail.name}`)}`
   const branch = github?.defaultBranch ?? 'main'
   const detailOwner = detail.owner
   const detailRepository = repositoryName(detail)
@@ -187,13 +181,13 @@ export function PackagePage() {
     <div className="page-container package-detail-page">
       <div className="detail-utility">
         <Link className="detail-brand" to="/" aria-label="DeepSeek Harness Store homepage">
-          <img className="brand-mark" src="/deepseek1024-icon.png" alt="" aria-hidden="true" />
+          <img className="brand-mark" src={publicAsset('deepseek1024-icon.png')} alt="" aria-hidden="true" />
           <span>DeepSeek Harness <strong>{t('market')}</strong></span>
         </Link>
         <LanguageSwitch />
       </div>
 
-      <Link className="back-link" to="/plugin">
+      <Link className="back-link" to="/plugins">
         <ArrowLeft size={16} aria-hidden="true" />
         {t('back')}
       </Link>
@@ -209,7 +203,7 @@ export function PackagePage() {
         <div className="detail-heading">
           <div className="detail-title-row">
             <h1>{detail.name}</h1>
-            <CategoryTag category={CATEGORY_LABELS[detail.category]} />
+            <CategoryTag category={category} />
           </div>
           <p className="detail-owner">{t('by')} <a href={`https://github.com/${detail.owner}`} target="_blank" rel="noreferrer">{detail.owner}</a></p>
           <p className="detail-description">{detail.description[language]}</p>
@@ -252,6 +246,72 @@ export function PackagePage() {
           <section className="detail-section install-section" aria-labelledby="install-heading">
             <h2 id="install-heading">{t('install')}</h2>
             <InstallCommand command={detail.install} prominent />
+          </section>
+
+          <section className="detail-section install-activity-section" aria-labelledby="install-activity-heading">
+            <div className="install-activity-heading">
+              <div>
+                <h2 id="install-activity-heading">{t('installActivity')}</h2>
+                <p>{t('anonymousInstallerNote')}</p>
+              </div>
+              <span className="latest-install-time">
+                <Clock3 size={15} aria-hidden="true" />
+                <span>
+                  <small>{t('latestInstall')}</small>
+                  <strong>
+                    {detail.latestInstallAt
+                      ? formatDateTime(detail.latestInstallAt, language)
+                      : t('neverInstalled')}
+                  </strong>
+                </span>
+              </span>
+            </div>
+
+            <dl className="install-stat-grid">
+              <div className="install-stat-primary">
+                <dt><Download size={16} aria-hidden="true" /> {t('installOperations')}</dt>
+                <dd>{formatNumber(detail.installCount ?? 0, language)}</dd>
+              </div>
+              <div className="install-stat-primary">
+                <dt><Users size={16} aria-hidden="true" /> {t('anonymousInstallers')}</dt>
+                <dd>{formatNumber(detail.installerCount ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt>{t('installs24h')}</dt>
+                <dd>{formatNumber(detail.installs24h ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt>{t('installs7d')}</dt>
+                <dd>{formatNumber(detail.installs7d ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt>{t('installs30d')}</dt>
+                <dd>{formatNumber(detail.installs30d ?? 0, language)}</dd>
+              </div>
+            </dl>
+
+            <dl className="install-operation-breakdown">
+              <div>
+                <dt><CheckCircle2 size={14} aria-hidden="true" /> {t('firstInstalls')}</dt>
+                <dd>{formatNumber(detail.firstInstallCount ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt><RefreshCw size={14} aria-hidden="true" /> {t('reinstalls')}</dt>
+                <dd>{formatNumber(detail.reinstallCount ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt><ArrowUp size={14} aria-hidden="true" /> {t('updates')}</dt>
+                <dd>{formatNumber(detail.updateCount ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt><Trash2 size={14} aria-hidden="true" /> {t('removals')}</dt>
+                <dd>{formatNumber(detail.removeCount ?? 0, language)}</dd>
+              </div>
+              <div>
+                <dt><XCircle size={14} aria-hidden="true" /> {t('failedOperations')}</dt>
+                <dd>{formatNumber(detail.failureCount ?? 0, language)}</dd>
+              </div>
+            </dl>
           </section>
 
           <div className={`notice verification-notice ${detail.verification.bundleDeclared ? 'notice-success' : 'notice-warning'}`}>
@@ -306,11 +366,29 @@ export function PackagePage() {
                   h1: ({ children }) => <h3>{children}</h3>,
                   h2: ({ children }) => <h3>{children}</h3>,
                   h3: ({ children }) => <h4>{children}</h4>,
-                  a: ({ href, children }) => (
-                    <a href={readmeLink(href)} target={href?.startsWith('#') ? undefined : '_blank'} rel="noreferrer">
-                      {children}
-                    </a>
-                  ),
+                  a: ({ href, children }) => {
+                    if (href?.startsWith('#')) {
+                      // Fragment links must never reach the router: under hash-based
+                      // routing the fragment is the route and would 404.
+                      return (
+                        <a
+                          href={href}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            const target = document.getElementById(decodeURIComponent(href.slice(1)))
+                            target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          }}
+                        >
+                          {children}
+                        </a>
+                      )
+                    }
+                    return (
+                      <a href={readmeLink(href)} target="_blank" rel="noreferrer">
+                        {children}
+                      </a>
+                    )
+                  },
                   img: ({ src, alt }) => <img src={readmeImage(src)} alt={alt ?? ''} loading="lazy" />,
                 }}
               >

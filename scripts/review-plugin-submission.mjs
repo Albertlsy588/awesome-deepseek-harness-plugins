@@ -1,68 +1,20 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { appendFileSync } from 'node:fs'
+import { lstat, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+
+import { assert, isObject, validateCatalogEntry } from './lib/catalog-entry.mjs'
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const root = path.resolve(process.env.PLUGIN_REVIEW_ROOT ?? scriptRoot)
 const catalogPrefix = 'catalog/plugins/'
 const catalogFilePattern = /^catalog\/plugins\/[^/]+\.json$/
 const reviewCommentMarker = '<!-- dsh-plugin-submission-review -->'
-const schemaReference = '../schema/plugin.schema.json'
 
-function isObject(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message)
-}
-
-function assertExactKeys(value, allowed, label) {
-  const actual = Object.keys(value).sort()
-  const expected = [...allowed].sort()
-  assert(JSON.stringify(actual) === JSON.stringify(expected), `${label} must contain exactly: ${expected.join(', ')}`)
-}
-
-function slugPart(value) {
-  return value
-    .toLocaleLowerCase('en-US')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
-function pluginFileName(id) {
-  const [owner, repository] = id.split('/')
-  return `${slugPart(owner)}--${slugPart(repository)}.json`
-}
-
-function isIsoDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
-  const parsed = new Date(`${value}T00:00:00.000Z`)
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
-}
-
-export function validateCatalogEntry(entry, file, categoryIds) {
-  const label = file
-  assert(isObject(entry), `${label} must contain a JSON object`)
-  assertExactKeys(entry, ['$schema', 'id', 'name', 'repository', 'category', 'description', 'added'], label)
-  assert(entry.$schema === schemaReference, `${label} must reference ${schemaReference}`)
-  assert(typeof entry.id === 'string' && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(entry.id), `${label} has an invalid id`)
-  assert(path.posix.basename(file) === pluginFileName(entry.id), `${label} should be named ${pluginFileName(entry.id)}`)
-  assert(typeof entry.name === 'string' && entry.name.trim().length > 0 && entry.name.length <= 120, `${label} has an invalid name`)
-  assert(entry.repository === `https://github.com/${entry.id}`, `${label}.repository must match its id exactly`)
-  assert(categoryIds instanceof Set && categoryIds.has(entry.category), `${label} has an unknown category`)
-  assert(isObject(entry.description), `${label}.description must be an object`)
-  assertExactKeys(entry.description, ['en', 'zh'], `${label}.description`)
-  for (const locale of ['en', 'zh']) {
-    const description = entry.description[locale]
-    assert(typeof description === 'string' && description.trim().length > 0 && description.length <= 1000, `${label} has an invalid ${locale} description`)
-  }
-  assert(typeof entry.added === 'string' && isIsoDate(entry.added), `${label} has an invalid added date`)
-  return entry
-}
+export { validateCatalogEntry }
 
 function repositoryParts(id) {
   const parts = id.split('/')
@@ -137,7 +89,7 @@ export async function findHarnessBundle(tree, readBlob) {
 export function createGitHubClient(token) {
   const headers = {
     Accept: 'application/vnd.github+json',
-    'User-Agent': 'dsh-store-plugin-review',
+    'User-Agent': 'dsh-1024store-plugin-review',
     'X-GitHub-Api-Version': '2022-11-28',
     ...(token === undefined || token.length === 0 ? {} : { Authorization: `Bearer ${token}` }),
   }
@@ -173,7 +125,10 @@ export function reviewComment(status, message) {
   if (status === 'passed') {
     return `${reviewCommentMarker}\n## Plugin submission review passed\n\n${diagnostic}`
   }
-  return `${reviewCommentMarker}\n## Plugin submission review failed\n\n\`\`\`text\n${diagnostic}\n\`\`\`\n\nPush a correction to this pull request. The review will run again automatically.`
+  if (status === 'manual-review') {
+    return `${reviewCommentMarker}\n## Plugin submission review passed — maintainer review required\n\n${diagnostic}\n\nThis pull request modifies or removes existing catalog entries, so it will not be merged automatically. A maintainer will review the change set and merge it manually.`
+  }
+  return `${reviewCommentMarker}\n## Plugin submission review failed\n\n\`\`\`text\n${diagnostic}\n\`\`\`\n\nPush a correction to this pull request. The review will run again automatically. Failed reviews never close the pull request.`
 }
 
 export async function upsertReviewComment(repository, pullNumber, client, body) {
@@ -280,34 +235,46 @@ function describeChange(change) {
 }
 
 export function validateSubmissionChanges(changes) {
-  const addedPlugins = changes.filter(change => (
-    change.status === 'A'
-    && catalogFilePattern.test(change.file)
-  ))
-  if (addedPlugins.length !== 1) {
-    throw new Error(`Plugin submission PRs must add exactly one ${catalogPrefix}*.json file; found ${addedPlugins.length}`)
+  if (changes.length === 0) {
+    throw new Error(`Plugin submission PRs must change at least one ${catalogPrefix}*.json file`)
   }
 
-  const pluginFile = addedPlugins[0].file
-  const unexpected = changes.filter(change => (
-    change.file !== pluginFile
-    || change.status !== 'A'
-    || change.oldPath !== undefined
-  ))
-  if (unexpected.length > 0 || changes.length !== 1) {
+  const problems = []
+  const reviewables = []
+  const deletions = []
+  let additions = 0
+  for (const change of changes) {
+    // git reports rename/copy statuses with a similarity score (R100, C75).
+    const status = change.status[0]
+    const paths = change.oldPath === undefined ? [change.file] : [change.oldPath, change.file]
+    if (!['A', 'M', 'D', 'R', 'C'].includes(status)) {
+      problems.push(`unsupported change: ${describeChange(change)}`)
+      continue
+    }
+    if (!paths.every(candidate => catalogFilePattern.test(candidate))) {
+      problems.push(`unexpected change: ${describeChange(change)}`)
+      continue
+    }
+    if (status === 'D') deletions.push(change.file)
+    else reviewables.push(change.file)
+    if (status === 'A') additions += 1
+  }
+  if (problems.length > 0) {
     throw new Error([
-      `Plugin submission PRs may contain only one new ${catalogPrefix}*.json file and no other changes.`,
-      ...unexpected.map(change => `unexpected change: ${describeChange(change)}`),
+      `Plugin submission PRs may only add, modify, or delete ${catalogPrefix}*.json files.`,
+      ...problems,
     ].join('\n'))
   }
-  return pluginFile
+
+  const verdict = changes.length === 1 && additions === 1 ? 'auto-merge' : 'manual-review'
+  return { verdict, reviewables, deletions, changes }
 }
 
-export function hasPluginCatalogChange(changes) {
-  return changes.some(change => (
-    change.file.startsWith(catalogPrefix)
-    || (change.oldPath?.startsWith(catalogPrefix) ?? false)
-  ))
+export async function readCatalogEntry(rootDirectory, file) {
+  const target = path.join(rootDirectory, file)
+  const metadata = await lstat(target)
+  assert(metadata.isFile(), `${file} must be a regular file`)
+  return JSON.parse(await readFile(target, 'utf8'))
 }
 
 function changedFiles(base, head) {
@@ -325,6 +292,13 @@ function workflowError(file, message) {
   process.stderr.write(`::error file=${file}::${escaped}\n`)
 }
 
+function publishVerdict(verdict) {
+  console.log(`VERDICT ${verdict}`)
+  const output = process.env.GITHUB_OUTPUT
+  if (output === undefined || output.length === 0) return
+  appendFileSync(output, `verdict=${verdict}\n`)
+}
+
 async function main() {
   const base = process.env.PLUGIN_REVIEW_BASE_SHA
   const head = process.env.PLUGIN_REVIEW_HEAD_SHA
@@ -332,32 +306,44 @@ async function main() {
   const repository = process.env.PLUGIN_REVIEW_REPOSITORY
   const pullNumber = process.env.PLUGIN_REVIEW_PULL_NUMBER
   let file = catalogPrefix
-  let applicable = false
   try {
     const changes = repository === undefined && pullNumber === undefined
       ? changedFiles(base, head)
       : await pullRequestChanges(repository, pullNumber, client)
-    if (!hasPluginCatalogChange(changes)) {
-      console.log('No catalog plugin entry changed; strict plugin submission review is not applicable.')
-      return
-    }
-    applicable = true
-    file = validateSubmissionChanges(changes)
-    const entry = JSON.parse(await readFile(path.join(root, file), 'utf8'))
-    const categories = JSON.parse(await readFile(path.join(root, 'catalog/categories.json'), 'utf8'))
+    const submission = validateSubmissionChanges(changes)
+    // Read the category allow-list from the trusted checkout this script was
+    // loaded from, never from the submitted tree: it decides which categories a
+    // submission may claim, so it must not be attacker-controlled.
+    const categories = JSON.parse(await readFile(path.join(scriptRoot, 'catalog/categories.json'), 'utf8'))
     const categoryIds = new Set(categories?.categories?.map(category => category?.id))
-    validateCatalogEntry(entry, file, categoryIds)
-    const result = await reviewRepository(entry, client)
-    console.log(`PASS ${entry.id}: ${result.packagePath} -> ${result.patchPath}`)
+    for (const target of submission.reviewables) {
+      file = target
+      const entry = await readCatalogEntry(root, target)
+      validateCatalogEntry(entry, target, categoryIds)
+      const result = await reviewRepository(entry, client)
+      console.log(`PASS ${entry.id}: ${result.packagePath} -> ${result.patchPath}`)
+    }
+    for (const target of submission.deletions) {
+      console.log(`PASS delete ${target}`)
+    }
+    file = catalogPrefix
+    publishVerdict(submission.verdict)
     if (repository !== undefined && pullNumber !== undefined) {
-      const detail = 'All static checks passed. A maintainer must review this pull request and merge it manually after `CI / verify` succeeds.'
-      await upsertReviewComment(repository, pullNumber, client, reviewComment('passed', detail))
+      const body = submission.verdict === 'auto-merge'
+        ? reviewComment('passed', 'All static checks passed. The validated pull request will be squash-merged automatically.')
+        : reviewComment('manual-review', [
+          'All static checks passed for this change set:',
+          '',
+          ...submission.changes.map(change => `- ${describeChange(change)}`),
+        ].join('\n'))
+      await upsertReviewComment(repository, pullNumber, client, body)
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    publishVerdict('rejected')
     workflowError(file, message)
     console.error(`FAIL ${file}\n${message}`)
-    if (applicable && repository !== undefined && pullNumber !== undefined) {
+    if (repository !== undefined && pullNumber !== undefined) {
       try {
         await upsertReviewComment(repository, pullNumber, client, reviewComment('failed', message))
       } catch (commentError) {

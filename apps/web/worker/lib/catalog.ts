@@ -17,6 +17,10 @@ export interface CatalogQuery {
 export function parseCatalogQuery(query: Record<string, string>): CatalogQuery {
   const requestedSort = query.sort
   const sort: CatalogSort =
+    requestedSort === 'installs' ||
+    requestedSort === 'installs24h' ||
+    requestedSort === 'installs7d' ||
+    requestedSort === 'installs30d' ||
     requestedSort === 'growth24h' ||
     requestedSort === 'growth7d' ||
     requestedSort === 'growth30d' ||
@@ -91,7 +95,15 @@ function growthForSort(plugin: CatalogPlugin, sort: CatalogSort): number | null 
   return null
 }
 
-function hasGrowthForSort(plugin: CatalogPlugin, sort: CatalogSort): boolean {
+function installsForSort(plugin: CatalogPlugin, sort: CatalogSort): number | null {
+  if (sort === 'installs') return plugin.installCount
+  if (sort === 'installs24h') return plugin.installs24h
+  if (sort === 'installs7d') return plugin.installs7d
+  if (sort === 'installs30d') return plugin.installs30d
+  return null
+}
+
+export function hasGrowthForSort(plugin: CatalogPlugin, sort: CatalogSort): boolean {
   return sort !== 'growth24h' && sort !== 'growth7d' && sort !== 'growth30d'
     ? true
     : growthForSort(plugin, sort) !== null
@@ -101,6 +113,18 @@ export function comparePlugins(
   sort: CatalogSort,
 ): (left: CatalogPlugin, right: CatalogPlugin) => number {
   if (sort === 'name') return (left, right) => left.name.localeCompare(right.name)
+  if (
+    sort === 'installs' ||
+    sort === 'installs24h' ||
+    sort === 'installs7d' ||
+    sort === 'installs30d'
+  ) {
+    return (left, right) =>
+      compareNullableNumber(installsForSort(left, sort), installsForSort(right, sort)) ||
+      compareNullableNumber(left.installerCount, right.installerCount) ||
+      compareNullableNumber(left.stars, right.stars) ||
+      left.name.localeCompare(right.name)
+  }
   if (sort === 'growth24h' || sort === 'growth7d' || sort === 'growth30d') {
     return (left, right) =>
       compareNullableNumber(growthForSort(left, sort), growthForSort(right, sort)) ||
@@ -117,14 +141,21 @@ export function comparePlugins(
   return (left, right) => compareNullableNumber(left.stars, right.stars) || left.name.localeCompare(right.name)
 }
 
-export function buildCatalog(result: CatalogSnapshotResult, query: CatalogQuery): CatalogResponse {
-  const { snapshot, source } = result
+export function filterCatalogPackages(
+  plugins: CatalogPlugin[],
+  query: CatalogQuery,
+): CatalogPlugin[] {
   const normalizedSearch = query.q.toLocaleLowerCase()
-  const filtered = snapshot.plugins
+  return plugins
     .filter((plugin) => !query.category || plugin.category === query.category)
     .filter((plugin) => !normalizedSearch || searchableText(plugin).includes(normalizedSearch))
     .filter((plugin) => hasGrowthForSort(plugin, query.sort))
     .sort(comparePlugins(query.sort))
+}
+
+export function buildCatalog(result: CatalogSnapshotResult, query: CatalogQuery): CatalogResponse {
+  const { snapshot, source } = result
+  const filtered = filterCatalogPackages(snapshot.plugins, query)
 
   const growthRanking = (sort: 'growth24h' | 'growth7d' | 'growth30d') =>
     [...snapshot.plugins]
@@ -132,12 +163,23 @@ export function buildCatalog(result: CatalogSnapshotResult, query: CatalogQuery)
       .sort(comparePlugins(sort))
       .slice(0, 100)
 
+  const installRanking = (
+    sort: 'installs' | 'installs24h' | 'installs7d' | 'installs30d',
+  ) => [...snapshot.plugins]
+    .filter((plugin) => (installsForSort(plugin, sort) ?? 0) > 0)
+    .sort(comparePlugins(sort))
+    .slice(0, 100)
+
   return {
     packages: filtered,
     rankings: {
       stars: [...snapshot.plugins]
         .sort(comparePlugins('stars'))
         .slice(0, 100),
+      installs: installRanking('installs'),
+      installs24h: installRanking('installs24h'),
+      installs7d: installRanking('installs7d'),
+      installs30d: installRanking('installs30d'),
       growth24h: growthRanking('growth24h'),
       growth7d: growthRanking('growth7d'),
       growth30d: growthRanking('growth30d'),
@@ -159,11 +201,28 @@ export function buildCatalog(result: CatalogSnapshotResult, query: CatalogQuery)
   }
 }
 
-export function findPlugin(
-  plugins: RegistryPlugin[],
+// Re-applies a catalog query on the client from one unfiltered response
+// (packages must hold the complete plugin list). Rankings and categories are
+// query-independent, so only packages/meta.total need recomputing; the filter
+// helpers are shared with buildCatalog to keep both sides byte-identical.
+export function deriveCatalogResponse(
+  full: CatalogResponse,
+  query: CatalogQuery,
+): CatalogResponse {
+  const filtered = filterCatalogPackages(full.packages, query)
+  return {
+    ...full,
+    packages: filtered,
+    meta: { ...full.meta, total: filtered.length },
+  }
+}
+
+/** Generic so callers holding full catalog rows keep their metrics fields. */
+export function findPlugin<T extends RegistryPlugin>(
+  plugins: T[],
   owner: string,
   repository: string,
-): RegistryPlugin | undefined {
+): T | undefined {
   return plugins.find(
     (plugin) =>
       plugin.owner.toLocaleLowerCase() === owner.toLocaleLowerCase() &&

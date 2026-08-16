@@ -1,39 +1,56 @@
 import {
   AlertCircle,
   ArrowUpRight,
-  Eye,
+  Code,
   ListFilter,
   PackagePlus,
   Search,
   Trophy,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { LoadingState } from '../components/LoadingState'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { PackageRow } from '../components/PackageRow'
+import type { CatalogSort, Language, RankingMode } from '../lib/api'
 import {
-  getCatalog,
-  type CatalogResponse,
-  type CatalogSort,
-  type RankingMode,
-} from '../lib/api'
-import { formatNumber } from '../lib/format'
+  deriveCatalogView,
+  getCachedCatalog,
+  isCatalogFresh,
+  loadCatalog,
+} from '../lib/catalog-cache'
+import { publicAsset } from '../lib/assets'
+import { formatDateTime, formatNumber, formatRelativeUpdate } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { useLiveStats } from '../lib/useLiveStats'
-import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
+import {
+  collectionCopy,
+  collectionPageNode,
+  graph,
+  itemListNode,
+  siteNodes,
+  SITE_ORIGIN,
+} from '../../worker/seo-templates'
+import { usePageSeo } from '../lib/usePageSeo'
 
 const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
-const RANKING_MODES: RankingMode[] = [
+// Directory rows render in bounded batches so a filter click does not mount
+// the full multi-thousand-plugin list in one commit.
+const PAGE_SIZE = 100
+// growth7d / growth30d stay available in the API but are hidden here until
+// enough snapshot history accumulates to make those windows meaningful.
+const GITHUB_RANKING_MODES: RankingMode[] = [
   'growth24h',
-  'growth7d',
-  'growth30d',
   'stars',
   'newest',
   'active',
 ]
 
 function rankingLabel(mode: RankingMode): Parameters<ReturnType<typeof useI18n>['t']>[0] {
+  if (mode === 'installs') return 'topInstalls'
+  if (mode === 'installs24h') return 'installs24h'
+  if (mode === 'installs7d') return 'installs7d'
+  if (mode === 'installs30d') return 'installs30d'
   if (mode === 'growth24h') return 'growth24h'
   if (mode === 'growth7d') return 'growth7d'
   if (mode === 'growth30d') return 'growth30d'
@@ -41,6 +58,79 @@ function rankingLabel(mode: RankingMode): Parameters<ReturnType<typeof useI18n>[
   if (mode === 'newest') return 'latestReleases'
   return 'recentlyActive'
 }
+
+function useCountUp(target: number | null, animate: boolean): number | null {
+  const [value, setValue] = useState<number | null>(null)
+  const previousRef = useRef(0)
+  useEffect(() => {
+    if (target === null) return
+    const from = previousRef.current
+    if (
+      !animate
+      || target === from
+      || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      previousRef.current = target
+      setValue(target)
+      return
+    }
+    let frame = 0
+    const start = performance.now()
+    const step = (now: number) => {
+      const progress = Math.min(Math.max((now - start) / 900, 0), 1)
+      const eased = 1 - (1 - progress) ** 3
+      const next = Math.round(from + (target - from) * eased)
+      previousRef.current = next
+      setValue(next)
+      if (progress < 1) frame = window.requestAnimationFrame(step)
+    }
+    frame = window.requestAnimationFrame(step)
+    // Animation frames stop entirely in hidden/background tabs; make sure the
+    // final value still lands once the duration has passed.
+    const settle = window.setTimeout(() => {
+      previousRef.current = target
+      setValue(target)
+    }, 1100)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(settle)
+    }
+  }, [animate, target])
+  return value
+}
+
+// Isolates the per-frame count-up state so the animation re-renders this leaf
+// only, not the whole page while up to 100 package rows are mounted.
+function TallyCount({ total, language, animate }: {
+  total: number | null
+  language: Language
+  animate: boolean
+}) {
+  const value = useCountUp(total, animate)
+  return <>{value === null ? '--' : formatNumber(value, language)}</>
+}
+
+function CatalogUpdatedAt({ value, language }: { value: string; language: Language }) {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  const label = formatRelativeUpdate(value, language, now)
+  if (!label) return null
+
+  return (
+    <time className="hero-updated" dateTime={value} title={formatDateTime(value, language)}>
+      {label}
+    </time>
+  )
+}
+
+// Play the hero entrance (CSS rise + count-up) once per page load, not every
+// time the router remounts this page on the way back from a detail view.
+let heroIntroPlayed = false
 
 interface CatalogPageProps {
   view: 'catalog' | 'rankings'
@@ -57,10 +147,16 @@ export function CatalogPage({ view }: CatalogPageProps) {
     ? requestedSort as CatalogSort
     : 'stars'
   const [draftQuery, setDraftQuery] = useState(query)
-  const [rankingMode, setRankingMode] = useState<RankingMode>('stars')
-  const [catalog, setCatalog] = useState<CatalogResponse | null>(null)
+  const [rankingMode, setRankingMode] = useState<RankingMode>('growth24h')
+  // The full unfiltered catalog; every filter/sort/search view derives from it
+  // synchronously, so selection feedback never waits on the network.
+  const [fullCatalog, setFullCatalog] = useState(() => getCachedCatalog())
+  const [playIntro] = useState(() => !heroIntroPlayed)
+  useEffect(() => {
+    heroIntroPlayed = true
+  }, [])
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [reload, setReload] = useState(0)
 
   useEffect(() => setDraftQuery(query), [query])
@@ -77,25 +173,42 @@ export function CatalogPage({ view }: CatalogPageProps) {
   }, [draftQuery, query, searchParams, setSearchParams])
 
   useEffect(() => {
-    const controller = new AbortController()
-    setLoading(true)
-    setError(null)
-    getCatalog(
-      view === 'catalog'
-        ? { q: query, category, sort }
-        : { q: query, sort: rankingMode },
-      controller.signal,
-    )
-      .then(setCatalog)
+    let cancelled = false
+    const force = reload > 0
+    if (force || !isCatalogFresh()) setRefreshing(true)
+    // The shared fetch is not aborted on unmount: letting it finish primes the
+    // module cache for the next mount (e.g. back from a detail page).
+    loadCatalog({ force })
+      .then((data) => {
+        if (cancelled) return
+        setFullCatalog(data)
+        setError(null)
+      })
       .catch((requestError: unknown) => {
-        if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+        // A failed background refresh keeps showing the last good catalog.
+        if (cancelled || getCachedCatalog()) return
         setError(requestError instanceof Error ? requestError.message : t('loadError'))
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
+        if (!cancelled) setRefreshing(false)
       })
-    return () => controller.abort()
-  }, [category, query, rankingMode, reload, sort, t, view])
+    return () => {
+      cancelled = true
+    }
+  }, [reload, t])
+
+  const catalog = useMemo(
+    () =>
+      fullCatalog
+        ? deriveCatalogView(
+            fullCatalog,
+            view === 'catalog'
+              ? { q: query, category, sort }
+              : { q: query, category: '', sort: rankingMode },
+          )
+        : null,
+    [category, fullCatalog, query, rankingMode, sort, view],
+  )
 
   useEffect(() => {
     const interval = window.setInterval(() => setReload((value) => value + 1), 5 * 60 * 1000)
@@ -113,6 +226,17 @@ export function CatalogPage({ view }: CatalogPageProps) {
     () => new Map(catalog?.categories.map((item) => [item.id, item]) ?? []),
     [catalog?.categories],
   )
+
+  // Incremental directory rendering; the visible count resets whenever the
+  // filter combination changes (key mismatch falls back to the first page).
+  const directoryKey = `${query}|${category}|${sort}`
+  const [directoryPage, setDirectoryPage] = useState({ key: directoryKey, count: PAGE_SIZE })
+  const visibleCount = directoryPage.key === directoryKey ? directoryPage.count : PAGE_SIZE
+  const visiblePackages = useMemo(
+    () => catalog?.packages.slice(0, visibleCount) ?? [],
+    [catalog, visibleCount],
+  )
+  const hasMorePackages = (catalog?.packages.length ?? 0) > visibleCount
 
   function updateFilter(key: 'category' | 'sort', value: string) {
     const next = new URLSearchParams(searchParams)
@@ -134,108 +258,142 @@ export function CatalogPage({ view }: CatalogPageProps) {
   }, [catalog, query, rankingMode])
   const isGrowthMode =
     rankingMode === 'growth24h' || rankingMode === 'growth7d' || rankingMode === 'growth30d'
-  const sourceWarning = catalog?.meta.source === 'stale' ? t('stale') : null
-  const catalogHref = query ? `/plugin?q=${encodeURIComponent(query)}` : '/plugin'
-  const rankingsHref = query ? `/rankings?q=${encodeURIComponent(query)}` : '/rankings'
-  const canonicalPath = view === 'catalog' ? '/plugin' : '/rankings'
-  const seoTitle = t(view === 'catalog' ? 'catalogSeoTitle' : 'rankingsSeoTitle')
-  const seoDescription = t(
-    view === 'catalog' ? 'catalogSeoDescription' : 'rankingsSeoDescription',
+  const isPendingRanking = !query && isGrowthMode
+  const catalogHref = query ? `/plugins?q=${encodeURIComponent(query)}` : '/plugins'
+  const rankingsHref = query ? `/?q=${encodeURIComponent(query)}` : '/'
+  const canonicalPath = view === 'catalog' ? '/plugins' : '/'
+  // Titles, descriptions and JSON-LD come from the same module the Worker uses,
+  // so a client-side navigation cannot disagree with the served HTML.
+  const copy = collectionCopy(
+    view === 'catalog' ? 'catalog' : 'rankings',
+    language,
+    catalog?.meta.catalogTotal ?? 0,
   )
   const hasIndexableFilters = Boolean(query || category || requestedSort)
+  const rankedForSchema = useMemo(
+    () => (view === 'catalog'
+      ? catalog?.rankings.stars ?? []
+      : catalog?.rankings[rankingMode] ?? []).slice(0, 30),
+    [catalog, rankingMode, view],
+  )
 
   usePageSeo({
-    title: seoTitle,
-    description: seoDescription,
+    title: copy.title,
+    description: copy.description,
     path: canonicalPath,
     language,
+    // Until the catalog resolves there is no ItemList and no plugin count, and
+    // writing that emptiness over the Worker's populated metadata is strictly
+    // worse than leaving the served head alone.
+    ready: Boolean(catalog),
     robots: hasIndexableFilters ? 'noindex,follow' : 'index,follow',
-    schema: {
-      '@context': 'https://schema.org',
-      '@type': 'CollectionPage',
-      '@id': `${SITE_ORIGIN}${canonicalPath}#webpage`,
-      url: `${SITE_ORIGIN}${canonicalPath}`,
-      name: seoTitle,
-      description: seoDescription,
-      isPartOf: {
-        '@type': 'WebSite',
-        '@id': `${SITE_ORIGIN}/#website`,
-        name: 'DeepSeek Harness Plugin Store',
-        url: `${SITE_ORIGIN}/`,
-      },
-    },
+    canonical: hasIndexableFilters ? null : `${SITE_ORIGIN}${canonicalPath}`,
+    schema: graph([
+      ...siteNodes(),
+      collectionPageNode(
+        canonicalPath,
+        copy,
+        language,
+        `${SITE_ORIGIN}${canonicalPath === '/' ? '/' : canonicalPath}#items`,
+      ),
+      itemListNode(
+        rankedForSchema,
+        canonicalPath,
+        copy.listHeading,
+        catalog?.meta.catalogTotal ?? rankedForSchema.length,
+      ),
+    ]),
   })
 
   return (
-    <div className={`catalog-page ${view === 'rankings' ? 'rankings-page' : 'directory-page'}`}>
+    <div
+      className={`catalog-page ${view === 'rankings' ? 'rankings-page' : 'directory-page'}${playIntro ? '' : ' hero-static'}`}
+    >
       <section className="catalog-hero">
         <div className="page-container catalog-hero-inner">
-          <div className="hero-topline">
-            <Link className="hero-brand" to="/" aria-label="DeepSeek Harness Store homepage">
-              <span className="hero-brand-mark">
-                <img className="brand-mark" src="/deepseek1024-icon.png" alt="" aria-hidden="true" />
-              </span>
-              <span className="hero-brand-copy">
-                <strong>DeepSeek Harness</strong>
-                <small>{t('market')}</small>
-              </span>
-            </Link>
-
+          <header className="hero-stage">
             <div className="hero-actions" aria-label={t('siteActions')}>
+              <Link
+                className="hero-action-link hero-api"
+                to="/docs/api"
+                aria-label={collectionCopy('apiDocs', language).heading}
+              >
+                <Code size={16} aria-hidden="true" />
+                <span>{t('navApi')}</span>
+              </Link>
               <a
                 className="hero-action-link github-link"
                 href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"
                 target="_blank"
                 rel="noreferrer"
               >
-                <img src="/github-mark.svg" alt="" aria-hidden="true" />
+                <img src={publicAsset('github-mark.svg')} alt="" aria-hidden="true" />
                 <span>GitHub</span>
                 <ArrowUpRight size={12} aria-hidden="true" />
               </a>
-              <a className="hero-action-link hero-submit" href="/CONTRIBUTING.md">
+              <a
+                className="hero-action-link hero-submit"
+                href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"
+                target="_blank"
+                rel="noreferrer"
+              >
                 <PackagePlus size={16} aria-hidden="true" />
                 <span>{t('submit')}</span>
               </a>
               <LanguageSwitch className="hero-language" />
             </div>
-          </div>
-
-          <header className="hero-stage">
             <div className="hero-heading">
-              <p className="hero-eyebrow">{t('heroEyebrow')}</p>
-              <h1 aria-label={`DeepSeek Harness ${t(view === 'catalog' ? 'catalog' : 'rankings')}`}>
-                <span>DeepSeek Harness</span>
-                <em>{t(view === 'catalog' ? 'catalog' : 'rankings')}</em>
-              </h1>
-              <p>{t(view === 'catalog' ? 'catalogIntro' : 'rankingsIntro')}</p>
+              <div className="hero-lockup">
+                <span className="hero-lockup-mark" aria-hidden="true">
+                  <img src={publicAsset('deepseek1024.png')} alt="" />
+                </span>
+                <div className="hero-lockup-copy">
+                  <p className="hero-eyebrow">{t('heroEyebrow')}</p>
+                  <h1>
+                    <a
+                      href="https://deepseek1024.com/"
+                      aria-label="DeepSeek Harness Plugin 1024Store"
+                    >
+                      <span>DeepSeek Harness Plugin</span>
+                      <em>1024Store</em>
+                    </a>
+                  </h1>
+                </div>
+              </div>
+              <p>{copy.intro}</p>
             </div>
 
-            <dl className="hero-ledger">
-              <div>
-                <dt>{t('totalPlugins')}</dt>
-                <dd>{catalog ? formatNumber(catalog.meta.catalogTotal, language) : '--'}</dd>
+            <dl className="hero-tally">
+              <div className="hero-tally-count">
+                <dt className="hero-tally-label">{t('totalPlugins')}</dt>
+                <dd className="hero-tally-value">
+                  <TallyCount
+                    total={catalog?.meta.catalogTotal ?? null}
+                    language={language}
+                    animate={playIntro}
+                  />
+                </dd>
               </div>
-              <div className="hero-live" role="status" aria-live="polite">
-                <dt>
+              <div className="hero-live">
+                <dt className="hero-live-label">
                   <span className={connected ? 'live-dot is-connected' : 'live-dot'} aria-hidden="true" />
                   {t('online')}
                 </dt>
-                <dd>{stats ? formatNumber(stats.online, language) : '--'}</dd>
+                <dd className="hero-live-count">
+                  {stats ? formatNumber(stats.online, language) : '--'}
+                </dd>
               </div>
-              <div>
-                <dt><Eye size={13} aria-hidden="true" /> {t('views')}</dt>
-                <dd>{stats ? formatNumber(stats.views, language) : '--'}</dd>
-              </div>
+              {catalog?.meta.generatedAt && (
+                <CatalogUpdatedAt value={catalog.meta.generatedAt} language={language} />
+              )}
             </dl>
+
           </header>
+        </div>
+      </section>
 
-          {sourceWarning && (
-            <div className="notice notice-warning hero-notice" role="status">
-              <AlertCircle size={17} aria-hidden="true" />
-              <span>{sourceWarning}</span>
-            </div>
-          )}
-
+      <div className="page-container catalog-content">
+        <section className="catalog-navigation" aria-label={`${t('search')} / ${t('catalog')} / ${t('rankings')}`}>
           <section className="catalog-toolbar" aria-label={t('search')}>
             <label className="search-control">
               <Search size={19} aria-hidden="true" />
@@ -254,25 +412,19 @@ export function CatalogPage({ view }: CatalogPageProps) {
             </label>
           </section>
 
-          <div className="hero-footer">
-            <nav className="catalog-view-tabs" aria-label={`${t('catalog')} / ${t('rankings')}`}>
-              <Link to={rankingsHref} className={view === 'rankings' ? 'selected' : undefined} aria-current={view === 'rankings' ? 'page' : undefined}>
-                <Trophy size={16} aria-hidden="true" />
-                {t('rankings')}
-              </Link>
-              <Link to={catalogHref} className={view === 'catalog' ? 'selected' : undefined} aria-current={view === 'catalog' ? 'page' : undefined}>
-                <ListFilter size={16} aria-hidden="true" />
-                <span>
-                  {t('catalog')}{catalog ? ` (${formatNumber(catalog.meta.catalogTotal, language)})` : ''}
-                </span>
-              </Link>
-            </nav>
-            <p>{t('heroNote')}</p>
-          </div>
-        </div>
-      </section>
-
-      <div className="page-container catalog-content">
+          <nav className="catalog-view-tabs" aria-label={`${t('catalog')} / ${t('rankings')}`}>
+            <Link to={rankingsHref} className={view === 'rankings' ? 'selected' : undefined} aria-current={view === 'rankings' ? 'page' : undefined}>
+              <Trophy size={16} aria-hidden="true" />
+              {t('rankings')}
+            </Link>
+            <Link to={catalogHref} className={view === 'catalog' ? 'selected' : undefined} aria-current={view === 'catalog' ? 'page' : undefined}>
+              <ListFilter size={16} aria-hidden="true" />
+              <span>
+                {t('catalog')}{catalog ? ` (${formatNumber(catalog.meta.catalogTotal, language)})` : ''}
+              </span>
+            </Link>
+          </nav>
+        </section>
 
         {view === 'catalog' && (
           <section className="category-section" aria-labelledby="categories-heading">
@@ -306,21 +458,30 @@ export function CatalogPage({ view }: CatalogPageProps) {
         )}
 
         {view === 'rankings' && (
-          <section className="catalog-section ranking-section" aria-label={t('rankings')}>
+          <section className="catalog-section ranking-section" aria-labelledby="rankings-heading">
+            <h2 id="rankings-heading" className="section-title">{copy.listHeading}</h2>
             <div className="view-controls">
-              <div className="segmented-control" role="group" aria-label={t('rankings')}>
-                {RANKING_MODES.map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={rankingMode === mode ? 'selected' : undefined}
-                    onClick={() => setRankingMode(mode)}
-                    aria-pressed={rankingMode === mode}
-                  >
-                    {t(rankingLabel(mode))}
-                  </button>
-                ))}
+              <div className="ranking-mode-groups">
+                <div className="ranking-mode-group">
+                  <span>{t('githubRankings')}</span>
+                  <div className="segmented-control" role="group" aria-label={t('githubRankings')}>
+                    {GITHUB_RANKING_MODES.map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={rankingMode === mode ? 'selected' : undefined}
+                        onClick={() => setRankingMode(mode)}
+                        aria-pressed={rankingMode === mode}
+                      >
+                        {t(rankingLabel(mode))}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+              {refreshing && catalog && (
+                <span className="refresh-note" role="status">{t('refreshing')}</span>
+              )}
             </div>
 
             {error ? (
@@ -335,18 +496,26 @@ export function CatalogPage({ view }: CatalogPageProps) {
             ) : catalog && ranking.length === 0 ? (
               <div className="state-panel">
                 <Search size={27} aria-hidden="true" />
-                <h3>{t(isGrowthMode && !query ? 'growthPendingTitle' : 'emptyTitle')}</h3>
-                <p>{t(isGrowthMode && !query ? 'growthPendingBody' : 'emptyBody')}</p>
+                <h3>{t(
+                  isGrowthMode && !query
+                    ? 'growthPendingTitle'
+                    : 'emptyTitle',
+                )}</h3>
+                <p>{t(
+                  isGrowthMode && !query
+                    ? 'growthPendingBody'
+                    : 'emptyBody',
+                )}</p>
                 <button
                   className="button button-secondary"
                   type="button"
-                  onClick={isGrowthMode && !query ? () => setRankingMode('stars') : resetFilters}
+                  onClick={isPendingRanking ? () => setRankingMode('stars') : resetFilters}
                 >
-                  {t(isGrowthMode && !query ? 'topStars' : 'reset')}
+                  {t(isPendingRanking ? 'topStars' : 'reset')}
                 </button>
               </div>
             ) : catalog ? (
-              <div className={`package-list ranking-list${loading ? ' is-refreshing' : ''}`}>
+              <div className={`package-list ranking-list${refreshing ? ' is-refreshing' : ''}`}>
                 {ranking.map((plugin, index) => (
                   <PackageRow
                     key={`${rankingMode}-${plugin.owner}/${plugin.repository}`}
@@ -364,7 +533,8 @@ export function CatalogPage({ view }: CatalogPageProps) {
         )}
 
         {view === 'catalog' && (
-          <section className="catalog-section directory-section" aria-label={t('allPackages')}>
+          <section className="catalog-section directory-section" aria-labelledby="directory-heading">
+            <h2 id="directory-heading" className="section-title">{copy.listHeading}</h2>
             <div className="view-controls">
               <div className="segmented-control sort-segments" role="group" aria-label={t('sort')}>
                 {SORT_MODES.map((mode) => (
@@ -385,6 +555,9 @@ export function CatalogPage({ view }: CatalogPageProps) {
                   </button>
                 ))}
               </div>
+              {refreshing && catalog && (
+                <span className="refresh-note" role="status">{t('refreshing')}</span>
+              )}
             </div>
 
             {error ? (
@@ -396,9 +569,9 @@ export function CatalogPage({ view }: CatalogPageProps) {
                   {t('retry')}
                 </button>
               </div>
-            ) : !catalog && loading ? (
+            ) : !catalog ? (
               <LoadingState />
-            ) : catalog?.packages.length === 0 ? (
+            ) : catalog.packages.length === 0 ? (
               <div className="state-panel">
                 <Search size={27} aria-hidden="true" />
                 <h3>{t('emptyTitle')}</h3>
@@ -408,16 +581,35 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 </button>
               </div>
             ) : (
-              <div className={`package-list${loading ? ' is-refreshing' : ''}`} aria-live="polite">
-                {catalog?.packages.map((plugin, index) => (
-                  <PackageRow
-                    key={`${plugin.owner}/${plugin.repository}`}
-                    plugin={plugin}
-                    category={categoryMap.get(plugin.category)}
-                    index={index}
-                  />
-                ))}
-              </div>
+              <>
+                <div className={`package-list${refreshing ? ' is-refreshing' : ''}`} aria-live="polite">
+                  {visiblePackages.map((plugin, index) => (
+                    <PackageRow
+                      key={`${plugin.owner}/${plugin.repository}`}
+                      plugin={plugin}
+                      category={categoryMap.get(plugin.category)}
+                      index={index}
+                    />
+                  ))}
+                </div>
+                {hasMorePackages && (
+                  <div className="load-more-row">
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={() =>
+                        setDirectoryPage({ key: directoryKey, count: visibleCount + PAGE_SIZE })}
+                    >
+                      {t('loadMore')}
+                    </button>
+                    <span className="load-more-count">
+                      {formatNumber(visiblePackages.length, language)}
+                      {' / '}
+                      {formatNumber(catalog.meta.total, language)}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </section>
         )}

@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 
 import {
   findHarnessBundle,
-  hasPluginCatalogChange,
   parseNameStatus,
   pullRequestChanges,
+  readCatalogEntry,
   reviewComment,
   reviewRepository,
   upsertReviewComment,
@@ -89,10 +92,84 @@ test('creates and updates one persistent review comment', async () => {
   assert.equal(updated[0].options.method, 'PATCH')
 })
 
-test('accepts exactly one new plugin JSON file', () => {
-  assert.equal(validateSubmissionChanges([
+test('renders a distinct maintainer-review comment', () => {
+  const body = reviewComment('manual-review', 'All static checks passed for this change set:\n\n- M catalog/plugins/owner--plugin.json')
+  assert.match(body, /maintainer/i)
+  assert.match(body, /not (be )?merged automatically/i)
+  assert.match(body, /- M catalog\/plugins\/owner--plugin\.json/)
+  assert.doesNotMatch(body, /review failed/i)
+})
+
+test('auto-merges exactly one new plugin JSON file', () => {
+  assert.deepEqual(validateSubmissionChanges([
     { status: 'A', file: 'catalog/plugins/owner--plugin.json' },
-  ]), 'catalog/plugins/owner--plugin.json')
+  ]), {
+    verdict: 'auto-merge',
+    reviewables: ['catalog/plugins/owner--plugin.json'],
+    deletions: [],
+    changes: [{ status: 'A', file: 'catalog/plugins/owner--plugin.json' }],
+  })
+})
+
+test('routes catalog entry modifications to manual review', () => {
+  const result = validateSubmissionChanges([
+    { status: 'M', file: 'catalog/plugins/owner--plugin.json' },
+  ])
+  assert.equal(result.verdict, 'manual-review')
+  assert.deepEqual(result.reviewables, ['catalog/plugins/owner--plugin.json'])
+  assert.deepEqual(result.deletions, [])
+})
+
+test('routes catalog entry deletions to manual review without content checks', () => {
+  const result = validateSubmissionChanges([
+    { status: 'D', file: 'catalog/plugins/owner--plugin.json' },
+  ])
+  assert.equal(result.verdict, 'manual-review')
+  assert.deepEqual(result.reviewables, [])
+  assert.deepEqual(result.deletions, ['catalog/plugins/owner--plugin.json'])
+})
+
+test('routes catalog renames to manual review and validates the new path', () => {
+  const result = validateSubmissionChanges([
+    { status: 'R100', oldPath: 'catalog/plugins/owner--old.json', file: 'catalog/plugins/owner--new.json' },
+  ])
+  assert.equal(result.verdict, 'manual-review')
+  assert.deepEqual(result.reviewables, ['catalog/plugins/owner--new.json'])
+})
+
+test('routes multiple additions to manual review', () => {
+  const result = validateSubmissionChanges([
+    { status: 'A', file: 'catalog/plugins/owner--one.json' },
+    { status: 'A', file: 'catalog/plugins/owner--two.json' },
+  ])
+  assert.equal(result.verdict, 'manual-review')
+  assert.deepEqual(result.reviewables, ['catalog/plugins/owner--one.json', 'catalog/plugins/owner--two.json'])
+})
+
+test('routes mixed additions and deletions to manual review', () => {
+  const result = validateSubmissionChanges([
+    { status: 'A', file: 'catalog/plugins/owner--one.json' },
+    { status: 'D', file: 'catalog/plugins/owner--two.json' },
+  ])
+  assert.equal(result.verdict, 'manual-review')
+  assert.deepEqual(result.reviewables, ['catalog/plugins/owner--one.json'])
+  assert.deepEqual(result.deletions, ['catalog/plugins/owner--two.json'])
+})
+
+test('rejects renames that leave the catalog directory', () => {
+  assert.throws(() => validateSubmissionChanges([
+    { status: 'R100', oldPath: 'catalog/plugins/owner--plugin.json', file: 'docs/owner--plugin.json' },
+  ]), /unexpected change: R100 catalog\/plugins\/owner--plugin\.json -> docs\/owner--plugin\.json/)
+})
+
+test('rejects unsupported change statuses', () => {
+  assert.throws(() => validateSubmissionChanges([
+    { status: 'T', file: 'catalog/plugins/owner--plugin.json' },
+  ]), /unsupported change: T catalog\/plugins\/owner--plugin\.json/)
+})
+
+test('rejects empty change sets', () => {
+  assert.throws(() => validateSubmissionChanges([]), /must change at least one/)
 })
 
 test('validates the submitted catalog entry', () => {
@@ -108,6 +185,20 @@ test('validates the submitted catalog entry', () => {
   assert.equal(
     validateCatalogEntry(entry, 'catalog/plugins/owner--plugin.json', new Set(['tools'])),
     entry,
+  )
+})
+
+test('reads only regular catalog entry files', async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'plugin-review-entry-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  await mkdir(path.join(directory, 'catalog/plugins'), { recursive: true })
+  const entry = { id: 'owner/plugin' }
+  await writeFile(path.join(directory, 'entry.json'), JSON.stringify(entry))
+  await symlink('../../entry.json', path.join(directory, 'catalog/plugins/owner--plugin.json'))
+
+  await assert.rejects(
+    readCatalogEntry(directory, 'catalog/plugins/owner--plugin.json'),
+    /must be a regular file/,
   )
 })
 
@@ -131,18 +222,6 @@ test('rejects catalog entries with extra fields or a mismatched filename', () =>
   )
 })
 
-test('detects added, updated, deleted, and renamed plugin entries', () => {
-  for (const change of [
-    { status: 'A', file: 'catalog/plugins/owner--plugin.json' },
-    { status: 'M', file: 'catalog/plugins/owner--plugin.json' },
-    { status: 'D', file: 'catalog/plugins/owner--plugin.json' },
-    { status: 'R', oldPath: 'catalog/plugins/owner--old.json', file: 'moved.json' },
-  ]) {
-    assert.equal(hasPluginCatalogChange([change]), true)
-  }
-  assert.equal(hasPluginCatalogChange([{ status: 'M', file: 'README.md' }]), false)
-})
-
 test('rejects unrelated files', () => {
   assert.throws(() => validateSubmissionChanges([
     { status: 'A', file: 'catalog/plugins/owner--plugin.json' },
@@ -150,23 +229,16 @@ test('rejects unrelated files', () => {
   ]), /unexpected change: M SECURITY\.md/)
 })
 
-test('rejects multiple plugin entries', () => {
+test('rejects pull requests touching only non-catalog files', () => {
   assert.throws(() => validateSubmissionChanges([
-    { status: 'A', file: 'catalog/plugins/owner--one.json' },
-    { status: 'A', file: 'catalog/plugins/owner--two.json' },
-  ]), /must add exactly one.*found 2/)
+    { status: 'M', file: 'apps/web/src/App.tsx' },
+  ]), /unexpected change: M apps\/web\/src\/App\.tsx/)
 })
 
 test('rejects plugin JSON files in nested catalog directories', () => {
   assert.throws(() => validateSubmissionChanges([
     { status: 'A', file: 'catalog/plugins/nested/owner--plugin.json' },
-  ]), /must add exactly one.*found 0/)
-})
-
-test('rejects updates to an existing plugin entry', () => {
-  assert.throws(() => validateSubmissionChanges([
-    { status: 'M', file: 'catalog/plugins/owner--plugin.json' },
-  ]), /must add exactly one.*found 0/)
+  ]), /unexpected change: A catalog\/plugins\/nested\/owner--plugin\.json/)
 })
 
 test('rejects changes to generated projections', () => {

@@ -1,88 +1,102 @@
-import { findPlugin, repositoryName } from './lib/catalog'
-import { BUNDLED_REGISTRY } from './lib/registry'
-import type { Registry, RegistryPlugin } from './types'
+import { comparePlugins, findPlugin, hasGrowthForSort, repositoryName } from './lib/catalog'
+import {
+  renderCollectionShell,
+  renderNotFoundShell,
+  renderPluginShell,
+  renderSimpleShell,
+  type ShellCatalog,
+} from './seo-content'
+import {
+  absoluteUrl,
+  apiDocsNodes,
+  collectionCopy,
+  collectionPageNode,
+  graph,
+  itemListNode,
+  pluginDescription,
+  pluginNodes,
+  pluginPath,
+  pluginTitle,
+  simplePageNode,
+  siteNodes,
+  SITE_IMAGE,
+  SITE_NAME,
+  SITE_ORIGIN,
+} from './seo-templates'
+import type { CatalogPlugin, Language, RegistryCategory, StoredCatalogSnapshot } from './types'
 
-export const SITE_ORIGIN = 'https://deepseek1024.com'
-const SITE_NAME = 'DeepSeek Harness Plugin Store'
-const DEFAULT_IMAGE = `${SITE_ORIGIN}/deepseek1024-icon.png`
+export { SITE_ORIGIN } from './seo-templates'
+
+const ITEM_LIST_LIMIT = 30
+
+/** The slice of the runtime catalog snapshot the SEO surfaces render from. */
+export interface SeoCatalog {
+  updated: string
+  revision: string
+  plugins: CatalogPlugin[]
+  categories: Record<string, RegistryCategory>
+  /**
+   * Set when the catalog could not be loaded at all. Every plugin URL would
+   * otherwise turn into a hard 404 + noindex for as long as the edge caches it,
+   * so the metadata layer fails open instead.
+   */
+  degraded?: boolean
+}
+
+export function seoCatalog(snapshot: StoredCatalogSnapshot, degraded = false): SeoCatalog {
+  return {
+    updated: snapshot.registryUpdated,
+    revision: snapshot.registryRevision,
+    plugins: snapshot.plugins,
+    categories: snapshot.categories,
+    degraded,
+  }
+}
 
 export interface PageMetadata {
   title: string
   description: string
-  canonical: string
+  /** null drops the canonical link entirely — correct for noindexed and 404 pages. */
+  canonical: string | null
   robots: 'index,follow' | 'noindex,follow'
   schema: object
-  status: 200 | 404
+  status: 200 | 404 | 503
+  /** Crawlable HTML injected into the empty SPA container. */
+  shell?: string
+  imageAlt?: string
 }
 
-function fitText(value: string, maxLength: number): string {
-  const normalized = value.replace(/\s+/g, ' ').trim()
-  if (normalized.length <= maxLength) return normalized
-  const candidate = normalized.slice(0, maxLength - 1).trimEnd()
-  const lastSpace = candidate.lastIndexOf(' ')
-  const boundary = lastSpace >= Math.floor(maxLength * 0.7) ? lastSpace : candidate.length
-  return `${candidate.slice(0, boundary).replace(/[.,;:!?-]+$/, '')}…`
+function categoryLabelFor(catalog: SeoCatalog, id: string, language: Language): string {
+  const label = catalog.categories[id]
+  if (label) return label[language]
+  return language === 'zh' ? '待分类' : 'Unclassified'
 }
 
-function absolute(path: string): string {
-  return new URL(path, SITE_ORIGIN).toString()
+function shellCatalog(catalog: SeoCatalog): ShellCatalog {
+  return { updated: catalog.updated, plugins: catalog.plugins, categories: catalog.categories }
 }
 
-function collectionSchema(name: string, description: string, path: string): object {
-  const url = absolute(path)
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
-    '@id': `${url}#webpage`,
-    url,
-    name,
-    description,
-    isPartOf: {
-      '@type': 'WebSite',
-      '@id': `${SITE_ORIGIN}/#website`,
-      name: SITE_NAME,
-      url: `${SITE_ORIGIN}/`,
-    },
-  }
-}
+/**
+ * The snapshot arrives ordered by normalized repository name, so any "top
+ * plugins" list has to be re-sorted — and it must be sorted the way the page
+ * the reader lands on actually sorts, or the ItemList claims an order the
+ * rendered page does not show. `/` defaults to 24h star growth, `/plugins` to
+ * stars. Sorting runs on every HTML request, so results are memoised against
+ * the snapshot revision.
+ */
+const rankedCache = new Map<string, CatalogPlugin[]>()
 
-function pluginSchema(plugin: RegistryPlugin, canonical: string, description: string): object {
-  const softwareId = `${canonical}#software`
-  return {
-    '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': 'WebPage',
-        '@id': `${canonical}#webpage`,
-        url: canonical,
-        name: plugin.name,
-        description,
-        isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
-        mainEntity: { '@id': softwareId },
-      },
-      {
-        '@type': 'SoftwareSourceCode',
-        '@id': softwareId,
-        name: plugin.name,
-        description: plugin.description.en,
-        codeRepository: plugin.url,
-        runtimePlatform: 'DeepSeek Harness',
-        dateCreated: plugin.added,
-      },
-      {
-        '@type': 'BreadcrumbList',
-        itemListElement: [
-          {
-            '@type': 'ListItem',
-            position: 1,
-            name: 'Plugin catalog',
-            item: `${SITE_ORIGIN}/plugin`,
-          },
-          { '@type': 'ListItem', position: 2, name: plugin.name, item: canonical },
-        ],
-      },
-    ],
-  }
+function rankedPlugins(catalog: SeoCatalog, sort: 'stars' | 'growth24h'): CatalogPlugin[] {
+  const key = `${catalog.revision}:${sort}`
+  const cached = rankedCache.get(key)
+  if (cached) return cached
+  const ranked = catalog.plugins
+    .filter((plugin) => hasGrowthForSort(plugin, sort))
+    .sort(comparePlugins(sort))
+  // One snapshot at a time: an older revision's entries are dead weight.
+  rankedCache.clear()
+  rankedCache.set(key, ranked)
+  return ranked
 }
 
 function safeDecode(value: string): string | null {
@@ -93,75 +107,218 @@ function safeDecode(value: string): string | null {
   }
 }
 
+/** URL segments reach the document head, so strip control characters and clamp. */
+function sanitizeSegment(value: string): string {
+  return value.replace(/[\u0000-\u001F\u007F<>]/g, '').trim().slice(0, 80)
+}
+
+function collectionMetadata(
+  view: 'rankings' | 'catalog',
+  path: string,
+  catalog: SeoCatalog,
+  language: Language,
+): PageMetadata {
+  const copy = collectionCopy(view, language, catalog.plugins.length)
+  const sort = view === 'rankings' ? 'growth24h' : 'stars'
+  const ranked = rankedPlugins(catalog, sort)
+  const list = itemListNode(ranked.slice(0, ITEM_LIST_LIMIT), path, copy.listHeading, ranked.length)
+  return {
+    title: copy.title,
+    description: copy.description,
+    canonical: absoluteUrl(path),
+    robots: 'index,follow',
+    schema: graph([
+      ...siteNodes(),
+      collectionPageNode(path, copy, language, `${absoluteUrl(path)}#items`),
+      list,
+    ]),
+    status: 200,
+    shell: renderCollectionShell(shellCatalog(catalog), language, copy, {
+      listed: ranked.slice(0, view === 'rankings' ? 60 : 120),
+      showCategories: view === 'catalog',
+    }),
+    imageAlt: `${SITE_NAME} — ${copy.heading}`,
+  }
+}
+
 export function metadataForPath(
   pathname: string,
-  registry: Registry = BUNDLED_REGISTRY,
+  catalog: SeoCatalog,
+  language: Language = 'en',
 ): PageMetadata {
   if (pathname === '/' || pathname === '/rankings') {
-    const title = 'DeepSeek Harness Plugin Rankings | DSH Store'
-    const description = 'Compare popular DeepSeek Harness plugins by GitHub stars, recent growth, releases, and repository activity in the community plugin rankings.'
+    return collectionMetadata('rankings', '/', catalog, language)
+  }
+
+  if (pathname === '/plugins') {
+    return collectionMetadata('catalog', '/plugins', catalog, language)
+  }
+
+  if (pathname === '/docs/api') {
+    const copy = collectionCopy('apiDocs', language, catalog.plugins.length)
+    const url = absoluteUrl('/docs/api')
     return {
-      title,
-      description,
-      canonical: absolute('/rankings'),
+      title: copy.title,
+      description: copy.description,
+      canonical: url,
       robots: 'index,follow',
-      schema: collectionSchema(title, description, '/rankings'),
+      schema: graph([...siteNodes(), ...apiDocsNodes(copy, language)]),
       status: 200,
+      shell: renderSimpleShell(copy.heading, copy.intro),
+      imageAlt: `${SITE_NAME} — ${copy.heading}`,
     }
   }
 
-  if (pathname === '/plugin') {
-    const title = 'DeepSeek Harness Plugins & Extensions | DSH Store'
-    const description = 'Browse curated DeepSeek Harness plugins and extensions. Compare GitHub activity, explore categories, and copy install commands from the community catalog.'
+  if (pathname === '/account') {
+    const copy = collectionCopy('account', language, 0)
+    const url = absoluteUrl('/account')
     return {
-      title,
-      description,
-      canonical: absolute('/plugin'),
-      robots: 'index,follow',
-      schema: collectionSchema(title, description, '/plugin'),
+      title: copy.title,
+      description: copy.description,
+      canonical: url,
+      robots: 'noindex,follow',
+      schema: graph([...siteNodes(), simplePageNode('/account', copy, language)]),
       status: 200,
+      shell: renderSimpleShell(copy.heading, copy.intro),
     }
   }
 
-  const match = pathname.match(/^\/plugin\/([^/]+)\/([^/]+)\/?$/)
+  const match = pathname.match(/^\/plugins\/([^/]+)\/([^/]+)\/?$/)
   if (match) {
     const owner = safeDecode(match[1] ?? '')
     const repository = safeDecode(match[2] ?? '')
-    const plugin = owner && repository ? findPlugin(registry.plugins, owner, repository) : undefined
-    if (plugin) {
-      const canonicalPath = `/plugin/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
-      const canonical = absolute(canonicalPath)
-      const title = fitText(`${plugin.name} DeepSeek Harness Plugin | DSH Store`, 60)
-      const description = fitText(
-        `Explore ${plugin.name}, a DeepSeek Harness plugin by ${plugin.owner}. ${plugin.description.en}`,
-        160,
-      )
-      return {
-        title,
-        description,
-        canonical,
-        robots: 'index,follow',
-        schema: pluginSchema(plugin, canonical, description),
-        status: 200,
-      }
+    const plugin = owner && repository ? findPlugin(catalog.plugins, owner, repository) : undefined
+    if (plugin) return pluginMetadata(plugin, catalog, language)
+    if (catalog.degraded && owner && repository) {
+      // A cold or failed catalog must not deindex the whole corpus: serve a
+      // 200 built from the URL itself and let the client fill in the detail.
+      return degradedPluginMetadata(sanitizeSegment(owner), sanitizeSegment(repository), language)
     }
   }
 
-  const title = 'Page not found | DSH Store'
-  const description = 'The requested page is not available in the DeepSeek Harness community plugin catalog.'
+  const notFoundTitle = language === 'zh' ? `页面未找到 | ${SITE_NAME}` : `Page not found | ${SITE_NAME}`
+  const notFoundBody = language === 'zh'
+    ? '请求的页面不在 DeepSeek Harness 社区插件目录中。'
+    : 'The requested page is not available in the DeepSeek Harness community plugin catalog.'
+  return {
+    title: notFoundTitle,
+    description: notFoundBody,
+    canonical: null,
+    robots: 'noindex,follow',
+    schema: graph([
+      ...siteNodes(),
+      {
+        '@type': 'WebPage',
+        '@id': `${absoluteUrl(pathname)}#webpage`,
+        url: absoluteUrl(pathname),
+        name: notFoundTitle,
+        isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
+      },
+    ]),
+    status: 404,
+    shell: renderNotFoundShell(
+      language === 'zh' ? '页面未找到' : 'Page not found',
+      notFoundBody,
+      language === 'zh' ? '浏览 DeepSeek Harness 插件目录' : 'Browse the DeepSeek Harness plugin catalog',
+    ),
+  }
+}
+
+function pluginMetadata(
+  plugin: CatalogPlugin,
+  catalog: SeoCatalog,
+  language: Language,
+): PageMetadata {
+  const canonical = absoluteUrl(pluginPath(plugin))
+  const categoryLabel = categoryLabelFor(catalog, plugin.category, language)
+  const title = pluginTitle(plugin.name, plugin.owner, language)
+  const description = pluginDescription(
+    plugin.name,
+    plugin.owner,
+    plugin.description[language],
+    categoryLabel,
+    language,
+  )
   return {
     title,
     description,
-    canonical: absolute(pathname),
-    robots: 'noindex,follow',
-    schema: {
-      '@context': 'https://schema.org',
-      '@type': 'WebPage',
-      url: absolute(pathname),
-      name: title,
-    },
-    status: 404,
+    canonical,
+    robots: 'index,follow',
+    schema: graph([
+      ...siteNodes(),
+      ...pluginNodes(
+        {
+          name: plugin.name,
+          owner: plugin.owner,
+          url: plugin.url,
+          description: plugin.description[language],
+          categoryLabel,
+          added: plugin.added,
+          stars: plugin.stars,
+          pushedAt: plugin.pushedAt,
+          updatedAt: plugin.updatedAt,
+          repository: repositoryName(plugin),
+        },
+        canonical,
+        title,
+        description,
+        language,
+        language === 'zh' ? '插件目录' : 'Plugin catalog',
+      ),
+    ]),
+    status: 200,
+    shell: renderPluginShell(plugin, shellCatalog(catalog), language, categoryLabel),
+    imageAlt: language === 'zh'
+      ? `${plugin.name} — DeepSeek Harness 插件`
+      : `${plugin.name} — DeepSeek Harness plugin`,
   }
+}
+
+function degradedPluginMetadata(
+  owner: string,
+  repository: string,
+  language: Language,
+): PageMetadata {
+  const canonical = absoluteUrl(`/plugins/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`)
+  const title = pluginTitle(repository, owner, language)
+  const description = pluginDescription(repository, owner, '', '', language)
+  return {
+    title,
+    description,
+    canonical,
+    robots: 'index,follow',
+    schema: graph([
+      ...siteNodes(),
+      {
+        '@type': 'WebPage',
+        '@id': `${canonical}#webpage`,
+        url: canonical,
+        name: title,
+        isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
+      },
+    ]),
+    status: 200,
+  }
+}
+
+const INDEXABLE_COLLECTION_PATHS = new Set(['/', '/plugins', '/rankings'])
+const COLLECTION_PARAMS = ['q', 'category', 'sort'] as const
+
+/**
+ * A filtered or searched collection view is a permutation of one page, so it is
+ * noindexed and drops its canonical — the filtered result really is different
+ * content, and pointing it at the unfiltered page would contradict the noindex.
+ *
+ * A campaign tag is the opposite case: `/?utm_source=x` is byte-identical to
+ * `/`, so it stays indexable and simply canonicalises to the clean URL. Treating
+ * those as filters would noindex every shared link and consolidate nothing.
+ */
+export function collectionQueryKind(url: URL): 'clean' | 'filtered' | 'tagged' {
+  if (!INDEXABLE_COLLECTION_PATHS.has(url.pathname)) return 'clean'
+  for (const key of COLLECTION_PARAMS) {
+    if ((url.searchParams.get(key) ?? '').trim().length > 0) return 'filtered'
+  }
+  return [...url.searchParams.keys()].length > 0 ? 'tagged' : 'clean'
 }
 
 function xmlEscape(value: string): string {
@@ -173,30 +330,107 @@ function xmlEscape(value: string): string {
     .replaceAll("'", '&apos;')
 }
 
-export function buildSitemap(registry: Registry = BUNDLED_REGISTRY): string {
-  const pages = [
-    { path: '/rankings', lastModified: registry.updated },
-    { path: '/plugin', lastModified: registry.updated },
-    ...registry.plugins.map((plugin) => ({
-      path: `/plugin/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`,
-      lastModified: plugin.added,
+export function buildSitemap(catalog: SeoCatalog): string {
+  const pages: { path: string; lastModified?: string }[] = [
+    { path: '/', lastModified: catalog.updated },
+    { path: '/plugins', lastModified: catalog.updated },
+    // No lastmod: the API reference changes on its own schedule, and stamping
+    // it with the catalog rebuild time trains crawlers to ignore the signal.
+    { path: '/docs/api' },
+    ...catalog.plugins.map((plugin) => ({
+      path: pluginPath(plugin),
+      lastModified: (plugin.pushedAt ?? plugin.updatedAt ?? plugin.added).slice(0, 10),
     })),
   ]
   const urls = pages.map(({ path, lastModified }) => [
     '  <url>',
-    `    <loc>${xmlEscape(absolute(path))}</loc>`,
-    `    <lastmod>${xmlEscape(lastModified)}</lastmod>`,
+    `    <loc>${xmlEscape(absoluteUrl(path))}</loc>`,
+    ...(lastModified ? [`    <lastmod>${xmlEscape(lastModified)}</lastmod>`] : []),
     '  </url>',
   ].join('\n')).join('\n')
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`
 }
 
+/**
+ * The SPA has no content of its own: every page is assembled from
+ * `/api/v1/plugins*`. Blanket-disallowing `/api/` therefore made the whole site
+ * unrenderable for crawlers, so the read-only catalog endpoints are explicitly
+ * allowed and only the account/telemetry surface stays closed.
+ */
 export function buildRobotsTxt(): string {
+  const rules = [
+    'Allow: /',
+    'Allow: /api/v1/plugins',
+    'Disallow: /api/v1/auth/',
+    'Disallow: /api/v1/api-keys',
+    'Disallow: /api/v1/catalog/',
+    'Disallow: /api/v1/install-events',
+    'Disallow: /api/live',
+  ]
+  const aiAgents = [
+    'GPTBot',
+    'OAI-SearchBot',
+    'ChatGPT-User',
+    'ClaudeBot',
+    'Claude-SearchBot',
+    'PerplexityBot',
+    'Google-Extended',
+    'Applebot-Extended',
+    'CCBot',
+  ]
   return [
     'User-agent: *',
-    'Allow: /',
-    'Disallow: /api/',
+    ...rules,
+    '',
+    // Named groups replace the wildcard group entirely, so these repeat the
+    // same rules; the stanza states the existing policy rather than changing it.
+    ...aiAgents.map((agent) => `User-agent: ${agent}`),
+    ...rules,
+    '',
     `Sitemap: ${SITE_ORIGIN}/sitemap.xml`,
+    '',
+  ].join('\n')
+}
+
+/**
+ * The API host serves external API clients, never the website, and has no page
+ * on it worth indexing. robots.txt governs crawling, not API calls: a developer
+ * or an agent hitting the documented endpoint is a client, not a crawler, so
+ * closing the host to crawlers costs that audience nothing.
+ */
+export function buildApiHostRobotsTxt(): string {
+  return ['User-agent: *', 'Disallow: /', ''].join('\n')
+}
+
+/**
+ * The whole catalog as plain text, for answer engines that will not run
+ * JavaScript and will not crawl 2,900 URLs. Install commands come from the
+ * registry `install` field, never a literal.
+ */
+export function buildLlmsFullTxt(catalog: SeoCatalog): string {
+  const grouped = new Map<string, CatalogPlugin[]>()
+  for (const plugin of [...catalog.plugins].sort(comparePlugins('stars'))) {
+    const bucket = grouped.get(plugin.category) ?? []
+    bucket.push(plugin)
+    grouped.set(plugin.category, bucket)
+  }
+  const sections = [...grouped.entries()]
+    .sort((left, right) => right[1].length - left[1].length)
+    .map(([category, plugins]) => {
+      const lines = plugins.map((plugin) => {
+        const description = plugin.description.en.replace(/\s+/g, ' ').trim()
+        return `- [${plugin.name}](${SITE_ORIGIN}${pluginPath(plugin)}) — ${description} — install: ${plugin.install}`
+      })
+      return `## ${categoryLabelFor(catalog, category, 'en')} (${plugins.length})\n\n${lines.join('\n')}`
+    })
+  return [
+    '# DSH 1024Store — full DeepSeek Harness plugin catalog',
+    '',
+    `> ${catalog.plugins.length} plugins for DeepSeek Harness (\`dsh\`), DeepSeek's coding-agent CLI. Updated ${catalog.updated}.`,
+    '> Install any listed plugin with: dsh plugin --profile web add github:<owner>/<repository>',
+    `> Source: ${SITE_ORIGIN}/ · Search API: https://api.deepseek1024.com/v1/plugins/search?q=`,
+    '',
+    ...sections,
     '',
   ].join('\n')
 }
@@ -230,17 +464,26 @@ export function rewriteHtmlResponse(response: Response, metadata: PageMetadata):
     })
     .on('meta[property="og:url"]', {
       element(element) {
-        element.setAttribute('content', metadata.canonical)
+        if (metadata.canonical) element.setAttribute('content', metadata.canonical)
+        // Leaving the static homepage URL on a permutation would describe the
+        // wrong page to anything that unfurls the link.
+        else element.remove()
       },
     })
     .on('meta[property="og:image"], meta[name="twitter:image"]', {
       element(element) {
-        element.setAttribute('content', DEFAULT_IMAGE)
+        element.setAttribute('content', SITE_IMAGE)
+      },
+    })
+    .on('meta[property="og:image:alt"]', {
+      element(element) {
+        element.setAttribute('content', metadata.imageAlt ?? SITE_NAME)
       },
     })
     .on('link[rel="canonical"]', {
       element(element) {
-        element.setAttribute('href', metadata.canonical)
+        if (metadata.canonical) element.setAttribute('href', metadata.canonical)
+        else element.remove()
       },
     })
     .on('script[data-seo-schema]', {
@@ -249,10 +492,25 @@ export function rewriteHtmlResponse(response: Response, metadata: PageMetadata):
         element.setInnerContent(json, { html: true })
       },
     })
+    // The React app is client rendered, so without this the document a crawler
+    // receives is an empty container. `createRoot().render()` discards these
+    // children on mount, which is what keeps the shell a pre-hydration
+    // projection rather than a second document. Switching to `hydrateRoot`
+    // would turn it into a hydration mismatch.
+    .on('div#root', {
+      element(element) {
+        if (metadata.shell) element.setInnerContent(metadata.shell, { html: true })
+      },
+    })
 
   const transformed = rewriter.transform(response)
   const headers = new Headers(transformed.headers)
-  headers.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600')
+  headers.set(
+    'Cache-Control',
+    metadata.status === 200
+      ? 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600'
+      : 'public, max-age=60, s-maxage=300',
+  )
   headers.set('X-Robots-Tag', metadata.robots)
   return new Response(transformed.body, {
     status: metadata.status,

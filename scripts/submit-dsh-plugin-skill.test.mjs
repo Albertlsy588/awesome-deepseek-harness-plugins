@@ -118,3 +118,60 @@ test('dry-run prints JSON without creating a file', async t => {
   assert.equal(JSON.parse(result.stdout).id, 'owner/plugin')
   await assert.rejects(readFile(path.join(directory, 'catalog/plugins/owner--plugin.json')))
 })
+
+test('documents automatic merge and automatic sync behavior consistently', async () => {
+  const contributing = await readFile(path.join(root, 'CONTRIBUTING.md'), 'utf8')
+  const readme = await readFile(path.join(root, 'README.md'), 'utf8')
+  const pullRequestTemplate = await readFile(path.join(root, '.github/PULL_REQUEST_TEMPLATE.md'), 'utf8')
+  const skill = await readFile(path.join(root, 'skills/submit-dsh-plugin/SKILL.md'), 'utf8')
+  const reference = await readFile(path.join(root, 'skills/submit-dsh-plugin/references/submission-reference.md'), 'utf8')
+
+  assert.match(contributing, /merged automatically/i)
+  assert.match(contributing, /synced automatically/i)
+  assert.match(contributing, /failed review leaves the pull request open/i)
+  assert.match(contributing, /never closes a pull request/i)
+  assert.match(contributing, /maintainer review is required/i)
+  assert.doesNotMatch(contributing, /CI \/ verify|maintainer(s)? refresh/i)
+  assert.match(readme, /自动合并/)
+  assert.match(readme, /自动同步/)
+  assert.doesNotMatch(readme, /结构化目录数据|catalog\/generated/)
+  assert.match(pullRequestTemplate, /merged automatically/i)
+  assert.match(pullRequestTemplate, /refresh(es)? automatically/i)
+  assert.match(pullRequestTemplate, /failed review leaves this PR open/i)
+  assert.match(pullRequestTemplate, /maintainer reviews and merges/i)
+  assert.match(skill, /自动合并/)
+  assert.match(skill, /自动同步/)
+  assert.match(skill, /检查失败，PR 会保持打开且不会被工作流自动关闭/)
+  assert.match(skill, /维护者人工审核/)
+  assert.doesNotMatch(skill, /CI \/ verify|由维护者单独更新/)
+  assert.match(reference, /自动合并/)
+  assert.match(reference, /自动同步/)
+  assert.match(reference, /自动审查失败时，PR 会保持打开/)
+  assert.match(reference, /维护者人工审核/)
+})
+
+test('runs only the trusted static gate for pull requests', async () => {
+  const ciWorkflow = await readFile(path.join(root, '.github/workflows/ci.yml'), 'utf8')
+  const reviewWorkflow = await readFile(path.join(root, '.github/workflows/plugin-review.yml'), 'utf8')
+  const staticReviewJob = reviewWorkflow.match(/\n  static-review:[\s\S]*?\n  merge:/)?.[0] ?? ''
+  const mergeJob = reviewWorkflow.match(/\n  merge:[\s\S]*/)?.[0] ?? ''
+
+  assert.doesNotMatch(ciWorkflow, /^\s*pull_request:/m)
+  assert.match(reviewWorkflow, /^\s*pull_request_target:/m)
+  assert.match(reviewWorkflow, /^\s+merge:\n\s+needs: static-review/m)
+  assert.match(reviewWorkflow, /PLUGIN_REVIEW_EXPECTED_HEAD_SHA/)
+  assert.match(reviewWorkflow, /contents: write/)
+  assert.match(staticReviewJob, /^\s+pull-requests: write$/m)
+  // Fork PRs are checked out as data only; without this opt-in the checkout
+  // step aborts before the reviewer can run or comment.
+  assert.match(staticReviewJob, /allow-unsafe-pr-checkout: true/)
+  assert.doesNotMatch(mergeJob, /^\s+pull-requests: write$/m)
+  // Modification/deletion PRs pass review with verdict=manual-review and must
+  // never reach the automatic merge job.
+  assert.match(mergeJob, /needs\.static-review\.outputs\.verdict == 'auto-merge'/)
+  // Both trusted checkouts must track the base BRANCH. base.sha is frozen at
+  // the revision main had when the PR was opened, so pinning to it would stop
+  // any fix to the reviewer or merger from reaching already-open PRs.
+  assert.doesNotMatch(reviewWorkflow, /pull_request\.base\.sha/)
+  assert.equal(reviewWorkflow.match(/ref: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/g)?.length, 2)
+})
