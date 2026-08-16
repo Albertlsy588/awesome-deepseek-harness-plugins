@@ -1,3 +1,4 @@
+import type { GitInstallCode } from './install-methods'
 const GITHUB_API = 'https://api.github.com'
 const SEARCH_RESULT_LIMIT = 1000
 const FIRST_GITHUB_INSTANT = '2008-01-01T00:00:00Z'
@@ -58,6 +59,16 @@ export interface RepositoryInspection {
     version: string | null
     path: string
     patch: string
+    /**
+     * What a git install of this manifest would produce. Same rules as the
+     * submission gate (scripts/review-plugin-submission.mjs classifyGitInstall)
+     * and the same vocabulary the badge derives from — the two must agree or
+     * the pull-request advisory contradicts the published label.
+     */
+    entryPoint: string | null
+    entryCommitted: boolean
+    hasPrepare: boolean
+    gitCode: GitInstallCode
   } | null
 }
 
@@ -297,6 +308,64 @@ function resolvePatchPath(manifestPath: string, patch: unknown): string {
   return resolved.join('/')
 }
 
+/**
+ * The entry point a git install has to import: `exports["."]` wins over `main`.
+ * Undefined when the manifest declares none — Node would fall back to
+ * index.js, but a bundle may load purely through its patch, so an undeclared
+ * entry is not evidence of a defect.
+ */
+function declaredEntryPoint(manifest: Record<string, unknown>): string | undefined {
+  const exported = manifest.exports
+  if (typeof exported === 'string') return exported
+  if (isObject(exported)) {
+    const root = exported['.']
+    if (typeof root === 'string') return root
+    if (isObject(root)) {
+      for (const condition of ['default', 'import', 'node', 'require']) {
+        const value = root[condition]
+        if (typeof value === 'string') return value
+      }
+    }
+  }
+  return typeof manifest.main === 'string' ? manifest.main : undefined
+}
+
+/**
+ * pnpm runs `prepare` after a git install and otherwise ships only committed
+ * files, so a plugin whose entry point is a build artifact produced at
+ * npm-publish time installs cleanly and then fails at startup. The better
+ * outcome wins: a committed entry needs no build allowance from the user,
+ * while `prepare` makes the first `dsh plugin add` fail until they grant one.
+ */
+function classifyGitInstall(
+  manifest: Record<string, unknown>,
+  manifestPath: string,
+  treePaths: Set<string>,
+): { entryPoint: string | null; entryCommitted: boolean; hasPrepare: boolean; gitCode: GitInstallCode } {
+  const scripts = isObject(manifest.scripts) ? manifest.scripts : null
+  const prepare = scripts?.prepare
+  const hasPrepare = typeof prepare === 'string' && prepare.trim().length > 0
+  const entry = declaredEntryPoint(manifest)
+  if (entry === undefined) {
+    return { entryPoint: null, entryCommitted: false, hasPrepare, gitCode: 'no_entry_declared' }
+  }
+  let entryPath: string
+  try {
+    entryPath = resolvePatchPath(manifestPath, entry)
+  } catch {
+    return { entryPoint: entry, entryCommitted: false, hasPrepare, gitCode: 'entry_outside_repository' }
+  }
+  if (treePaths.has(entryPath)) {
+    return { entryPoint: entry, entryCommitted: true, hasPrepare, gitCode: 'entry_committed' }
+  }
+  return {
+    entryPoint: entry,
+    entryCommitted: false,
+    hasPrepare,
+    gitCode: hasPrepare ? 'prepare_builds_entry' : 'entry_missing_no_prepare',
+  }
+}
+
 function validateManifest(source: string, manifestPath: string, treePaths: Set<string>) {
   let manifest: unknown
   try {
@@ -321,6 +390,7 @@ function validateManifest(source: string, manifestPath: string, treePaths: Set<s
       : null,
     path: manifestPath,
     patch,
+    ...classifyGitInstall(manifest, manifestPath, treePaths),
   }
 }
 

@@ -2,6 +2,8 @@ import type { GitHubRepository, RepositoryInspection } from './github-discovery'
 import type { CatalogPlugin, LocalizedText, StoredCatalogSnapshot } from '../types'
 import { categoryLabelMap, UNCLASSIFIED_CATEGORY } from './categories'
 import { emptyInstallMetrics } from './install-metrics'
+import { deriveInstallMethods } from './install-methods'
+import type { GitInstallCode, NpmBinding } from './install-methods'
 import {
   normalizePluginId,
   parsePluginId,
@@ -51,6 +53,15 @@ interface CatalogRow {
   curated_description_en: string | null
   curated_description_zh: string | null
   curated_added: string | null
+  git_code: string | null
+  git_has_prepare: number
+  git_head_sha: string | null
+  git_checked_at: string | null
+  npm_package_name: string | null
+  npm_binding: string
+  npm_bundle_declared: number
+  npm_version: string | null
+  npm_checked_at: string | null
 }
 
 export interface ScanCounters {
@@ -566,6 +577,7 @@ export async function saveRepositoryInspections(
   db: D1Database,
   inspections: RepositoryInspection[],
   now = new Date().toISOString(),
+  headSha: string | null = null,
 ): Promise<void> {
   if (inspections.length === 0) return
   const statements: D1PreparedStatement[] = []
@@ -602,6 +614,8 @@ export async function saveRepositoryInspections(
         `UPDATE catalog_plugins SET
            validation_status = ?, validation_code = ?, validation_reason = ?,
            package_name = ?, package_version = ?, manifest_path = ?, bundle_patch = ?,
+           git_entry_point = ?, git_entry_committed = ?, git_has_prepare = ?,
+           git_status = ?, git_code = ?, git_head_sha = ?, git_checked_at = ?,
            updated_at = ?
          WHERE repository_id = (SELECT id FROM catalog_repositories WHERE github_id = ?)
            AND plugin_path = ?`,
@@ -613,6 +627,15 @@ export async function saveRepositoryInspections(
         inspection.package?.version ?? null,
         inspection.package?.path ?? null,
         inspection.package?.patch ?? null,
+        inspection.package?.entryPoint ?? null,
+        inspection.package?.entryCommitted ? 1 : 0,
+        inspection.package?.hasPrepare ? 1 : 0,
+        // A rejected repository has no manifest to judge, so the git method
+        // stays unknown rather than being called broken.
+        inspection.package ? 'ok' : 'error',
+        inspection.package?.gitCode ?? null,
+        headSha ?? null,
+        now,
         now,
         inspection.githubId,
         pluginPath,
@@ -691,7 +714,10 @@ export async function loadCatalogSnapshotFromD1(
             r.stars, r.forks, r.pushed_at, r.github_updated_at,
             p.plugin_path, p.plugin_id,
             p.curated_name, p.curated_category,
-            p.curated_description_en, p.curated_description_zh, p.curated_added
+            p.curated_description_en, p.curated_description_zh, p.curated_added,
+            p.git_code, p.git_has_prepare, p.git_head_sha, p.git_checked_at,
+            p.npm_package_name, p.npm_binding, p.npm_bundle_declared,
+            p.npm_version, p.npm_checked_at
        FROM catalog_plugins p
        JOIN catalog_repositories r ON r.id = p.repository_id
       WHERE p.from_pr = 1
@@ -723,6 +749,24 @@ export async function loadCatalogSnapshotFromD1(
         zh: row.curated_description_zh ?? description,
       },
       install: pluginInstallCommand(id),
+      // Facts in, verdicts out: the badge is derived here rather than stored,
+      // so changing how a fact is judged is a deploy, not a re-crawl.
+      installMethods: deriveInstallMethods(
+        id,
+        {
+          code: (row.git_code as GitInstallCode | null) ?? 'not_checked',
+          hasPrepare: row.git_has_prepare === 1,
+          headSha: row.git_head_sha,
+          checkedAt: row.git_checked_at,
+        },
+        row.npm_package_name === null ? null : {
+          packageName: row.npm_package_name,
+          binding: row.npm_binding as NpmBinding,
+          bundleDeclared: row.npm_bundle_declared === 1,
+          version: row.npm_version,
+          checkedAt: row.npm_checked_at,
+        },
+      ),
       added: row.curated_added ?? (row.github_updated_at ?? now).slice(0, 10),
       stars: row.stars,
       forks: row.forks,
@@ -743,4 +787,138 @@ export async function loadCatalogSnapshotFromD1(
     categories,
     plugins,
   }
+}
+
+export interface NpmProbeCandidate {
+  pluginId: string
+  packageName: string
+}
+
+/**
+ * Plugins whose npm binding is stale or unknown, oldest first.
+ *
+ * Only published plugins are probed, and only those whose own manifest named a
+ * package — the name comes from the repository, never from a guess.
+ */
+export async function loadPendingNpmProbes(
+  db: D1Database,
+  limit = 60,
+  staleBefore: string | null = null,
+): Promise<NpmProbeCandidate[]> {
+  const result = await db.prepare(
+    `SELECT p.plugin_id, p.package_name
+       FROM catalog_plugins p
+       JOIN catalog_repositories r ON r.id = p.repository_id
+      WHERE p.package_name IS NOT NULL
+        AND (p.from_pr = 1 OR (r.from_topic = 1 AND p.validation_status = 'accepted'))
+        AND (p.npm_status = 'pending' OR p.npm_checked_at IS NULL OR p.npm_checked_at < ?)
+      ORDER BY p.npm_checked_at IS NOT NULL, p.npm_checked_at
+      LIMIT ?`,
+  ).bind(staleBefore ?? '', limit).all<{ plugin_id: string; package_name: string }>()
+  return result.results.map((row) => ({ pluginId: row.plugin_id, packageName: row.package_name }))
+}
+
+export interface NpmProbeRecord {
+  pluginId: string
+  packageName: string
+  status: 'found' | 'absent' | 'error'
+  httpStatus: number | null
+  version: string | null
+  repositoryUrl: string | null
+  repositoryDirectory: string | null
+  bundleDeclared: boolean
+  entryPoint: string | null
+  tarballUrl: string | null
+  integrity: string | null
+  binding: string
+}
+
+/**
+ * Records npm probe results.
+ *
+ * An `error` result updates only the bookkeeping columns: one registry outage
+ * must not flip thousands of badges from verified to unverified. A `found` or
+ * `absent` result is a real observation and replaces the previous one.
+ */
+export async function saveNpmProbes(
+  db: D1Database,
+  probes: NpmProbeRecord[],
+  now = new Date().toISOString(),
+): Promise<void> {
+  if (probes.length === 0) return
+  for (const group of chunks(probes, 40)) {
+    await db.batch(group.map((probe) => (probe.status === 'error'
+      ? db.prepare(
+        `UPDATE catalog_plugins
+            SET npm_status = 'error', npm_http_status = ?, npm_checked_at = ?, updated_at = ?
+          WHERE normalized_plugin_id = ?`,
+      ).bind(probe.httpStatus, now, now, normalizePluginId(probe.pluginId))
+      : db.prepare(
+        `UPDATE catalog_plugins
+            SET npm_package_name = ?, npm_status = ?, npm_http_status = ?,
+                npm_version = ?, npm_repository_url = ?, npm_repository_directory = ?,
+                npm_bundle_declared = ?, npm_binding = ?,
+                npm_checked_at = ?, updated_at = ?
+          WHERE normalized_plugin_id = ?`,
+      ).bind(
+        probe.packageName, probe.status, probe.httpStatus,
+        probe.version, probe.repositoryUrl, probe.repositoryDirectory,
+        probe.bundleDeclared ? 1 : 0, probe.binding,
+        now, now, normalizePluginId(probe.pluginId),
+      ))))
+  }
+}
+
+/**
+ * Fills in the GitHub facts for repositories that arrived through a submission.
+ *
+ * A submission gives us a name and nothing else, so those rows land with
+ * `github_id` NULL — and the validation queue keys on `github_id`. Until this
+ * runs, a curated plugin is published without anything ever inspecting it,
+ * which is exactly how the catalog came to serve install commands that cannot
+ * work. One request per repository, once.
+ *
+ * @returns how many repositories were hydrated.
+ */
+export async function hydrateCuratedRepositories(
+  db: D1Database,
+  client: { request: <T>(path: string) => Promise<T> },
+  limit = 20,
+  now = new Date().toISOString(),
+): Promise<number> {
+  const pending = await db.prepare(
+    `SELECT r.id, r.full_name
+       FROM catalog_repositories r
+      WHERE r.github_id IS NULL
+        AND EXISTS (SELECT 1 FROM catalog_plugins p WHERE p.repository_id = r.id AND p.from_pr = 1)
+      ORDER BY r.id
+      LIMIT ?`,
+  ).bind(limit).all<{ id: number; full_name: string }>()
+  if (pending.results.length === 0) return 0
+
+  let hydrated = 0
+  for (const row of pending.results) {
+    const encoded = row.full_name.split('/').map(encodeURIComponent).join('/')
+    let repository: GitHubRepository
+    try {
+      repository = await client.request<GitHubRepository>(`/repos/${encoded}`)
+    } catch {
+      // A renamed or deleted repository must not stall the queue behind it; the
+      // next run tries again, and the plugin stays published meanwhile.
+      continue
+    }
+    await db.prepare(
+      `UPDATE catalog_repositories
+          SET github_id = ?, github_description = ?, default_branch = ?, stars = ?, forks = ?,
+              language = ?, license = ?, github_updated_at = ?, pushed_at = ?, updated_at = ?
+        WHERE id = ?`,
+    ).bind(
+      repository.id, repository.description, repository.default_branch,
+      repository.stargazers_count, repository.forks_count, repository.language,
+      repository.license?.spdx_id ?? null, repository.updated_at, repository.pushed_at,
+      now, row.id,
+    ).run()
+    hydrated += 1
+  }
+  return hydrated
 }

@@ -1,3 +1,5 @@
+import type { PluginInstallMethod } from './lib/install-methods'
+
 export type Language = 'en' | 'zh'
 
 export interface LocalizedText {
@@ -11,6 +13,11 @@ export interface RegistryCategory {
 }
 
 export interface RegistryPlugin {
+  /**
+   * How this plugin can be installed, each with its own verification state.
+   * Absent on snapshots written before install verification shipped.
+   */
+  installMethods?: PluginInstallMethod[]
   /** Full plugin id: `owner/repository[/sub/dir]`, in its submitted case. */
   id: string
   name: string
