@@ -3284,8 +3284,7 @@ main {
   line-height: 1.65;
 }
 
-.api-endpoint code,
-.api-endpoint-list code {
+.api-endpoint code {
   padding: 2px 7px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -3294,16 +3293,6 @@ main {
   font-family: var(--font-mono);
   font-size: 12.5px;
   font-weight: 650;
-}
-
-.api-endpoint-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 10px;
-  color: var(--muted);
-  font-size: 13.5px;
 }
 
 .api-code {

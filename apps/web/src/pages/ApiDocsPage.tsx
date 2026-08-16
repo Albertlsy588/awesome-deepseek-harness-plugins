@@ -176,15 +176,6 @@ export function ApiDocsPage() {
         </div>
       </section>
 
-      <section className="api-docs-section">
-        <h2>{t('apiDocsOtherHeading')}</h2>
-        <p>{t('apiDocsOtherBody')}</p>
-        <ul className="api-endpoint-list">
-          <li><code>GET /api/v1/plugins</code> — {t('apiDocsOtherPlugins')}</li>
-          <li><code>GET /api/v1/plugins/:owner/:name</code> — {t('apiDocsOtherDetail')}</li>
-          <li><code>GET /api/v1/registry</code> — {t('apiDocsOtherRegistry')}</li>
-        </ul>
-      </section>
     </div>
   )
 }

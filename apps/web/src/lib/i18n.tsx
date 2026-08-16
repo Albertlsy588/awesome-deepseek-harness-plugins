@@ -176,11 +176,6 @@ const messages = {
     apiDocsErrDailyQuota: 'The daily quota is exhausted.',
     apiDocsErrInternal: 'Unexpected server error.',
     apiDocsErrServiceUnavailable: 'The service is temporarily unavailable (e.g. during maintenance).',
-    apiDocsOtherHeading: 'Other public endpoints',
-    apiDocsOtherBody: 'These read-only endpoints are unauthenticated and CDN-cached; no API key is required.',
-    apiDocsOtherPlugins: 'Full catalog with rankings and categories (q, category, sort).',
-    apiDocsOtherDetail: 'Package detail with GitHub and install metrics.',
-    apiDocsOtherRegistry: 'Machine-readable registry projection.',
   },
   zh: {
     catalog: '插件目录',
@@ -356,11 +351,6 @@ const messages = {
     apiDocsErrDailyQuota: '当日配额已用完。',
     apiDocsErrInternal: '服务器内部错误。',
     apiDocsErrServiceUnavailable: '服务暂时不可用（例如维护期间）。',
-    apiDocsOtherHeading: '其他公开端点',
-    apiDocsOtherBody: '以下只读端点无需认证、走 CDN 缓存，不需要 API Key。',
-    apiDocsOtherPlugins: '完整目录，含榜单与分类（支持 q、category、sort）。',
-    apiDocsOtherDetail: '插件详情，含 GitHub 与安装指标。',
-    apiDocsOtherRegistry: '面向机器消费的 registry 投影。',
   },
 } as const
 
