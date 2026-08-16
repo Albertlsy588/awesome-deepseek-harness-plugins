@@ -150,12 +150,14 @@ test('documents automatic merge and automatic sync behavior consistently', async
 test('runs only the trusted static gate for pull requests', async () => {
   const ciWorkflow = await readFile(path.join(root, '.github/workflows/ci.yml'), 'utf8')
   const reviewWorkflow = await readFile(path.join(root, '.github/workflows/plugin-review.yml'), 'utf8')
+  const staticReviewJob = reviewWorkflow.match(/\n  static-review:[\s\S]*?\n  merge:/)?.[0] ?? ''
+  const mergeJob = reviewWorkflow.match(/\n  merge:[\s\S]*/)?.[0] ?? ''
 
   assert.doesNotMatch(ciWorkflow, /^\s*pull_request:/m)
   assert.match(reviewWorkflow, /^\s*pull_request_target:/m)
   assert.match(reviewWorkflow, /^\s+merge:\n\s+needs: static-review/m)
   assert.match(reviewWorkflow, /PLUGIN_REVIEW_EXPECTED_HEAD_SHA/)
   assert.match(reviewWorkflow, /contents: write/)
-  assert.match(reviewWorkflow, /^\s+issues: write$/m)
-  assert.doesNotMatch(reviewWorkflow, /^\s+pull-requests: write$/m)
+  assert.match(staticReviewJob, /^\s+pull-requests: write$/m)
+  assert.doesNotMatch(mergeJob, /^\s+pull-requests: write$/m)
 })

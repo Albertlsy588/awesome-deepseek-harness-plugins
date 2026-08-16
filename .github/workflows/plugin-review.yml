@@ -18,8 +18,9 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      # The reviewer only uses issue-comment endpoints; it never updates PR state.
-      issues: write
+      # GitHub Actions requires pull-request write access for PR issue comments.
+      # The trusted reviewer only calls comment endpoints; it never updates PR state.
+      pull-requests: write
     steps:
       - name: Check out trusted reviewer
         uses: actions/checkout@v4
