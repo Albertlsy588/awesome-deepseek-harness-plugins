@@ -28,7 +28,11 @@ jobs:
       - name: Check out trusted reviewer
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          # The base BRANCH, not the event's base.sha. base.sha is frozen at the
+          # revision main had when the pull request was opened, and reopening
+          # does not refresh it — pinning to it means a fix to this reviewer can
+          # never reach a pull request that was opened before the fix landed.
+          ref: ${{ github.event.pull_request.base.ref }}
           path: reviewer
           persist-credentials: false
       - name: Check out submitted files as data
@@ -72,7 +76,9 @@ jobs:
       - name: Check out trusted merger
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          # Same reasoning as the reviewer checkout above: always the latest
+          # trusted revision of the base branch, never the frozen base.sha.
+          ref: ${{ github.event.pull_request.base.ref }}
           path: reviewer
           persist-credentials: false
       - uses: actions/setup-node@v4

@@ -169,4 +169,9 @@ test('runs only the trusted static gate for pull requests', async () => {
   // Modification/deletion PRs pass review with verdict=manual-review and must
   // never reach the automatic merge job.
   assert.match(mergeJob, /needs\.static-review\.outputs\.verdict == 'auto-merge'/)
+  // Both trusted checkouts must track the base BRANCH. base.sha is frozen at
+  // the revision main had when the PR was opened, so pinning to it would stop
+  // any fix to the reviewer or merger from reaching already-open PRs.
+  assert.doesNotMatch(reviewWorkflow, /pull_request\.base\.sha/)
+  assert.equal(reviewWorkflow.match(/ref: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/g)?.length, 2)
 })
