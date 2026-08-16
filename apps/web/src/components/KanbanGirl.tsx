@@ -26,6 +26,8 @@ const WALK_SPEED = 70
 const WALK_DISTANCE_MIN = 60
 const WALK_DISTANCE_MAX = 200
 const WALK_MARGIN = 12
+/** 视口收缩后至少要留出这么多像素可见，否则才把宠物拉回来。 */
+const KEEP_VISIBLE = 28
 /** 3D 倾斜最大角度（pointer 跟随）。 */
 const TILT_MAX_DEG = 10
 /** 静态资源根。 */
@@ -257,9 +259,10 @@ export function KanbanGirl() {
   }
 
   const startWalk = () => {
-    const pet = petRef.current
-    if (!pet || dragRef.current !== null || walkRef.current !== null) return
-    const rect = pet.getBoundingClientRect()
+    // 位置一律以 root 为准：按钮带 3D 倾斜，它的 rect 是投影包围盒而非布局位置。
+    const root = rootRef.current
+    if (!root || dragRef.current !== null || walkRef.current !== null) return
+    const rect = root.getBoundingClientRect()
     const size = rect.width
     const startX = rect.left
     const y = rect.top
@@ -289,8 +292,10 @@ export function KanbanGirl() {
   const applyTilt = (clientX: number, clientY: number) => {
     if (reduceMotion) return
     const pet = petRef.current
-    if (!pet) return
-    const rect = pet.getBoundingClientRect()
+    const root = rootRef.current
+    if (!pet || !root) return
+    // 用 root 量：拿按钮自身的 rect 会让倾斜反过来影响下一帧的倾斜，产生抖动。
+    const rect = root.getBoundingClientRect()
     const px = (clientX - rect.left) / rect.width - 0.5
     const py = (clientY - rect.top) / rect.height - 0.5
     pet.style.setProperty('--kanban-tilt-x', `${(-py * 2 * TILT_MAX_DEG).toFixed(2)}deg`)
@@ -427,15 +432,24 @@ export function KanbanGirl() {
     }
   }, [])
 
-  // 视口变小时把宠物拉回可见区域。存下来的位置来自上一次的视口——手机横屏
-  // 拖到右侧后转竖屏，或桌面拖到角落后缩窗口，它就会停在屏幕外再也点不到，
-  // 而且位置进了 localStorage，刷新也回不来。
+  // 视口变小时把宠物拉回来。存下的位置来自上一次的视口——手机横屏拖到右侧后
+  // 转竖屏，或桌面拖到角落后缩窗口，它会停在屏幕外再也点不到，而且位置已进
+  // localStorage，刷新也回不来。
+  //
+  // 只在它快看不见时才动手：移动端滚动会收放地址栏，innerHeight 随之抖动几十
+  // 像素，每次都 clamp 会把贴底的宠物一路往上顶，看起来就是无故瞬移。
   useEffect(() => {
     const keepInView = () => {
-      const size = petRef.current?.getBoundingClientRect().width ?? 0
+      const size = rootRef.current?.offsetWidth ?? 0
       if (size === 0) return
       setPos((current) => {
         if (!current) return current
+        const stillVisible = current.x >= KEEP_VISIBLE - size
+          && current.x <= window.innerWidth - KEEP_VISIBLE
+          && current.y >= KEEP_VISIBLE - size
+          && current.y <= window.innerHeight - KEEP_VISIBLE
+        if (stillVisible) return current
+
         const next = {
           x: clamp(current.x, 0, Math.max(0, window.innerWidth - size)),
           y: clamp(current.y, 0, Math.max(0, window.innerHeight - size)),
@@ -514,7 +528,7 @@ export function KanbanGirl() {
 
   // ── 拖拽 ────────────────────────────────────────────────────────────────
   const petPositionOf = (drag: NonNullable<typeof dragRef.current>, clientX: number, clientY: number) => {
-    const size = petRef.current?.getBoundingClientRect().width ?? 0
+    const size = rootRef.current?.offsetWidth ?? 0
     const x = clamp(drag.baseX + (clientX - drag.startX), 0, Math.max(0, window.innerWidth - size))
     const y = clamp(drag.baseY + (clientY - drag.startY), 0, Math.max(0, window.innerHeight - size))
     return { x, y }
@@ -522,8 +536,9 @@ export function KanbanGirl() {
 
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     const pet = petRef.current
-    if (!pet) return
-    const rect = pet.getBoundingClientRect()
+    const root = rootRef.current
+    if (!pet || !root) return
+    const rect = root.getBoundingClientRect()
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -558,6 +573,7 @@ export function KanbanGirl() {
       transitionTimers.current = []
       setState('drag')
       setPos(petPositionOf(drag, event.clientX, event.clientY))
+      return
     }
     applyTilt(event.clientX, event.clientY)
   }
