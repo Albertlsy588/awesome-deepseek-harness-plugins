@@ -4,8 +4,22 @@ var module = { exports: {} }; var exports = module.exports;
 
 const React = require('react')
 const h = React.createElement
-const { useCallback, useEffect, useMemo, useRef, useState } = React
+const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React
 const NS = 'dsh1024'
+
+/**
+ * 本体的 UI 基元。它在平台 seed 表里,同步 require 拿到的是 shell 同一个实例,
+ * CSS 已随 shell 加载,零打包成本。
+ *
+ * 但同步 require 只认那张 seed 表 —— require 一个不在表里的包会 throw,并且
+ * 会把整个 factory 一起炸掉。所以这里必须兜底:拿不到就回退自绘,面板绝不能白屏。
+ */
+let primitives = null
+try {
+  primitives = require('@deepseek-ai/dsh-client-ui-primitives')
+} catch {
+  primitives = null
+}
 const SITE_URL = 'https://deepseek1024.com/'
 
 const zh = {
@@ -50,6 +64,15 @@ function subscribeCatalogCount(listener) {
   return () => catalogCountListeners.delete(listener)
 }
 
+function readCatalogCount() {
+  return catalogCount
+}
+
+/** 订阅目录总数;数据变了徽标自己更新,不再靠 dispose + 重新 register。 */
+function useCatalogCount() {
+  return useSyncExternalStore(subscribeCatalogCount, readCatalogCount, readCatalogCount)
+}
+
 const CSS = `
 .dsm-root{color:var(--dsw-alias-label-primary);container-type:inline-size;display:flex;flex-direction:column;gap:14px;min-width:0}
 .dsm-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
@@ -79,6 +102,16 @@ const CSS = `
 .dsm-card-foot{align-items:center;display:flex;gap:8px;margin-top:auto}.dsm-category{background:var(--dsw-alias-bg-layer-2);border-radius:999px;color:var(--dsw-alias-label-secondary);font-size:11px;max-width:55%;overflow:hidden;padding:4px 8px;text-overflow:ellipsis;white-space:nowrap}.dsm-grow{flex:1}
 .dsm-state{align-items:center;color:var(--dsw-alias-label-secondary);display:flex;font-size:13px;gap:8px;justify-content:center;min-height:140px;text-align:center}.dsm-spin{animation:dsm-spin .8s linear infinite;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;height:15px;width:15px}@keyframes dsm-spin{to{transform:rotate(360deg)}}
 .dsm-more{display:flex;justify-content:center;padding:4px 0 8px}
+/* 侧边栏席位:wide 是整行,窄栏是 36×36 圆形 rail 态(装不下数字,总数走 aria-label)。 */
+.dsm-rail{align-items:center;appearance:none;background:none;border:0;border-radius:8px;color:inherit;cursor:pointer;display:flex;font:inherit;font-size:13px;gap:8px;min-height:32px;padding:0 8px;width:100%}
+.dsm-rail:hover{background:var(--dsw-alias-button-ghost-active-fill)}
+.dsm-rail[data-wide=false]{border-radius:50%;height:36px;justify-content:center;padding:0;width:36px}
+.dsm-rail-icon{align-items:center;display:flex;flex:0 0 16px;height:16px;justify-content:center;width:16px}
+.dsm-rail-label{flex:1;overflow:hidden;text-align:left;text-overflow:ellipsis;white-space:nowrap}
+/* 徽标语汇照抄本体 footer 面板:margin-left:auto、12/16、tertiary、tabular-nums。 */
+.dsm-rail-badge{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;margin-left:auto;font-variant-numeric:tabular-nums}
+.dsm-pop-backdrop{inset:0;position:fixed;z-index:2147483000}
+.dsm-pop{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;bottom:12px;box-shadow:0 12px 40px rgba(0,0,0,.24);display:flex;flex-direction:column;left:12px;max-height:min(760px,calc(100vh - 24px));overflow:auto;padding:14px;position:fixed;width:min(564px,calc(100vw - 24px));z-index:2147483001}
 @media(max-width:640px){.dsm-root{gap:12px}.dsm-meta{width:100%}.dsm-grid{grid-template-columns:1fr}.dsm-card{padding:12px}.dsm-action,.dsm-chip{min-height:42px}.dsm-source{padding:5px 0}}
 @container(max-width:360px){.dsm-head{display:block}.dsm-brand h3{font-size:18px}.dsm-meta{align-items:flex-start;flex-direction:column;margin-top:8px;width:auto}.dsm-pill{display:block}.dsm-card{position:relative}.dsm-card-head{display:block;padding-right:18px}.dsm-avatar{display:none}.dsm-source{font-size:0;margin:0;padding:6px;position:absolute;right:5px;top:4px}.dsm-source:after{content:'↗';font-size:15px}.dsm-name{font-size:13px;overflow-wrap:break-word}.dsm-desc,.dsm-category{display:none}.dsm-card-foot{display:block}.dsm-action{margin-top:2px;width:100%}.dsm-row-spacer{display:none}.dsm-cats[data-clamped=true]{max-height:112px}}
 @container(max-width:180px){.dsm-root{gap:8px}.dsm-brand p{display:none}.dsm-meta{gap:3px;margin-top:5px}.dsm-pill{background:transparent;font-size:11px;padding:0 8px}.dsm-toolbar{gap:6px}.dsm-cats{gap:4px}.dsm-cat{font-size:11px;padding:0 9px}.dsm-search{font-size:11px;min-height:34px;padding:0 9px}.dsm-row{gap:5px}.dsm-chip,.dsm-action{font-size:11px;min-height:34px;padding:5px 9px}.dsm-card{gap:6px;padding:8px}.dsm-card-head{padding-right:0}.dsm-source{display:none}.dsm-name,.dsm-owner{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsm-name{font-size:12px}.dsm-owner{font-size:11px}.dsm-card-foot{margin-top:0}.dsm-action{margin-top:0}.dsm-more{padding-top:0}}
@@ -417,6 +450,38 @@ function MarketTab({ locale }) {
                 }, copy.more + ' (' + visibleCount + '/' + plugins.length + ')'))))
 }
 
+/** 侧边栏席位:图标 + 名称 + 总数徽标;点开自己的浮层。 */
+function SidebarEntry({ wide, locale }) {
+  const t = locale.bind(NS)
+  const count = useCatalogCount()
+  const [open, setOpen] = useState(false)
+  const label = t('tab')
+  const title = count === null ? label : label + ' (' + count + ')'
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onKeyDown = event => { if (event.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
+  const Icon = primitives?.IconDownloadOutline16
+  return h(React.Fragment, null,
+    h('button', {
+      className: 'dsm-rail', type: 'button', 'data-wide': wide !== false,
+      title, 'aria-label': title, 'aria-expanded': open,
+      onClick: () => setOpen(value => !value),
+    },
+      h('span', { className: 'dsm-rail-icon', 'aria-hidden': true },
+        Icon ? h(Icon, null) : '\u2b07'),
+      wide !== false && h('span', { className: 'dsm-rail-label' }, label),
+      wide !== false && count !== null && h('span', { className: 'dsm-rail-badge' }, count)),
+    open && h(React.Fragment, null,
+      h('div', { className: 'dsm-pop-backdrop', onClick: () => setOpen(false) }),
+      h('div', { className: 'dsm-pop', role: 'dialog', 'aria-label': label },
+        h(MarketTab, { locale }))))
+}
+
 exports.name = 'dsh1024/client'
 exports.inject = ['slots', 'locale']
 exports.apply = function apply(ctx) {
@@ -449,6 +514,16 @@ exports.apply = function apply(ctx) {
       disposeEntry()
     }
   })
+  // 必须包在 slots.inject 里:裸 register 打进未声明的槽会抛错。
+  // id 用我们自己的,绝不能复用官方面板的 id(会把它顶掉);
+  // order 10 让我们稳定排在官方面板之下、设置之上。
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+    name: 'sidebar.footer.action',
+    id: 'dsh1024-store',
+    order: 10,
+    label: () => t('tab'),
+    locale: NS,
+  }, props => h(SidebarEntry, { wide: props?.wide !== false, locale: ctx.locale })))
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: '1024store',
