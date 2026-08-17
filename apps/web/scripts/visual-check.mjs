@@ -88,7 +88,7 @@ async function assertVisibleSubdirectorySiblingsHaveDistinctTitles(page, label) 
  * and let the reader reach them; a bare count told neither. Skips when the
  * dataset happens to hold no multi-plugin repository.
  */
-async function assertRepositorySeatDisclosure(page, label) {
+async function assertRepositorySeatDisclosure(page, label, { touchTargets = false } = {}) {
   const toggle = page.locator('.package-row .row-repo-toggle').first()
   if ((await toggle.count()) === 0) return
   const caption = (await toggle.textContent())?.trim() ?? ''
@@ -104,9 +104,27 @@ async function assertRepositorySeatDisclosure(page, label) {
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
     throw new Error(`${label} repository seat did not expand`)
   }
-  const listed = await page.locator(`#${panelId} li a`).count()
+  const listed = await page.locator(`#${panelId} .package-row`).count()
   if (listed < 2) {
     throw new Error(`${label} expanded repository seat lists ${listed} plugins, expected the whole repository`)
+  }
+  // The panel's rows are ordinary catalog rows, indented under the seat. If they
+  // ever stop being indented the panel reads as more board entries instead.
+  const indent = await page.locator(`#${panelId}`).evaluate((node) => {
+    const row = node.closest('.package-row')
+    return row === null ? 0 : node.getBoundingClientRect().left - row.getBoundingClientRect().left
+  })
+  if (indent <= 0) {
+    throw new Error(`${label} expanded repository panel is not indented under its seat`)
+  }
+  // The panel's rows only exist once it is open, so the sweep over the closed
+  // board never sees them and they need checking here.
+  if (touchTargets) {
+    await assertMinTouchTargets(page, `${label} expanded repository panel`, [
+      '.row-repo-panel .package-row .row-link',
+      '.row-repo-panel .package-row .split-install-main',
+      '.row-repo-panel .package-row .split-install-toggle',
+    ])
   }
   await assertNoHorizontalOverflow(page, `${label} with a repository seat expanded`)
   await toggle.click()
@@ -743,7 +761,7 @@ try {
     // is grown separately, and that is what this guards.
     '.package-row .row-repo-toggle',
   ])
-  await assertRepositorySeatDisclosure(mobileRankings, 'mobile rankings')
+  await assertRepositorySeatDisclosure(mobileRankings, 'mobile rankings', { touchTargets: true })
   await assertHorizontalTouchScroller(
     mobileRankings,
     'mobile GitHub ranking modes',

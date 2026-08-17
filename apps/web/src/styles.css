@@ -1466,76 +1466,45 @@ main {
 
 .row-repo-panel {
   grid-column: 1 / -1;
-  margin: 6px 0 2px;
-  padding: 10px 12px;
+  /* Indented and inset so the rows read as belonging to the seat above rather
+     than as more entries in the board. The negative right margin is what lets
+     the children keep the parent's column grid, only shifted. */
+  margin: 4px 0 4px 26px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--brand-wash);
+  background: var(--surface);
+  overflow: hidden;
 }
 
 .row-repo-panel[hidden] {
   display: none;
 }
 
-.row-repo-panel ul {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  gap: 4px 18px;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  list-style: none;
+/* The children are ordinary catalog rows on purpose: same columns, same
+   metrics, same install button, so nothing new has to be learned to read them.
+   Only the chrome is toned down, because they sit inside another row. */
+.row-repo-panel .package-row {
+  min-height: 60px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  background: var(--brand-wash);
 }
 
-.row-repo-panel li {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 12px;
+.row-repo-panel .package-row:hover {
+  background: var(--surface-hover);
 }
 
-.row-repo-panel li a {
+.row-badge {
   flex: none;
-  color: var(--ink);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.row-repo-panel li a:hover {
-  text-decoration: underline;
-}
-
-.repo-seat-tag {
-  flex: none;
-  padding: 0 5px;
+  padding: 1px 6px;
   border-radius: 999px;
-  background: var(--surface);
+  background: var(--surface-muted);
   color: var(--muted);
   font-size: 9px;
-}
-
-.repo-plugin-desc {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
+  line-height: 1.5;
   white-space: nowrap;
 }
 
-.row-repo-browse {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  margin-top: 8px;
-  color: var(--brand-dark);
-  font-size: 11px;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.row-repo-browse:hover {
-  text-decoration: underline;
-}
 
 .row-identity p {
   margin: 3px 0 0;

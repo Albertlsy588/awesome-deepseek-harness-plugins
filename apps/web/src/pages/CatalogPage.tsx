@@ -550,6 +550,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
                     category={categoryMap.get(plugin.category)}
                     index={index}
                     ranking={rankingMode}
+                    categories={categoryMap}
                     repositoryPlugins={pluginsByRepository.get(
                       `${plugin.owner}/${plugin.repository}`.toLocaleLowerCase('en-US'),
                     )}

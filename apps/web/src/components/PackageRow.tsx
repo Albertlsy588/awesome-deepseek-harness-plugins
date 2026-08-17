@@ -24,6 +24,10 @@ interface PackageRowProps {
   category?: CategoryResult
   index: number
   ranking?: RankingMode
+  /** Small tag beside the name, e.g. marking the seat inside its own panel. */
+  badge?: string
+  /** Resolves a category id for the rows rendered inside an expanded panel. */
+  categories?: Map<string, CategoryResult>
   /**
    * Every plugin of this row's repository, this one included.
    *
@@ -40,6 +44,8 @@ export const PackageRow = memo(function PackageRow({
   category,
   index,
   ranking,
+  badge,
+  categories,
   repositoryPlugins,
 }: PackageRowProps) {
   const { language, t } = useI18n()
@@ -115,6 +121,7 @@ export const PackageRow = memo(function PackageRow({
             </Link>
           </h3>
           <span className="row-owner">{listIdentity.sourceLabel}</span>
+          {badge ? <span className="row-badge">{badge}</span> : null}
           {expandable ? (
             // Stars, growth and activity are repository facts, so this row
             // stands for its whole repository. A bare "+23" told the reader a
@@ -221,39 +228,27 @@ export const PackageRow = memo(function PackageRow({
 
       {expandable ? (
         // Spans every grid column so the panel reads as part of the row rather
-        // than as a new entry in the list.
-        <div className="row-repo-panel" id={panelId} hidden={!expanded}>
-          <ul>
-            {siblings.map((sibling) => {
-              const identity = pluginListIdentity(sibling)
-              const isSeat = sibling.id === plugin.id
-              // Until a plugin has copy of its own it inherits the repository
-              // blurb, so printing it here would repeat the row above once per
-              // sibling and differentiate nothing.
-              const ownDescription = sibling.description[language] !== plugin.description[language]
-                ? sibling.description[language]
-                : ''
-              return (
-                <li key={sibling.id} className={isSeat ? 'is-seat' : undefined}>
-                  <Link
-                    to={packagePath(sibling)}
-                    target={ROW_LINK_TARGET}
-                    rel={ROW_LINK_TARGET ? 'noreferrer' : undefined}
-                  >
-                    {identity.displayName}
-                  </Link>
-                  {isSeat ? <span className="repo-seat-tag">{t('repoThisSeat')}</span> : null}
-                  {ownDescription ? (
-                    <span className="repo-plugin-desc">{ownDescription}</span>
-                  ) : null}
-                </li>
-              )
-            })}
-          </ul>
-          <Link className="row-repo-browse" to={`/plugins?q=${encodeURIComponent(plugin.repository)}`}>
-            {t('repoBrowseAll')}
-            <ArrowUpRight size={13} aria-hidden="true" />
-          </Link>
+        // than as a new entry in the list. The children are plain catalog rows:
+        // the reader already knows how to read one, and it is the only rendering
+        // that gives them the category, the metrics and the install button.
+        <div
+          className="row-repo-panel"
+          id={panelId}
+          hidden={!expanded}
+          // A click inside the panel belongs to the plugin it landed on, never
+          // to the seat's toggle.
+          onClick={(event) => event.stopPropagation()}
+        >
+          {siblings.map((sibling, position) => (
+            <PackageRow
+              key={sibling.id}
+              plugin={sibling}
+              category={categories?.get(sibling.category)}
+              index={position}
+              categories={categories}
+              badge={sibling.id === plugin.id ? t('repoThisSeat') : undefined}
+            />
+          ))}
         </div>
       ) : null}
     </article>
