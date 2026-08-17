@@ -870,6 +870,15 @@ try {
     '.install-options .icon-button',
     '.site-bottom-link a',
   ])
+  // Entered by direct URL, so nothing on this site preceded it: the control has
+  // to stay a real link to the catalog rather than a dead history step.
+  const backControl = await scoped.locator('.back-link').evaluate((node) => ({
+    href: node.getAttribute('href'),
+    tag: node.tagName,
+  }))
+  if (backControl.tag !== 'A' || backControl.href !== '/plugins') {
+    throw new Error(`directly opened detail page has no catalog fallback: ${JSON.stringify(backControl)}`)
+  }
   await assertMinFontSize(scoped, 'mobile detail prose', '.detail-description', 15)
   await assertMinFontSize(scoped, 'mobile README prose', '.markdown-body', 15)
   await assertMinFontSize(scoped, 'mobile package facts', '.package-facts dd', 13)

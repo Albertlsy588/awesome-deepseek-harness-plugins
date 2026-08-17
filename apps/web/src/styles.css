@@ -2078,15 +2078,21 @@ main {
   padding-bottom: 72px;
 }
 
+/* Rendered as a link when the catalog is the only place to go, and as a button
+   when there is real history to step back through, so both need the styling. */
 .back-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   margin-bottom: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 650;
+  cursor: pointer;
 }
 
 .back-link:hover {

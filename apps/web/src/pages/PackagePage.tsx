@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
 import { CategoryTag } from '../components/CategoryTag'
 import { InstallMethods } from '../components/InstallMethods'
@@ -45,6 +45,11 @@ export function PackagePage() {
   // Splat route: the id is owner plus every remaining segment, which is how a
   // monorepo subpackage (owner/repo/packages/foo) addresses its detail page.
   const { owner = '', '*': rest = '' } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  // React Router stamps the first entry of a tab's history with key 'default',
+  // which is exactly "nothing on this site preceded this page".
+  const cameFromSite = location.key !== 'default'
   const requestedId = [owner, ...rest.split('/')].filter(Boolean).join('/')
   const { language, t } = useI18n()
   const [detail, setDetail] = useState<PackageDetail | null>(null)
@@ -205,10 +210,22 @@ export function PackagePage() {
         <LanguageSwitch />
       </div>
 
-      <Link className="back-link" to="/plugins">
-        <ArrowLeft size={16} aria-hidden="true" />
-        {t('back')}
-      </Link>
+      {/* Back means the page the reader came from — the rankings, a search, a
+          repository they had expanded — not always the catalog. Rows open in a
+          new tab by default, and a detail page can also be entered from a link
+          or a search engine; in those tabs there is no in-app history to
+          return to, so the control stays a plain link to the catalog. */}
+      {cameFromSite ? (
+        <button type="button" className="back-link" onClick={() => navigate(-1)}>
+          <ArrowLeft size={16} aria-hidden="true" />
+          {t('backToPrevious')}
+        </button>
+      ) : (
+        <Link className="back-link" to="/plugins">
+          <ArrowLeft size={16} aria-hidden="true" />
+          {t('back')}
+        </Link>
+      )}
 
       <section className="detail-header">
         <OwnerAvatar
