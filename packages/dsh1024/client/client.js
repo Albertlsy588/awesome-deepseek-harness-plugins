@@ -13,7 +13,7 @@ const zh = {
   discover: '发现', installed: '已安装', all: '全部', search: '搜索名称、作者或功能…',
   popular: '热门', newest: '最新', install: '安装', installing: '安装中…',
   remove: '卸载', removing: '卸载中…', source: '源码', empty: '没有匹配的插件',
-  more: '加载更多',
+  more: '加载更多', expand: '展开全部分类', collapse: '收起分类',
   loading: '正在加载插件目录…', loadFailed: '目录加载失败，请稍后重试。',
   confirmInstall: '这是社区第三方代码。确认信任来源并安装',
   confirmRemove: '确认卸载', restart: '项变更已完成，重启 DeepSeek Harness 后生效。',
@@ -27,7 +27,7 @@ const en = {
   discover: 'Discover', installed: 'Installed', all: 'All', search: 'Search by name, owner, or capability…',
   popular: 'Popular', newest: 'Newest', install: 'Install', installing: 'Installing…',
   remove: 'Uninstall', removing: 'Removing…', source: 'Source', empty: 'No matching plugins',
-  more: 'Load more',
+  more: 'Load more', expand: 'Show all categories', collapse: 'Show fewer categories',
   loading: 'Loading the plugin catalog…', loadFailed: 'The catalog could not be loaded. Try again later.',
   confirmInstall: 'This is third-party community code. Trust this source and install',
   confirmRemove: 'Uninstall', restart: 'change(s) completed. Restart DeepSeek Harness to apply them.',
@@ -59,7 +59,14 @@ const CSS = `
 .dsm-update-link{color:inherit;font-weight:700;margin-left:auto;white-space:nowrap}
 .dsm-error{background:color-mix(in srgb,var(--dsw-alias-state-error-secondary) 14%,var(--dsw-alias-bg-layer-1));border:1px solid color-mix(in srgb,var(--dsw-alias-state-error-secondary) 42%,transparent);border-radius:10px;color:var(--dsw-alias-state-error-primary);font-size:13px;padding:10px 12px;white-space:pre-wrap;word-break:break-word}
 .dsm-toolbar{display:flex;flex-direction:column;gap:10px}.dsm-search{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l3);border-radius:10px;color:inherit;font:inherit;min-height:42px;padding:0 13px;width:100%}
-.dsm-row{align-items:center;display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}.dsm-row::-webkit-scrollbar{display:none}.dsm-row-spacer{flex:1 0 12px}
+.dsm-row{align-items:center;display:flex;gap:8px}.dsm-row-spacer{flex:1 0 12px}
+/* 分类不再横向滚动:本体 Pill 几何(h24 / 12px / gap6)整片铺开,默认最多 3 行,
+   超出才出现展开按钮。564px 面板下是 3 行 84px,按钮不出现。 */
+.dsm-cats{display:flex;flex-wrap:wrap;gap:6px}
+.dsm-cats[data-clamped=true]{max-height:84px;overflow:hidden}
+.dsm-cat{appearance:none;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l3);border-radius:999px;color:inherit;cursor:pointer;font:inherit;font-size:12px;height:24px;line-height:1;padding:0 12px;white-space:nowrap}
+.dsm-cat[data-active=true]{background:var(--dsw-alias-button-ghost-active-fill);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);font-weight:650}
+.dsm-cats-toggle{align-self:flex-start;background:none;border:0;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;padding:2px 0;text-decoration:underline}
 .dsm-chip,.dsm-action{appearance:none;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l3);border-radius:9px;color:inherit;cursor:pointer;font:inherit;font-size:13px;min-height:38px;padding:7px 12px;white-space:nowrap}
 .dsm-chip[data-active=true]{background:var(--dsw-alias-button-ghost-active-fill);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);font-weight:650}
 .dsm-action{background:var(--dsw-alias-brand-primary);border-color:transparent;color:var(--dsw-alias-label-primary-foreground);font-weight:650}.dsm-action[data-kind=remove]{background:transparent;border-color:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary)}
@@ -72,18 +79,33 @@ const CSS = `
 .dsm-card-foot{align-items:center;display:flex;gap:8px;margin-top:auto}.dsm-category{background:var(--dsw-alias-bg-layer-2);border-radius:999px;color:var(--dsw-alias-label-secondary);font-size:11px;max-width:55%;overflow:hidden;padding:4px 8px;text-overflow:ellipsis;white-space:nowrap}.dsm-grow{flex:1}
 .dsm-state{align-items:center;color:var(--dsw-alias-label-secondary);display:flex;font-size:13px;gap:8px;justify-content:center;min-height:140px;text-align:center}.dsm-spin{animation:dsm-spin .8s linear infinite;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;height:15px;width:15px}@keyframes dsm-spin{to{transform:rotate(360deg)}}
 .dsm-more{display:flex;justify-content:center;padding:4px 0 8px}
-@media(max-width:640px){.dsm-root{gap:12px}.dsm-meta{width:100%}.dsm-row{margin-left:-2px;margin-right:-2px}.dsm-grid{grid-template-columns:1fr}.dsm-card{padding:12px}.dsm-action,.dsm-chip{min-height:42px}.dsm-source{padding:5px 0}}
-@container(max-width:360px){.dsm-head{display:block}.dsm-brand h3{font-size:18px}.dsm-meta{align-items:flex-start;flex-direction:column;margin-top:8px;width:auto}.dsm-pill{display:block}.dsm-card{position:relative}.dsm-card-head{display:block;padding-right:18px}.dsm-avatar{display:none}.dsm-source{font-size:0;margin:0;padding:6px;position:absolute;right:5px;top:4px}.dsm-source:after{content:'↗';font-size:15px}.dsm-name{font-size:13px;overflow-wrap:break-word}.dsm-desc,.dsm-category{display:none}.dsm-card-foot{display:block}.dsm-action{margin-top:2px;width:100%}.dsm-row-spacer{display:none}}
-@container(max-width:180px){.dsm-root{gap:8px}.dsm-brand p{display:none}.dsm-meta{gap:3px;margin-top:5px}.dsm-pill{background:transparent;font-size:11px;padding:0 8px}.dsm-toolbar{gap:6px}.dsm-search{font-size:11px;min-height:34px;padding:0 9px}.dsm-row{gap:5px}.dsm-chip,.dsm-action{font-size:11px;min-height:34px;padding:5px 9px}.dsm-card{gap:6px;padding:8px}.dsm-card-head{padding-right:0}.dsm-source{display:none}.dsm-name,.dsm-owner{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsm-name{font-size:12px}.dsm-owner{font-size:11px}.dsm-card-foot{margin-top:0}.dsm-action{margin-top:0}.dsm-more{padding-top:0}}
+@media(max-width:640px){.dsm-root{gap:12px}.dsm-meta{width:100%}.dsm-grid{grid-template-columns:1fr}.dsm-card{padding:12px}.dsm-action,.dsm-chip{min-height:42px}.dsm-source{padding:5px 0}}
+@container(max-width:360px){.dsm-head{display:block}.dsm-brand h3{font-size:18px}.dsm-meta{align-items:flex-start;flex-direction:column;margin-top:8px;width:auto}.dsm-pill{display:block}.dsm-card{position:relative}.dsm-card-head{display:block;padding-right:18px}.dsm-avatar{display:none}.dsm-source{font-size:0;margin:0;padding:6px;position:absolute;right:5px;top:4px}.dsm-source:after{content:'↗';font-size:15px}.dsm-name{font-size:13px;overflow-wrap:break-word}.dsm-desc,.dsm-category{display:none}.dsm-card-foot{display:block}.dsm-action{margin-top:2px;width:100%}.dsm-row-spacer{display:none}.dsm-cats[data-clamped=true]{max-height:112px}}
+@container(max-width:180px){.dsm-root{gap:8px}.dsm-brand p{display:none}.dsm-meta{gap:3px;margin-top:5px}.dsm-pill{background:transparent;font-size:11px;padding:0 8px}.dsm-toolbar{gap:6px}.dsm-cats{gap:4px}.dsm-cat{font-size:11px;padding:0 9px}.dsm-search{font-size:11px;min-height:34px;padding:0 9px}.dsm-row{gap:5px}.dsm-chip,.dsm-action{font-size:11px;min-height:34px;padding:5px 9px}.dsm-card{gap:6px;padding:8px}.dsm-card-head{padding-right:0}.dsm-source{display:none}.dsm-name,.dsm-owner{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsm-name{font-size:12px}.dsm-owner{font-size:11px}.dsm-card-foot{margin-top:0}.dsm-action{margin-top:0}.dsm-more{padding-top:0}}
 `
 
+/**
+ * 注入面板样式。
+ *
+ * 两件事必须这样做:
+ * 1. 打上 data-plugin / data-plugin-css。宿主的 claimStyles 会把页面上任何
+ *    未打标的 <style> 认领给「当时正在物化的插件」,那个插件热更新卸载时会
+ *    把我们的样式一并删掉。打标之后这块样式明确归我们。
+ * 2. 在 factory 体顶层调用,而不是等面板挂载。侧边栏入口在面板从未打开过时
+ *    也要有样式,放进组件的 effect 里那会儿它已经是裸的了。
+ */
 function injectStyles() {
-  if (document.getElementById('dsh1024-style')) return
+  if (typeof document === 'undefined') return
+  if (document.getElementById('dsh1024-style') !== null) return
   const style = document.createElement('style')
   style.id = 'dsh1024-style'
+  style.setAttribute('data-plugin', NS)
+  style.setAttribute('data-plugin-css', NS)
   style.textContent = CSS
   document.head.appendChild(style)
 }
+
+injectStyles()
 
 function repositoryOf(url) {
   const match = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/?$/.exec(url)
@@ -153,6 +175,10 @@ function MarketTab({ locale }) {
   const [loadFailed, setLoadFailed] = useState(false)
   const [restartChanges, setRestartChanges] = useState(0)
   const [visibleCount, setVisibleCount] = useState(40)
+  // 分类整片铺开,只有真的超过三行才给展开兜底(564px 面板下不会出现)。
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false)
+  const [categoriesOverflow, setCategoriesOverflow] = useState(false)
+  const catsRef = useRef(null)
 
   const refreshInstalled = useCallback(() => {
     return fetch('/dsh1024/installed', { cache: 'no-store' })
@@ -210,7 +236,18 @@ function MarketTab({ locale }) {
       .finally(() => { revalidating.current = false })
   }, [])
 
-  useEffect(() => { injectStyles(); load().then(revalidate) }, [load, revalidate])
+  useEffect(() => { load().then(revalidate) }, [load, revalidate])
+
+  // 面板宽度和分类数量都会变,用 ResizeObserver 判断是否真的溢出三行。
+  useEffect(() => {
+    const node = catsRef.current
+    if (node === null || typeof ResizeObserver === 'undefined') return undefined
+    const measure = () => setCategoriesOverflow(node.scrollHeight > node.clientHeight + 1)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [categories, categoriesExpanded, registry])
 
   // Coming back to a panel that has been sitting open for hours should not show
   // an hours-old catalog either.
@@ -355,12 +392,16 @@ function MarketTab({ locale }) {
         h('span', { className: 'dsm-row-spacer' }),
         h('button', { className: 'dsm-chip', type: 'button', 'data-active': sort === 'popular', onClick: () => setSort('popular') }, copy.popular),
         h('button', { className: 'dsm-chip', type: 'button', 'data-active': sort === 'newest', onClick: () => setSort('newest') }, copy.newest)),
-      h('div', { className: 'dsm-row' },
-        h('button', { className: 'dsm-chip', type: 'button', 'data-active': category === 'all', onClick: () => setCategory('all') }, copy.all),
+      h('div', { className: 'dsm-cats', ref: catsRef, 'data-clamped': !categoriesExpanded },
+        h('button', { className: 'dsm-cat', type: 'button', 'data-active': category === 'all', onClick: () => setCategory('all') }, copy.all),
         categories.map(id => h('button', {
-          className: 'dsm-chip', key: id, type: 'button', 'data-active': category === id,
+          className: 'dsm-cat', key: id, type: 'button', 'data-active': category === id,
           onClick: () => setCategory(id),
-        }, categoryLabels[id]?.[lang] || categoryLabels[id]?.en || id)))),
+        }, categoryLabels[id]?.[lang] || categoryLabels[id]?.en || id))),
+      categoriesOverflow && h('button', {
+        className: 'dsm-cats-toggle', type: 'button',
+        onClick: () => setCategoriesExpanded(value => !value),
+      }, categoriesExpanded ? copy.collapse : copy.expand)),
     loadFailed
       ? h('div', { className: 'dsm-state' }, h('span', null, copy.loadFailed, ' ',
           h('button', { className: 'dsm-chip', type: 'button', onClick: load }, copy.retry)))
