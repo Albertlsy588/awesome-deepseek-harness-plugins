@@ -8,7 +8,7 @@ import type {
 import { categoryLabelMap } from './categories'
 import { loadCatalogSnapshotFromD1, saveCatalogMetrics } from './catalog-db'
 import { fetchGitHubMetrics, metricKey } from './github-metrics'
-import { normalizePluginId } from './plugin-id'
+import { normalizePluginId } from '@dsh-1024store/core/plugin-id'
 import { emptyInstallMetrics, loadInstallMetrics } from './install-metrics'
 import { updateStarHistory } from './star-history'
 

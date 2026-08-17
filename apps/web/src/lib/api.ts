@@ -4,7 +4,7 @@ import {
   parsePluginId,
   pluginDetailPath,
   pluginInstallSpec,
-} from '../../worker/lib/plugin-id'
+} from '@dsh-1024store/core/plugin-id'
 
 export type Language = 'en' | 'zh'
 

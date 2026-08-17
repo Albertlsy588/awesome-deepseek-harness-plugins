@@ -25,7 +25,7 @@ is the single place that decides which is which; `apps/web/tests/public-api.test
 
 That host exists for third-party consumers, and its one substantive endpoint is metered
 independently of the site. `/v1/plugins/search` enforces a per-caller quota — `ANONYMOUS_QUOTA`
-and `AUTHENTICATED_QUOTA` in `apps/web/worker/lib/api-quota.ts`, counters kept in D1 through
+and `AUTHENTICATED_QUOTA` in `packages/dsh-core/src/api-quota.ts`, counters kept in D1 through
 `consumeQuota`: 10/min and 50/day anonymous, 30/min and 500/day with a key. Anonymous callers are
 keyed by `ip:<HMAC of CF-Connecting-IP>` so the raw address never reaches D1; authenticated callers
 are keyed by `user:<id>` and not by key id, so rotating or minting keys cannot open a fresh window.
@@ -68,6 +68,57 @@ npm run deploy
 ```
 
 Extend `apps/web/tests/public-api.test.ts` whenever you change which host serves what.
+
+## Two Workers, one database, one sign-in
+
+`apps/web` and `apps/community` are separate Workers on separate hostnames, bound to the **same**
+D1. The community never runs an OAuth exchange: a GitHub OAuth App accepts exactly one callback
+URL, and that URL belongs to `deepseek1024.com`. So sign-in always happens on the main site, and
+the session it issues is readable on both hosts.
+
+That works because of three things, all of which live in `packages/dsh-core/src/auth.ts`:
+
+1. **The session cookie carries `Domain=deepseek1024.com`** (`sessionCookieDomain`), so the
+   subdomain receives it. On localhost the attribute is omitted — a bare hostname cannot carry
+   one — which is harmless, because cookies are not isolated by port and a session minted at
+   `localhost:5641` already reaches a dev server on another port.
+2. **`sanitizeReturnTo` has a hardcoded cross-site allow-list** (`CROSS_SITE_RETURN_HOSTS`). It is
+   deliberately not configurable: an environment variable there is one typo away from an open
+   redirect. A same-site path still returns unchanged; a loopback peer is allowed only when the
+   sign-in request itself arrived on loopback.
+3. **Every `dsh_session` value is read and revoked, not just the first.** The cookie used to be
+   host-only, so a browser that signed in before the change presents *two* cookies of that name
+   and sends both. `readCookieValues` / `resolveSessionUser` / `deleteSessions` handle the set;
+   reading only the first would leave a live session row behind after sign-out — a signed-out page
+   over a live session. `apps/web/tests/auth-api.test.ts` guards this.
+
+Three ways this gets broken:
+
+1. **Adding a host to `CROSS_SITE_RETURN_HOSTS` without thinking.** Anything listed there can
+   receive a live session. Only hosts this project controls belong in it.
+2. **Reaching for `getCookie(context, SESSION_COOKIE)` again.** Hono returns the first match. Use
+   `resolveSessionUser`, or the migration hazard above comes back.
+3. **Editing `routes` in either `wrangler.jsonc`.** Each file is the authoritative binding list for
+   its own Worker. `apps/web` owns the three main hostnames; `apps/community` owns
+   `community.deepseek1024.com`. They must never overlap, and a deploy that drops an entry unbinds
+   that hostname.
+
+The community's schema lives in `apps/community/migrations/`, numbered independently — wrangler
+tracks applied migrations by filename in a shared `d1_migrations` table, and the two sets never
+collide. Ordering does matter once: community tables reference `api_users`, which the web app's
+`0004_api_accounts.sql` creates, so the root `db:migrate:local` / `db:migrate:remote` scripts run
+the web migrations first. Deploy the two Workers separately: `npm run deploy` and
+`npm run deploy:community`.
+
+There is a development-only sign-in at `/api/v1/community/dev-login`, gated on **both** a
+`COMMUNITY_DEV_LOGIN` var that exists only in git-ignored `.dev.vars` (and deliberately not in
+`wrangler.jsonc`, so no deploy can carry it) **and** a loopback hostname. Never move that flag
+into `wrangler.jsonc`.
+
+`.dev.vars` shows up in `dist/dsh_community/` after a build. That is the Vite plugin staging it for
+`vite preview`; it is not in the uploaded assets (`dist/client/`) and not in the deploy manifest
+(`dist/dsh_community/wrangler.json`), and `wrangler deploy` does not read `.dev.vars` at all.
+`apps/community/tests/deploy-config.test.ts` asserts the flag never appears in `wrangler.jsonc`.
 
 ## Responsive web support
 

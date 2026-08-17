@@ -1,5 +1,5 @@
 import type { InstallMetrics } from '../types'
-import { isPluginId, PLUGIN_ID_MAX_LENGTH } from './plugin-id'
+import { isPluginId, PLUGIN_ID_MAX_LENGTH } from '@dsh-1024store/core/plugin-id'
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
@@ -7,7 +7,7 @@ const MAX_QUERY_PLUGINS = 80
 const MAX_EVENTS_PER_CLIENT_HOUR = 120
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // owner/repository, optionally extended with a monorepo subdirectory path;
-// `.`/`..` segments are rejected by isPluginId (see lib/plugin-id.ts).
+// `.`/`..` segments are rejected by isPluginId (see @dsh-1024store/core/plugin-id).
 const PLUGIN_ID = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)*$/
 const PROFILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 const SAFE_TEXT = /^[^\u0000-\u001f\u007f]*$/

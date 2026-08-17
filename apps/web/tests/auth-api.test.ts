@@ -4,9 +4,11 @@ import { createApp } from '../worker/app'
 import {
   cleanupExpiredAuthRows,
   createSession,
+  readCookieValues,
   sanitizeReturnTo,
+  sessionCookieDomain,
   upsertGitHubUser,
-} from '../worker/lib/auth'
+} from '@dsh-1024store/core/auth'
 import { accountsDatabase, sqliteD1 } from './d1-sqlite'
 import { testCatalogResult } from './fixtures'
 
@@ -73,6 +75,44 @@ describe('sanitizeReturnTo', () => {
     expect(sanitizeReturnTo('//evil.example')).toBe('/')
     expect(sanitizeReturnTo('/\\evil.example')).toBe('/')
     expect(sanitizeReturnTo('/a\r\nSet-Cookie: x=1')).toBe('/')
+  })
+
+  it('allows the community subdomain and nothing else that looks like it', () => {
+    expect(sanitizeReturnTo('https://community.deepseek1024.com/p/12'))
+      .toBe('https://community.deepseek1024.com/p/12')
+    // Same-registrable-domain is not enough: only the listed host is allowed.
+    expect(sanitizeReturnTo('https://other.deepseek1024.com/')).toBe('/')
+    // A lookalike registered by someone else must not match on suffix.
+    expect(sanitizeReturnTo('https://community.deepseek1024.com.evil.example/')).toBe('/')
+    // Credentials in the authority are a classic way to disguise the real host.
+    expect(sanitizeReturnTo('https://community.deepseek1024.com@evil.example/')).toBe('/')
+    expect(sanitizeReturnTo('http://community.deepseek1024.com/')).toBe('/')
+  })
+
+  it('allows a loopback peer only when the sign-in itself is on loopback', () => {
+    expect(sanitizeReturnTo('http://localhost:5642/', 'http://localhost:5641/api/v1/auth/github/login'))
+      .toBe('http://localhost:5642/')
+    expect(sanitizeReturnTo('http://localhost:5642/', 'https://deepseek1024.com/api/v1/auth/github/login'))
+      .toBe('/')
+    expect(sanitizeReturnTo('https://evil.example/', 'http://localhost:5641/api/v1/auth/github/login'))
+      .toBe('/')
+  })
+})
+
+describe('session cookie scope', () => {
+  it('reads every value presented under one cookie name', () => {
+    expect(readCookieValues('dsh_session=host-only; other=1; dsh_session=domain-scoped', 'dsh_session'))
+      .toEqual(['host-only', 'domain-scoped'])
+    expect(readCookieValues('', 'dsh_session')).toEqual([])
+    expect(readCookieValues(undefined, 'dsh_session')).toEqual([])
+    expect(readCookieValues('dsh_session_other=x', 'dsh_session')).toEqual([])
+  })
+
+  it('scopes the cookie to the registrable domain in production only', () => {
+    expect(sessionCookieDomain('https://deepseek1024.com/api/v1/auth/me')).toBe('deepseek1024.com')
+    expect(sessionCookieDomain('https://community.deepseek1024.com/x')).toBe('deepseek1024.com')
+    expect(sessionCookieDomain('http://localhost:5641/x')).toBeUndefined()
+    expect(sessionCookieDomain('https://deepseek1024.com.evil.example/x')).toBeUndefined()
   })
 })
 
@@ -179,6 +219,64 @@ describe('GitHub OAuth flow', () => {
 
     const after = await app.request(`${ORIGIN}/api/v1/auth/me`, { headers: { Cookie: cookie } }, env)
     await expect(after.json()).resolves.toEqual({ user: null })
+    database.close()
+  })
+
+  it('revokes every session a mid-migration browser presents', async () => {
+    // Two cookies named dsh_session: the host-only one issued before the cookie
+    // gained a Domain, and the Domain-scoped one issued after. Both are sent.
+    const database = accountsDatabase()
+    const app = authApp()
+    const env = authEnv(database)
+    const first = await signedInCookie(database)
+    const second = await signedInCookie(database)
+    const both = `${first}; ${second}`
+
+    const me = await app.request(`${ORIGIN}/api/v1/auth/me`, { headers: { Cookie: both } }, env)
+    await expect(me.json()).resolves.toEqual({
+      user: { githubLogin: 'octocat', githubName: 'Octo Cat', avatarUrl: null },
+    })
+
+    const logout = await app.request(
+      `${ORIGIN}/api/v1/auth/logout`,
+      { method: 'POST', headers: { Cookie: both, Origin: ORIGIN } },
+      env,
+    )
+    expect(logout.status).toBe(200)
+    // Both rows gone: leaving the second one live is a signed-out page over a
+    // live session.
+    expect(database.prepare('SELECT COUNT(*) AS session_count FROM api_sessions').get())
+      .toEqual({ session_count: 0 })
+    const after = await app.request(`${ORIGIN}/api/v1/auth/me`, { headers: { Cookie: both } }, env)
+    await expect(after.json()).resolves.toEqual({ user: null })
+    database.close()
+  })
+
+  it('expires the host-only cookie when it issues the Domain-scoped one', async () => {
+    const database = accountsDatabase()
+    const app = authApp()
+    const env = authEnv(database)
+    const login = await app.request(
+      'https://deepseek1024.com/api/v1/auth/github/login?returnTo=https%3A%2F%2Fcommunity.deepseek1024.com%2F',
+      {},
+      env,
+    )
+    const stateCookie = setCookieValue(login, 'dsh_oauth_state')!
+    const state = decodeURIComponent(stateCookie).split(':', 1)[0]
+    const callback = await app.request(
+      `https://deepseek1024.com/api/v1/auth/github/callback?code=abc&state=${state}`,
+      { headers: { Cookie: `dsh_oauth_state=${stateCookie}` } },
+      env,
+    )
+
+    expect(callback.headers.get('Location')).toBe('https://community.deepseek1024.com/')
+    const sessionCookies = callback.headers.getSetCookie().filter((c) => c.startsWith('dsh_session='))
+    expect(sessionCookies).toHaveLength(2)
+    expect(sessionCookies[0]).toMatch(/^dsh_session=;/)
+    expect(sessionCookies[0]).not.toMatch(/Domain=/i)
+    expect(sessionCookies[1]).toMatch(/Domain=deepseek1024\.com/i)
+    expect(sessionCookies[1]).toMatch(/HttpOnly/i)
+    expect(sessionCookies[1]).toMatch(/Secure/i)
     database.close()
   })
 

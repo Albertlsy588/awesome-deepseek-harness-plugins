@@ -13,7 +13,7 @@
  * cross-checked by tests/install-methods.test.ts.
  */
 
-import { parsePluginId, pluginInstallSpec, pluginRepositoryFullName } from './plugin-id'
+import { parsePluginId, pluginInstallSpec, pluginRepositoryFullName } from '@dsh-1024store/core/plugin-id'
 
 export type InstallMethodKind = 'github' | 'npm'
 

@@ -1,5 +1,5 @@
 import { createApp } from './app'
-import { cleanupExpiredAuthRows } from './lib/auth'
+import { cleanupExpiredAuthRows } from '@dsh-1024store/core/auth'
 import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
 import { runPluginClassifyTask } from './lib/plugin-classify-task'
 import { runPluginDiscoveryTask } from './lib/plugin-discovery-task'

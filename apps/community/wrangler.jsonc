@@ -1,0 +1,44 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dsh-community",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-08-14",
+  "compatibility_flags": ["nodejs_compat"],
+  // 只有社区自己的域名。主站那三条 custom domain 归 apps/web/wrangler.jsonc 管，
+  // 两个 Worker 的 routes 互不重叠,所以部署社区不可能解绑主站的域名。
+  "routes": [
+    {
+      "pattern": "community.deepseek1024.com",
+      "custom_domain": true
+    }
+  ],
+  // 和主站同一个 D1：作者就是 api_users,会话就是 api_sessions,
+  // 插件引用直接读 catalog_plugins。社区不复制任何一份用户数据。
+  "d1_databases": [
+    {
+      "binding": "CATALOG_DB",
+      "database_name": "dsh-store-star-history",
+      "database_id": "57006b9f-17e1-466f-b941-71c35cbff092",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    // 逗号分隔的 GitHub login,可以删任何人的内容。留空表示只有作者能删自己的。
+    "COMMUNITY_ADMIN_LOGINS": ""
+  },
+  "limits": {
+    "cpu_ms": 30000
+  },
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    }
+  }
+}

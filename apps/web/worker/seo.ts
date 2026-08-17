@@ -1,5 +1,5 @@
 import { comparePlugins, findPluginById, findPluginsUnder, hasGrowthForSort, repositoryName } from './lib/catalog'
-import { pluginDetailPath, pluginSourceUrl } from './lib/plugin-id'
+import { pluginDetailPath, pluginSourceUrl } from '@dsh-1024store/core/plugin-id'
 import {
   renderCollectionShell,
   renderNotFoundShell,

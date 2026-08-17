@@ -1,4 +1,4 @@
-import { pluginDetailPath } from './lib/plugin-id'
+import { pluginDetailPath } from '@dsh-1024store/core/plugin-id'
 import type { CatalogPlugin, Language, RegistryPlugin } from './types'
 
 /**

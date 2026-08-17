@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from '../worker/app'
-import { createApiKey, revokeApiKey, upsertGitHubUser } from '../worker/lib/auth'
+import { createApiKey, revokeApiKey, upsertGitHubUser } from '@dsh-1024store/core/auth'
 import { accountsDatabase, sqliteD1 } from './d1-sqlite'
 import { testCatalogResult } from './fixtures'
 

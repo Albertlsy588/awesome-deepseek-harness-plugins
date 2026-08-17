@@ -1,3 +1,7 @@
+// Just enough of Node's shape for the test-only helpers in this directory.
+// Pulling in all of @types/node would put Node globals in scope for Worker
+// code, where they do not exist; both apps list this file in their worker
+// tsconfig include instead.
 declare module 'node:fs' {
   export function readFileSync(path: URL, encoding: 'utf8'): string
 }
