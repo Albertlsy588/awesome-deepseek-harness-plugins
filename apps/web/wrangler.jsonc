@@ -82,6 +82,18 @@
     "run_worker_first": true
   },
   "observability": {
-    "enabled": false
+    "enabled": true,
+    // 2000 万事件/月含在套餐内，本站量级远低于此，所以采样不是为了省钱，
+    // 是为了在量级上来之后不用回头再调。1% 足够看出系统性故障——审核
+    // 分类器挂掉时 100% 的发帖都会失败，抽 1% 也照样看得见。
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    },
+    // traces 和 logs 共用同一份配额，而这个站的排障靠的是结构化日志，
+    // 不是分布式追踪。
+    "traces": {
+      "enabled": false
+    }
   }
 }
