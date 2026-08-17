@@ -1315,7 +1315,7 @@ main {
   background: var(--brand-soft);
 }
 
-.ranking-list .ranking-row:nth-child(-n + 3) .row-index {
+.ranking-list .ranking-row:nth-child(-n + 3) > .row-index {
   display: grid;
   width: 28px;
   height: 28px;
@@ -1327,7 +1327,7 @@ main {
   color: var(--brand-dark);
 }
 
-.ranking-list .ranking-row:first-child .row-index {
+.ranking-list .ranking-row:first-child > .row-index {
   border-color: var(--medal-line);
   background: var(--medal-bg);
   color: var(--medal-ink);
@@ -1340,6 +1340,16 @@ main {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: center;
+}
+
+/* A plugin inside a repository has no rank, so it gets a plain ordinal instead
+   of the board's badge — same information, unmistakably not a leaderboard. */
+.row-index.is-child {
+  color: var(--faint);
+  font-family: var(--font-body, inherit);
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.75;
 }
 
 .row-index.is-leading {
@@ -1485,6 +1495,10 @@ main {
    Only the chrome is toned down, because they sit inside another row. */
 .row-repo-panel .package-row {
   min-height: 60px;
+  /* One column fewer than the board row, and stated explicitly: the avatar
+     belongs to the repository above, and with implicit placement the name slid
+     into the vacated 36px avatar slot and truncated to three characters. */
+  grid-template-columns: 30px minmax(200px, 1fr) 120px 244px 54px 30px;
   padding-top: 6px;
   padding-bottom: 6px;
   background: var(--brand-wash);
@@ -1492,17 +1506,6 @@ main {
 
 .row-repo-panel .package-row:hover {
   background: var(--surface-hover);
-}
-
-.row-badge {
-  flex: none;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--surface-muted);
-  color: var(--muted);
-  font-size: 9px;
-  line-height: 1.5;
-  white-space: nowrap;
 }
 
 
@@ -3333,7 +3336,7 @@ main {
     grid-template-columns: 42px 42px minmax(360px, 1fr) 130px 272px 54px 34px;
   }
 
-  .ranking-list .ranking-row:nth-child(-n + 3) .row-index {
+  .ranking-list .ranking-row:nth-child(-n + 3) > .row-index {
     width: 32px;
     height: 32px;
   }

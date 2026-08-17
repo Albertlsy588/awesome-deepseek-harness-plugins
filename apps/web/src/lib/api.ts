@@ -205,6 +205,22 @@ export function pluginListIdentity(
   }
 }
 
+/**
+ * The plugin a repository row may offer an install command for.
+ *
+ * `dsh plugin add github:owner/repo` installs the repository root and nothing
+ * else, so the command only exists when the repository publishes a bundle
+ * there. A repository whose plugins all live in subdirectories has no command
+ * of its own — each subdirectory carries its own, with its `#path:` — and
+ * offering one anyway would hand the reader something that installs the wrong
+ * thing.
+ */
+export function repositoryInstallTarget<T extends Pick<RegistryPlugin, 'id'>>(
+  plugins: readonly T[],
+): T | undefined {
+  return plugins.find((plugin) => parsePluginId(plugin.id)?.path === '')
+}
+
 export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): string {
   try {
     const segments = new URL(plugin.url).pathname.split('/').filter(Boolean)

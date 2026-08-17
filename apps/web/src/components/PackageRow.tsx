@@ -11,7 +11,7 @@ import {
 import { memo, useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
-import { packagePath, pluginListIdentity } from '../lib/api'
+import { packagePath, pluginListIdentity, repositoryInstallTarget } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { ROW_LINK_TARGET } from '../lib/link-target'
@@ -24,8 +24,10 @@ interface PackageRowProps {
   category?: CategoryResult
   index: number
   ranking?: RankingMode
-  /** Small tag beside the name, e.g. marking the seat inside its own panel. */
-  badge?: string
+  /** Rendered inside a repository's expanded panel rather than on the board. */
+  child?: boolean
+  /** The repository blurb, so a child can tell whether it has copy of its own. */
+  repositoryDescription?: string
   /** Resolves a category id for the rows rendered inside an expanded panel. */
   categories?: Map<string, CategoryResult>
   /**
@@ -44,7 +46,8 @@ export const PackageRow = memo(function PackageRow({
   category,
   index,
   ranking,
-  badge,
+  child,
+  repositoryDescription,
   categories,
   repositoryPlugins,
 }: PackageRowProps) {
@@ -75,7 +78,21 @@ export const PackageRow = memo(function PackageRow({
   // Only the repository-level boards collapse, so this is zero everywhere else.
   const collapsed = ranking ? (plugin as { repositorySiblings?: number }).repositorySiblings ?? 0 : 0
   const siblings = collapsed > 0 ? repositoryPlugins ?? [] : []
-  const expandable = siblings.length > 1
+  /**
+   * This row is a repository rather than one of its plugins.
+   *
+   * Every number on it — stars, growth, last push — was fetched per repository
+   * and is shared by all of them, so the row can only honestly claim the
+   * repository. Which also settles what belongs on it: repository facts once
+   * here, plugin facts once per plugin in the panel.
+   */
+  const isRepository = siblings.length > 1
+  const installableRoot = isRepository ? repositoryInstallTarget(siblings) : undefined
+  // A child inherits the repository blurb until it earns copy of its own, and
+  // repeating one sentence down the whole panel differentiates nothing.
+  const ownDescription = child && plugin.description[language] === repositoryDescription
+    ? ''
+    : plugin.description[language]
   const relevantDate = ranking === 'active'
     ? plugin.pushedAt
     : ranking === 'newest'
@@ -85,7 +102,7 @@ export const PackageRow = memo(function PackageRow({
 
   return (
     <article
-      className={`package-row${ranking ? ' ranking-row' : ''}${expandable ? ' is-expandable' : ''}${
+      className={`package-row${ranking ? ' ranking-row' : ''}${isRepository ? ' is-expandable' : ''}${
         expanded ? ' is-expanded' : ''
       }`}
       // A seat that stands for a whole repository opens that repository rather
@@ -93,36 +110,51 @@ export const PackageRow = memo(function PackageRow({
       // `.is-expandable .row-link::after` in styles.css) and the row toggles.
       // Anything the reader can actually click keeps doing its own job; the
       // toggle button below is what makes this reachable from the keyboard.
-      onClick={expandable
+      onClick={isRepository
         ? (event) => {
             if ((event.target as HTMLElement).closest('a, button')) return
             setExpanded((value) => !value)
           }
         : undefined}
     >
-      <span className={`row-index${index < 3 && ranking ? ' is-leading' : ''}`} aria-label={`${t('rank')} ${index + 1}`}>
-        {String(index + 1).padStart(2, '0')}
-      </span>
+      {child ? (
+        // Deliberately not the board's zero-padded rank badge: a plugin inside a
+        // repository has no rank, and reusing the badge made the panel look like
+        // a second leaderboard.
+        <span className="row-index is-child" aria-hidden="true">{index + 1}</span>
+      ) : (
+        <span className={`row-index${index < 3 && ranking ? ' is-leading' : ''}`} aria-label={`${t('rank')} ${index + 1}`}>
+          {String(index + 1).padStart(2, '0')}
+        </span>
+      )}
 
-      <OwnerAvatar owner={plugin.owner} size={36} className="owner-avatar" />
+      {child ? null : <OwnerAvatar owner={plugin.owner} size={36} className="owner-avatar" />}
 
       <div className="row-identity">
         <div className="row-title-line">
           {/* The plugin name is the link text: a row-wide overlay anchor gave
-              every one of ~2,900 catalog links the same boilerplate label. */}
+              every one of ~2,900 catalog links the same boilerplate label. A
+              repository row is not a link at all — it opens its panel. */}
           <h3 className="row-title">
-            <Link
-              className="row-link"
-              to={packagePath(plugin)}
-              target={ROW_LINK_TARGET}
-              rel={ROW_LINK_TARGET ? 'noreferrer' : undefined}
-            >
-              {listIdentity.displayName}
-            </Link>
+            {isRepository ? plugin.repository : (
+              <Link
+                className="row-link"
+                to={packagePath(plugin)}
+                target={ROW_LINK_TARGET}
+                rel={ROW_LINK_TARGET ? 'noreferrer' : undefined}
+              >
+                {listIdentity.displayName}
+              </Link>
+            )}
           </h3>
-          <span className="row-owner">{listIdentity.sourceLabel}</span>
-          {badge ? <span className="row-badge">{badge}</span> : null}
-          {expandable ? (
+          {/* A child says nothing about its owner or repository: both are on the
+              repository row directly above it, identically, once. */}
+          {child ? null : (
+            <span className="row-owner">
+              {isRepository ? plugin.owner : listIdentity.sourceLabel}
+            </span>
+          )}
+          {isRepository ? (
             // Stars, growth and activity are repository facts, so this row
             // stands for its whole repository. A bare "+23" told the reader a
             // number but not what it meant or that anything could be done with
@@ -141,10 +173,10 @@ export const PackageRow = memo(function PackageRow({
             </button>
           ) : null}
         </div>
-        <p>{plugin.description[language]}</p>
+        {ownDescription ? <p>{ownDescription}</p> : null}
       </div>
 
-      <CategoryTag category={category} />
+      {isRepository ? <span /> : <CategoryTag category={category} />}
 
       <div className="row-metrics">
         {isInstallRanking ? (
@@ -200,13 +232,16 @@ export const PackageRow = memo(function PackageRow({
             {formatNumber(plugin.installerCount ?? 0, language)}
           </span>
         )}
-        {!ranking && (
+        {/* Stars and the last push are repository facts, printed once on the
+            repository row. Repeating them down the panel filled two columns with
+            the same number and read as if each plugin had earned it. */}
+        {!ranking && !child && (
           <span className="catalog-star-metric" title={t('stars')}>
             <Star size={14} aria-hidden="true" />
             {plugin.stars === null ? '--' : formatNumber(plugin.stars, language)}
           </span>
         )}
-        {!isGrowthRanking && !isInstallRanking && (
+        {!isGrowthRanking && !isInstallRanking && !child && (
           <span
             className="date-metric"
             title={ranking === 'newest' ? t('latestRelease') : t('lastPush')}
@@ -217,16 +252,24 @@ export const PackageRow = memo(function PackageRow({
         )}
       </div>
 
-      <SplitInstallButton plugin={plugin} />
+      {isRepository
+        ? installableRoot === undefined
+          // Nothing to copy: this repository publishes only subdirectories, and
+          // each of them offers its own command inside the panel.
+          ? <span />
+          : <SplitInstallButton plugin={installableRoot} />
+        : <SplitInstallButton plugin={plugin} />}
 
-      <span
-        className="row-open"
-        aria-hidden="true"
-      >
-        <ArrowUpRight size={17} aria-hidden="true" />
-      </span>
+      {isRepository ? <span /> : (
+        <span
+          className="row-open"
+          aria-hidden="true"
+        >
+          <ArrowUpRight size={17} aria-hidden="true" />
+        </span>
+      )}
 
-      {expandable ? (
+      {isRepository ? (
         // Spans every grid column so the panel reads as part of the row rather
         // than as a new entry in the list. The children are plain catalog rows:
         // the reader already knows how to read one, and it is the only rendering
@@ -246,7 +289,8 @@ export const PackageRow = memo(function PackageRow({
               category={categories?.get(sibling.category)}
               index={position}
               categories={categories}
-              badge={sibling.id === plugin.id ? t('repoThisSeat') : undefined}
+              child
+              repositoryDescription={plugin.description[language]}
             />
           ))}
         </div>
