@@ -13,6 +13,16 @@ type Loader = (cursor: string | null) => Promise<{ posts: Post[]; nextCursor: st
 const INITIAL: FeedState = { posts: [], cursor: null, status: 'loading', loadingMore: false }
 
 /**
+ * Last page rendered per list, kept for the life of the tab.
+ *
+ * The catalog does the same thing (`getCachedCatalog`) and that is why moving
+ * between site pages is seamless: a remount paints the previous answer
+ * immediately and refreshes behind it. Without this the community remounted
+ * empty on every visit, flashed a loading row, then jumped to full height.
+ */
+const lastRendered = new Map<string, { posts: Post[]; cursor: string | null }>()
+
+/**
  * A paged list of posts with local edits applied in place.
  *
  * Liking or deleting inside a feed must not refetch the page — that would jump
@@ -20,7 +30,10 @@ const INITIAL: FeedState = { posts: [], cursor: null, status: 'loading', loading
  * list and exposes surgical edits instead of a reload.
  */
 export function useFeed(load: Loader, resetKey: string) {
-  const [state, setState] = useState<FeedState>(INITIAL)
+  const [state, setState] = useState<FeedState>(() => {
+    const warm = lastRendered.get(resetKey)
+    return warm ? { ...warm, status: 'ready', loadingMore: false } : INITIAL
+  })
   // A mirror of the latest state, so loadMore can read the current cursor
   // without taking it as a dependency and re-creating itself on every page.
   const latest = useRef(state)
@@ -31,14 +44,18 @@ export function useFeed(load: Loader, resetKey: string) {
 
   useEffect(() => {
     let cancelled = false
-    setState(INITIAL)
+    // A warm list stays on screen while the refresh runs; only a cold one shows
+    // the loading state, so navigating back never blanks the page.
+    if (!lastRendered.has(resetKey)) setState(INITIAL)
     load(null)
       .then((page) => {
         if (cancelled) return
+        lastRendered.set(resetKey, { posts: page.posts, cursor: page.nextCursor })
         setState({ posts: page.posts, cursor: page.nextCursor, status: 'ready', loadingMore: false })
       })
       .catch(() => {
-        if (!cancelled) setState({ ...INITIAL, status: 'error' })
+        // A failed refresh keeps the last good list, like the catalog does.
+        if (!cancelled && !lastRendered.has(resetKey)) setState({ ...INITIAL, status: 'error' })
       })
     return () => { cancelled = true }
   }, [load, resetKey, reloadToken])

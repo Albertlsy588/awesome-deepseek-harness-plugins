@@ -4448,17 +4448,22 @@ main {
 @media (min-width: 1440px) {
   .floating-nav {
     flex-direction: column;
-    gap: 1px;
-    left: max(16px, calc(50% - 560px - 158px));
+    gap: 2px;
+    /* 尽量往左靠：贴到视口左缘 28px，只在余量不够时才退回内容列旁边，
+       免得它蹭着正文。内容列左缘 = 50% - 560。 */
+    left: min(28px, calc(50% - 560px - 168px));
     bottom: auto;
     top: 132px;
-    border-radius: var(--radius-xl);
-    padding: 6px;
-    width: 134px;
+    border-radius: 18px;
+    padding: 10px;
+    width: 152px;
   }
 
   .floating-nav-item {
     justify-content: flex-start;
+    gap: 9px;
+    min-height: 42px;
+    padding: 0 12px;
     border-radius: var(--radius-md);
   }
 

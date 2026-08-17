@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { LogOut, Sparkles } from 'lucide-react'
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet } from 'react-router-dom'
 import { LanguageSwitch } from '../../components/LanguageSwitch'
 import { useI18n } from '../../lib/i18n'
 import { api, type CommunityStats } from '../lib/api'
@@ -101,9 +101,10 @@ function StatsRail() {
 
 export function CommunityLayout() {
   const { t } = useI18n()
-  const { pathname } = useLocation()
 
-  useEffect(() => { window.scrollTo({ top: 0 }) }, [pathname])
+  // 站点其它页面一律不碰滚动位置。这里原来有一个 window.scrollTo({top:0})，
+  // 它在 React 画完之后才跑：浏览器先按旧滚动位置画一帧，再跳到顶，切进
+  // 社区时就会看见明显的一抖。要改滚动行为得全站一起改，不能只有一页特殊。
 
   return (
     <div className="community">
