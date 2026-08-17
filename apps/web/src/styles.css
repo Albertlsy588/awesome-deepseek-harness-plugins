@@ -4484,3 +4484,56 @@ main {
     display: inline;
   }
 }
+
+/* ============================================================================
+   GitHub 登录按钮 —— 官方样式
+
+   登录是把账号交给第三方的动作，按钮长得像 GitHub 自己的按钮是一个可信度
+   信号：读者一眼认得出要跳去哪儿。用站点品牌蓝反而模糊了这件事。
+   颜色取自 GitHub Primer 的 btn-primary（深色底）。
+   ========================================================================= */
+
+.github-signin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid rgb(27 31 36 / 15%);
+  border-radius: var(--radius-md);
+  background: #24292f;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
+}
+
+.github-signin:hover {
+  background: #32383f;
+  color: #fff;
+  text-decoration: none;
+  transform: var(--lift);
+}
+
+.github-signin:active {
+  background: #1c2128;
+  transform: none;
+}
+
+.github-signin svg {
+  flex: none;
+}
+
+.github-signin.is-compact {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+@media (pointer: coarse) {
+  .github-signin.is-compact {
+    min-height: 44px;
+  }
+}

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { LogOut, Sparkles } from 'lucide-react'
+import { LogOut, ScrollText } from 'lucide-react'
 import { Link, Outlet } from 'react-router-dom'
 import { LanguageSwitch } from '../../components/LanguageSwitch'
+import { GitHubSignInButton } from '../../components/GitHubSignInButton'
 import { useI18n } from '../../lib/i18n'
-import { api, type CommunityStats } from '../lib/api'
 import { startSignIn, useSession } from '../lib/session'
 import { Avatar } from './Avatar'
 import { communityRules, profilePath } from '../lib/paths'
@@ -31,9 +31,7 @@ function ViewerChip() {
   if (loading) return <span className="viewer-placeholder" aria-hidden="true" />
   if (!viewer) {
     return (
-      <button type="button" className="button-primary button-compact" onClick={startSignIn}>
-        {t('signIn')}
-      </button>
+      <GitHubSignInButton onClick={startSignIn} className="is-compact" />
     )
   }
 
@@ -64,40 +62,47 @@ function ViewerChip() {
   )
 }
 
-function StatsRail() {
-  const { t } = useI18n()
-  const [stats, setStats] = useState<CommunityStats | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    api.stats().then((next) => { if (!cancelled) setStats(next) }).catch(() => undefined)
-    return () => { cancelled = true }
-  }, [])
+/**
+ * 右栏：社区规则摘要。
+ *
+ * 这里原来是帖子数 / 发言者 / 今日新帖。空社区里那三个 0 只是在反复强调
+ * 没人；有人之后它们也不影响任何人的下一步动作。规则不一样——新来的人
+ * 发第一条之前真正需要知道的就是这几条。
+ *
+ * 顺带少了一次挂载时的 /stats 请求。
+ */
+function RulesRail() {
+  const { t, language } = useI18n()
+  const rules = RAIL_RULES[language]
 
   return (
     <section className="rail-card">
       <h2 className="rail-title">
-        <Sparkles size={14} aria-hidden="true" />
-        {t('stats')}
+        <ScrollText size={14} aria-hidden="true" />
+        {t('guidelines')}
       </h2>
-      <dl className="stat-grid">
-        <div>
-          <dt>{t('statPosts')}</dt>
-          <dd>{stats ? stats.posts.toLocaleString() : '—'}</dd>
-        </div>
-        <div>
-          <dt>{t('statAuthors')}</dt>
-          <dd>{stats ? stats.authors.toLocaleString() : '—'}</dd>
-        </div>
-        <div>
-          <dt>{t('statToday')}</dt>
-          <dd>{stats ? stats.postsToday.toLocaleString() : '—'}</dd>
-        </div>
-      </dl>
-      <Link className="rail-link" to={communityRules}>{t('guidelines')}</Link>
+      <ul className="rail-rules">
+        {rules.map((rule) => <li key={rule}>{rule}</li>)}
+      </ul>
+      <Link className="rail-link" to={communityRules}>{t('readAllRules')}</Link>
     </section>
   )
 }
+
+const RAIL_RULES = {
+  zh: [
+    '用 GitHub 账号登录就能发言，不需要另外注册。',
+    '只发文字，支持 Markdown。',
+    '写 @owner/name 会自动带出插件卡片。',
+    '广告、人身攻击、与 DeepSeek Harness 无关的内容会被删除。',
+  ],
+  en: [
+    'Sign in with GitHub and you can post. No separate account.',
+    'Text only, Markdown supported.',
+    'Write @owner/name to pull in a plugin card.',
+    'Ads, personal attacks, and off-topic posts get removed.',
+  ],
+} as const
 
 export function CommunityLayout() {
   const { t } = useI18n()
@@ -123,8 +128,8 @@ export function CommunityLayout() {
         <div className="community-main">
           <Outlet />
         </div>
-        <aside className="community-rail" aria-label={t('stats')}>
-          <StatsRail />
+        <aside className="community-rail" aria-label={t('guidelines')}>
+          <RulesRail />
         </aside>
       </div>
     </div>

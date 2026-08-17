@@ -5,6 +5,7 @@ import type { Language } from './api'
 // Worker-rendered HTML and the client-side re-render cannot disagree.
 const messages = {
   en: {
+    readAllRules: 'Read the full rules',
     navHome: 'Home',
     catalog: 'Catalog',
     rankings: 'Rankings',
@@ -240,6 +241,7 @@ const messages = {
     devSignIn: 'Local dev sign-in',
   },
   zh: {
+    readAllRules: '查看完整规则',
     navHome: '首页',
     catalog: '插件目录',
     rankings: '排行榜',

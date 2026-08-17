@@ -26,7 +26,10 @@
 .community {
   width: min(1120px, calc(100% - 48px));
   margin: 0 auto;
-  padding: 24px 0 48px;
+  /* 首页靠 hero 自带的上边距把内容顶下来；社区没有 hero，得自己留，
+     否则标题直接贴着浏览器边框。和站内其它无 hero 页面（账户页 26px）
+     取同一档，再宽一点让它不显得局促。 */
+  padding: 40px 0 64px;
 }
 
 .community .community-head {
@@ -81,7 +84,9 @@
 
 @media (min-width: 900px) {
   .community {
-    padding: 0 0 48px;
+    /* 上边距不能清零。这条规则是社区还有自己侧栏那会儿留下的——当时外框
+       提供了上边距；并进站点之后没人给了，标题就直接贴在浏览器边框上。 */
+    padding: 48px 0 64px;
   }
 }
 
@@ -1030,4 +1035,20 @@
   border-top: 1px solid var(--line);
   color: var(--faint);
   font-size: 13px;
+}
+
+/* 右栏的规则摘要。原来这里是三个统计数字，空社区里它们只是在强调没人。 */
+.community .rail-rules {
+  margin: 0;
+  padding-inline-start: 1.15em;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.community .rail-rules li::marker {
+  color: var(--faint);
 }

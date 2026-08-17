@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { RequestFailed, type Post } from '../lib/api'
+import { GitHubSignInButton } from '../../components/GitHubSignInButton'
 import { useI18n } from '../../lib/i18n'
 import { useSession, startSignIn } from '../lib/session'
 import { Avatar } from './Avatar'
@@ -57,9 +58,7 @@ export function Composer({
     return (
       <div className={compact ? 'composer composer-compact composer-signed-out' : 'composer composer-signed-out'}>
         <p>{t(compact ? 'signInToReact' : 'signInToPost')}</p>
-        <button type="button" className="button-primary" onClick={startSignIn}>
-          {t('signIn')}
-        </button>
+        <GitHubSignInButton onClick={startSignIn} />
       </div>
     )
   }
