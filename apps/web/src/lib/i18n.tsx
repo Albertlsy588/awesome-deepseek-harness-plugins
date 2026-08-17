@@ -5,6 +5,7 @@ import type { Language } from './api'
 // Worker-rendered HTML and the client-side re-render cannot disagree.
 const messages = {
   en: {
+    navHome: 'Home',
     catalog: 'Catalog',
     rankings: 'Rankings',
     submit: 'Submit package',
@@ -193,12 +194,6 @@ const messages = {
     community: 'Community',
     openMenu: 'Menu',
     closeMenu: 'Close',
-    myPosts: 'My posts',
-    apiKeys: 'API keys',
-    catalogFacts: 'Catalog',
-    curationTitle: 'How entries get in',
-    curationBody: 'Every plugin is verified to install and load. Anything that fails stays out.',
-    onThisPage: 'On this page',
     // ---- 社区（/community）----
     siteName: '1024 Plaza',
     feed: 'Feed',
@@ -245,6 +240,7 @@ const messages = {
     devSignIn: 'Local dev sign-in',
   },
   zh: {
+    navHome: '首页',
     catalog: '插件目录',
     rankings: '排行榜',
     submit: '提交插件',
@@ -433,12 +429,6 @@ const messages = {
     community: '社区',
     openMenu: '菜单',
     closeMenu: '关闭',
-    myPosts: '我的发言',
-    apiKeys: 'API Key',
-    catalogFacts: '目录概况',
-    curationTitle: '收录标准',
-    curationBody: '每个插件都验证过能装上、能加载。未通过的不进目录。',
-    onThisPage: '本页目录',
     // ---- 社区（/community）----
     siteName: '1024 广场',
     feed: '广场',

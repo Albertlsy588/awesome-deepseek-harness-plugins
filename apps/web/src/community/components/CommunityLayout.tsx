@@ -1,17 +1,68 @@
 import { useEffect, useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { LogOut, Sparkles } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
+import { LanguageSwitch } from '../../components/LanguageSwitch'
 import { useI18n } from '../../lib/i18n'
 import { api, type CommunityStats } from '../lib/api'
-import { communityRules } from '../lib/paths'
+import { startSignIn, useSession } from '../lib/session'
+import { Avatar } from './Avatar'
+import { communityRules, profilePath } from '../lib/paths'
 
 /**
  * The community section's own frame.
  *
- * Navigation, branding, language and identity all belong to the site shell, so
- * what is left here is only what this section has of its own: the page header
- * every section shares, and the activity rail.
+ * Site-level navigation, branding and the footer belong to the site shell; what
+ * is left here is what only this section has — who you are signed in as, and the
+ * activity rail.
  */
+
+function ViewerChip() {
+  const { t } = useI18n()
+  const { viewer, loading, signOut } = useSession()
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [open])
+
+  if (loading) return <span className="viewer-placeholder" aria-hidden="true" />
+  if (!viewer) {
+    return (
+      <button type="button" className="button-primary button-compact" onClick={startSignIn}>
+        {t('signIn')}
+      </button>
+    )
+  }
+
+  return (
+    <div className="viewer" onClick={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        className="viewer-trigger"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <Avatar login={viewer.login} src={viewer.avatarUrl} size={28} />
+        <span className="viewer-login">@{viewer.login}</span>
+      </button>
+      {open ? (
+        <div className="viewer-menu" role="menu">
+          <Link to={profilePath(viewer.login)} role="menuitem" onClick={() => setOpen(false)}>
+            {viewer.login}{t('postsBy')}
+          </Link>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); void signOut() }}>
+            <LogOut size={14} aria-hidden="true" />
+            {t('signOut')}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 function StatsRail() {
   const { t } = useI18n()
@@ -55,25 +106,23 @@ export function CommunityLayout() {
   useEffect(() => { window.scrollTo({ top: 0 }) }, [pathname])
 
   return (
-    <div className="page community">
-      {/* One line, like every other section. The sidebar already says
-          "社区"; a full-width "1024 广场 / 开发者的公开广场" lockup under it
-          was the third time the same thing got said. */}
-      <header className="page-head">
-        <div className="page-head-titles">
-          <h1>{t('community')}</h1>
-          <p className="page-head-sub">{t('tagline')}</p>
+    <div className="community">
+      <header className="community-head">
+        <div>
+          <h1>{t('siteName')}</h1>
+          <p>{t('tagline')}</p>
         </div>
-        <div className="page-head-actions">
-          <Link className="button button-secondary" to={communityRules}>{t('guidelines')}</Link>
+        <div className="community-head-actions">
+          <LanguageSwitch />
+          <ViewerChip />
         </div>
       </header>
 
-      <div className="page-body has-rail">
-        <div className="page-main">
+      <div className="community-body">
+        <div className="community-main">
           <Outlet />
         </div>
-        <aside className="page-rail" aria-label={t('stats')}>
+        <aside className="community-rail" aria-label={t('stats')}>
           <StatsRail />
         </aside>
       </div>

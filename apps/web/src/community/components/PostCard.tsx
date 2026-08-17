@@ -3,8 +3,7 @@ import { Heart, Link2, MessageCircle, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { api, RequestFailed, type Post } from '../lib/api'
 import { useI18n, useRelativeTime } from '../../lib/i18n'
-import { startSignIn } from '../lib/session'
-import { useViewer } from '../../lib/useViewer'
+import { startSignIn, useSession } from '../lib/session'
 import { Avatar } from './Avatar'
 import { PluginCard } from './PluginCard'
 import { PostBody } from './PostBody'
@@ -21,7 +20,7 @@ interface PostCardProps {
 export function PostCard({ post, variant = 'feed', onChange, onRemoved }: PostCardProps) {
   const { t } = useI18n()
   const relative = useRelativeTime()
-  const { viewer } = useViewer()
+  const { viewer } = useSession()
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
 

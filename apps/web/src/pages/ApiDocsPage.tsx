@@ -1,5 +1,7 @@
 import { ExternalLink, KeyRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { LanguageSwitch } from '../components/LanguageSwitch'
+import { publicAsset } from '../lib/assets'
 import { useI18n } from '../lib/i18n'
 import { apiDocsNodes, collectionCopy, graph, siteNodes } from '../../worker/seo-templates'
 import { usePageSeo } from '../lib/usePageSeo'
@@ -68,6 +70,13 @@ export function ApiDocsPage() {
 
   return (
     <div className="page-container api-docs-page">
+      <div className="detail-utility">
+        <Link className="detail-brand" to="/" aria-label="DeepSeek Harness Store homepage">
+          <img className="brand-mark" src={publicAsset('deepseek1024-icon.png')} alt="" aria-hidden="true" />
+          <span>DeepSeek Harness <strong>{t('market')}</strong></span>
+        </Link>
+        <LanguageSwitch />
+      </div>
 
       <header className="api-docs-header">
         <h1>{t('apiDocsTitle')}</h1>
@@ -77,9 +86,7 @@ export function ApiDocsPage() {
         </p>
       </header>
 
-            <div className="api-docs-layout">
-        <div className="api-docs-main">
-  <section className="api-docs-contact" aria-labelledby="api-docs-contact-heading">
+      <section className="api-docs-contact" aria-labelledby="api-docs-contact-heading">
         <div>
           <h2 id="api-docs-contact-heading">{t('apiDocsContactHeading')}</h2>
           <p>{t('apiDocsContactBody')}</p>
@@ -95,7 +102,7 @@ export function ApiDocsPage() {
         </a>
       </section>
 
-      <section className="api-docs-section" id="apiDocsAuthHeading">
+      <section className="api-docs-section">
         <h2>{t('apiDocsAuthHeading')}</h2>
         <p>{t('apiDocsAuthBody')}</p>
         <pre className="api-code"><code>{'Authorization: Bearer dsh_live_your_api_key'}</code></pre>
@@ -105,7 +112,7 @@ export function ApiDocsPage() {
         </Link>
       </section>
 
-      <section className="api-docs-section" id="apiDocsRateHeading">
+      <section className="api-docs-section">
         <h2>{t('apiDocsRateHeading')}</h2>
         <div className="api-table-scroll">
           <table className="api-table">
@@ -133,7 +140,7 @@ export function ApiDocsPage() {
         <p>{t('apiDocsRateHeaders')}</p>
       </section>
 
-      <section className="api-docs-section" id="apiDocsEndpointsHeading">
+      <section className="api-docs-section">
         <h2>{t('apiDocsEndpointsHeading')}</h2>
         <p className="api-endpoint"><code>GET /v1/plugins/search</code></p>
         <p>{t('apiDocsSearchDescription')}</p>
@@ -167,7 +174,7 @@ export function ApiDocsPage() {
         <pre className="api-code"><code>{RESPONSE_EXAMPLE}</code></pre>
       </section>
 
-      <section className="api-docs-section" id="apiDocsErrorsHeading">
+      <section className="api-docs-section">
         <h2>{t('apiDocsErrorsHeading')}</h2>
         <div className="api-table-scroll">
           <table className="api-table">
@@ -191,17 +198,6 @@ export function ApiDocsPage() {
         </div>
       </section>
 
-        </div>
-
-        {/* 这页有六个大节，没有目录只能靠滚；宽屏下它也让页面不至于只剩一条窄内容柱。 */}
-        <nav className="api-docs-toc" aria-label={t('onThisPage')}>
-          <p className="api-docs-toc-title">{t('onThisPage')}</p>
-            <a href="#apiDocsAuthHeading">{t('apiDocsAuthHeading')}</a>
-            <a href="#apiDocsRateHeading">{t('apiDocsRateHeading')}</a>
-            <a href="#apiDocsEndpointsHeading">{t('apiDocsEndpointsHeading')}</a>
-            <a href="#apiDocsErrorsHeading">{t('apiDocsErrorsHeading')}</a>
-        </nav>
-      </div>
     </div>
   )
 }

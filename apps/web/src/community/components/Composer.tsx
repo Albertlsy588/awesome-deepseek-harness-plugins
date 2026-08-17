@@ -2,8 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { RequestFailed, type Post } from '../lib/api'
 import { useI18n } from '../../lib/i18n'
-import { startSignIn } from '../lib/session'
-import { useViewer } from '../../lib/useViewer'
+import { useSession, startSignIn } from '../lib/session'
 import { Avatar } from './Avatar'
 
 interface ComposerProps {
@@ -26,7 +25,7 @@ export function Composer({
   compact = false,
 }: ComposerProps) {
   const { t } = useI18n()
-  const { viewer, loading } = useViewer()
+  const { viewer, loading } = useSession()
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -86,7 +85,7 @@ export function Composer({
 
   return (
     <form className={compact ? 'composer composer-compact' : 'composer'} onSubmit={submit}>
-      <Avatar login={viewer.githubLogin} src={viewer.avatarUrl} size={compact ? 32 : 40} />
+      <Avatar login={viewer.login} src={viewer.avatarUrl} size={compact ? 32 : 40} />
       <div className="composer-main">
         <textarea
           ref={textarea}

@@ -13,16 +13,37 @@ const mobileContext = await browser.newContext({
 })
 const errors = []
 
+/**
+ * Noise this check must not fail on.
+ *
+ * The VibeCafe telemetry tag in index.html posts to its own origin, which does
+ * not allow http://127.0.0.1, so every local run collects one CORS error per
+ * page. It is a third-party script that cannot succeed off the production
+ * hostname; failing the layout suite on it would mean the suite is red for
+ * everyone, always, for a reason nobody can fix locally.
+ */
+const IGNORED_ERROR_PATTERNS = [/vibecafe\.ai\/api\/products\//]
+
+function isIgnorable(text) {
+  return IGNORED_ERROR_PATTERNS.some((pattern) => pattern.test(text))
+}
+
 async function openPage(viewport, path, { touch = false } = {}) {
   const context = touch ? mobileContext : desktopContext
   const page = await context.newPage()
   await page.setViewportSize(viewport)
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('response', (response) => {
-    if (response.status() >= 400) errors.push(`HTTP ${response.status()} ${response.url()}`)
+    if (response.status() >= 400 && !isIgnorable(response.url())) {
+      errors.push(`HTTP ${response.status()} ${response.url()}`)
+    }
   })
   page.on('console', (message) => {
-    if (message.type() === 'error' && !message.text().startsWith('Failed to load resource:')) {
+    if (
+      message.type() === 'error'
+      && !message.text().startsWith('Failed to load resource:')
+      && !isIgnorable(message.text())
+    ) {
       errors.push(`${page.url()}: ${message.text()}`)
     }
   })
@@ -135,8 +156,8 @@ async function assertInstallCommandsReadable(page, label, scope) {
 
 // The hero labels sit in one shared column, so all three command boxes have to
 // start and end on the same pixel regardless of label width or language.
-async function assertInstallCommandsAligned(page, label) {
-  const edges = await page.locator('.self-install-banner .install-command').evaluateAll((nodes) =>
+async function assertHeroCommandsAligned(page, label) {
+  const edges = await page.locator('.catalog-hero .self-install-banner .install-command').evaluateAll((nodes) =>
     nodes.map((node) => {
       const box = node.getBoundingClientRect()
       return { left: Math.round(box.left), right: Math.round(box.right) }
@@ -280,32 +301,28 @@ try {
   }
   await legacyCatalog.close()
 
-  // 站点外框：四个板块共用一条侧栏，切换是客户端路由（不整页跳转），
-  // 且社区板块必须真的被渲染出来 —— 它和目录站共用一份 SPA fallback，
-  // 路由分流一旦错了会静默地渲染成另一个板块。
-  const shell = await openPage({ width: 1440, height: 900 }, '/community')
-  await shell.locator('.page-head').waitFor()
-  const sections = await shell.locator('.shell-sidebar .sidebar-sections .nav-link').evaluateAll(
+  // 悬浮导航在每一页都在，且社区板块必须真的被渲染出来 —— 它和目录站
+  // 共用一份 SPA fallback，路由分流一旦错了会静默地渲染成另一个板块。
+  const shell = await openPage({ width: 1500, height: 900 }, '/community')
+  await shell.locator('.community-head').waitFor()
+  const destinations = await shell.locator('.floating-nav .floating-nav-item').evaluateAll(
     (links) => links.map((link) => link.getAttribute('href')),
   )
-  if (JSON.stringify(sections) !== JSON.stringify(['/', '/plugins', '/community', '/docs/api'])) {
-    throw new Error(`sidebar sections drifted: ${JSON.stringify(sections)}`)
+  if (JSON.stringify(destinations) !== JSON.stringify(['/', '/community', '/docs/api'])) {
+    throw new Error(`floating nav destinations drifted: ${JSON.stringify(destinations)}`)
   }
-  // 「提交插件」是动作，另起一组，不算板块。
-  if ((await shell.locator('.shell-sidebar .sidebar-secondary .nav-link').count()) !== 1) {
-    throw new Error('the sidebar should offer exactly one submit action below the sections')
-  }
-  // 语言和账号沉在栏底，未登录也看得见语言 —— 本站主要流量是未登录访客。
-  const sidebarFoot = await shell.evaluate(() => ({
-    language: document.querySelectorAll('.sidebar-foot .language-switch').length,
-    account: document.querySelectorAll('.sidebar-foot .sidebar-account, .sidebar-foot .sidebar-signin, .sidebar-foot .sidebar-account-placeholder').length,
-  }))
-  if (sidebarFoot.language !== 1 || sidebarFoot.account !== 1) {
-    throw new Error(`sidebar foot is wrong: ${JSON.stringify(sidebarFoot)}`)
-  }
-  const activeHref = await shell.locator('.shell-sidebar .nav-link.active').getAttribute('href')
+  const activeHref = await shell.locator('.floating-nav-item.active').getAttribute('href')
   if (activeHref !== '/community') {
-    throw new Error(`sidebar does not mark the open section: ${activeHref}`)
+    throw new Error(`floating nav does not mark the open page: ${activeHref}`)
+  }
+  // 宽屏下它停在内容列左侧的余量里，不能压住内容。
+  const clearance = await shell.evaluate(() => {
+    const nav = document.querySelector('.floating-nav')?.getBoundingClientRect()
+    const content = document.querySelector('.community')?.getBoundingClientRect()
+    return nav && content ? { navRight: Math.round(nav.right), contentLeft: Math.round(content.left) } : null
+  })
+  if (!clearance || clearance.navRight > clearance.contentLeft) {
+    throw new Error(`the floating nav overlaps the content column: ${JSON.stringify(clearance)}`)
   }
   // 社区内部链接必须带板块前缀，否则会落到目录站的路由上。
   const strayLinks = await shell.locator('.post a[href^="/"]').evaluateAll(
@@ -314,32 +331,33 @@ try {
   if (strayLinks.length > 0) {
     throw new Error(`community links missing the section prefix: ${JSON.stringify(strayLinks)}`)
   }
-  // 切到另一个板块：不整页跳转，侧栏跟着变。
-  await shell.locator('.shell-sidebar .nav-link[href="/plugins"]').click()
-  await shell.waitForURL('**/plugins')
-  // 页头是四个板块共用的骨架；hero 只在排行榜页，等它会永远超时。
-  await shell.locator('.page-head').waitFor()
-  if ((await shell.locator('.site-hero').count()) !== 0) {
-    throw new Error('the catalog section should not carry the rankings hero')
-  }
+  // 切到另一个页面：不整页跳转，首页结构原样保留（hero 还在）。
+  await shell.locator('.floating-nav-item[href="/"]').click()
+  await shell.waitForURL(/\/$/)
+  await shell.locator('.catalog-hero').waitFor()
   await assertNoHorizontalOverflow(shell, 'desktop shell after section switch')
   await shell.close()
 
   const mobileShell = await openPage({ width: 390, height: 844 }, '/community', { touch: true })
-  await mobileShell.locator('.page-head').waitFor()
+  await mobileShell.locator('.community-head').waitFor()
   await assertNoHorizontalOverflow(mobileShell, 'mobile community')
   await assertMinTouchTargets(mobileShell, 'mobile community actions', [
-    '.shell-bar-toggle', '.tab', '.post-action',
+    '.floating-nav-item', '.tab', '.post-action',
   ])
-  // 窄屏侧栏收成一个展开菜单，展开后仍不能撑破页面。
-  await mobileShell.locator('.shell-bar-toggle').tap()
-  await mobileShell.locator('.shell-bar-menu .nav-link').first().waitFor()
-  await assertMinTouchTargets(mobileShell, 'mobile section menu', ['.shell-bar-menu .nav-link'])
-  await assertNoHorizontalOverflow(mobileShell, 'mobile community with the menu open')
+  // 窄屏下它收成左下角的横排胶囊，仍然常驻且不能撑破页面。
+  const pill = await mobileShell.evaluate(() => {
+    const nav = document.querySelector('.floating-nav')
+    if (!nav) return null
+    const box = nav.getBoundingClientRect()
+    return { visible: box.width > 0, right: Math.round(box.right), viewport: window.innerWidth }
+  })
+  if (!pill || !pill.visible || pill.right > pill.viewport) {
+    throw new Error(`the floating nav is missing or overflows on a phone: ${JSON.stringify(pill)}`)
+  }
   await mobileShell.close()
 
   const compactCommunity = await openPage({ width: 320, height: 568 }, '/community', { touch: true })
-  await compactCommunity.locator('.page-head').waitFor()
+  await compactCommunity.locator('.community-head').waitFor()
   await assertNoHorizontalOverflow(compactCommunity, 'compact community')
   await compactCommunity.close()
 
@@ -351,11 +369,20 @@ try {
   if ((await desktop.locator('.directory-section .sort-segments button').count()) !== 3) {
     throw new Error('directory sort controls should only contain stars, newest, and active')
   }
-  // 包装 CLI 的安装横幅是落地页的 CTA，跟着 hero 只留在排行榜页。
-  // 目录页每一行本来就各带自己的安装按钮。
-  if ((await desktop.locator('.self-install-banner').count()) !== 0) {
-    throw new Error('the catalog section should not repeat the wrapper-CLI install banner')
+  if ((await desktop.locator('.catalog-hero .self-install-banner').count()) !== 1) {
+    throw new Error('directory hero is missing the self install banner')
   }
+  const desktopBannerText = await desktop.locator('.catalog-hero .self-install-banner').textContent()
+  for (const command of [
+    'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024',
+    'dsh plugin --profile web add dsh1024',
+  ]) {
+    if (!desktopBannerText?.includes(command)) {
+      throw new Error(`directory self install banner is missing the command: ${command}`)
+    }
+  }
+  await assertHeroCommandsAligned(desktop, 'desktop directory hero')
+  await assertInstallCommandsReadable(desktop, 'desktop directory hero', '.catalog-hero')
   if ((await desktop.locator('.directory-section .package-row .split-install-main').count()) === 0) {
     throw new Error('directory rows are missing the split install button')
   }
@@ -363,33 +390,41 @@ try {
   await assertSeo(desktop, 'desktop catalog', '/plugins')
   await assertNoHorizontalOverflow(desktop, 'desktop catalog')
   await assertVisibleSubdirectorySiblingsHaveDistinctTitles(desktop, 'desktop catalog')
-  // 插件目录页不再有 hero：/ 是搜索流量的落地页需要自我介绍，
-  // /plugins 是干活的页面，进来的人已经知道这是哪儿了。
-  if ((await desktop.locator('.site-hero').count()) !== 0) {
-    throw new Error('the catalog page should not render the site hero')
+  if (await desktop.locator('.hero-heading h1 a[href="https://deepseek1024.com/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
+    throw new Error('catalog hero does not show the linked DeepSeek Harness Plugin 1024Store title')
   }
-  if ((await desktop.locator('.page-head h1').count()) !== 1) {
-    throw new Error('the catalog page should render exactly one page heading')
+  if (!(await desktop.locator('.hero-heading > p:last-child').textContent())?.includes('收录插件均先经 DSH 插件规范检查与过滤')) {
+    throw new Error('catalog hero does not keep the shared plugin screening description')
   }
-  if (!/^\d+ (秒|分钟|小时|天)前更新$/.test((await desktop.locator('.page-head-updated').textContent())?.trim() ?? '')) {
-    throw new Error('the catalog page head does not show a relative update time')
+  if (!/^\d+ (秒|分钟|小时|天)前更新$/.test((await desktop.locator('.hero-updated').textContent())?.trim() ?? '')) {
+    throw new Error('catalog tally does not show a relative update time')
   }
-  // 侧栏是唯一的站点导航；页内不该再有一份板块切换。
-  const duplicateSectionNav = await desktop.evaluate(() => ({
-    viewTabs: document.querySelectorAll('.catalog-view-tabs').length,
-    utility: document.querySelectorAll('.detail-utility').length,
-    sidebarSections: document.querySelectorAll('.shell-sidebar .sidebar-sections .nav-link').length,
-    sidebarSecondary: document.querySelectorAll('.shell-sidebar .sidebar-secondary .nav-link').length,
-  }))
+  const heroAlignment = await desktop.evaluate(() => {
+    const heading = document.querySelector('.hero-heading')?.getBoundingClientRect()
+    const actions = document.querySelector('.hero-stage > .hero-actions')?.getBoundingClientRect()
+    const hero = document.querySelector('.catalog-hero')?.getBoundingClientRect()
+    const navigation = document.querySelector('.catalog-content > .catalog-navigation')?.getBoundingClientRect()
+    return {
+      actionsTop: actions?.top,
+      headingTop: heading?.top,
+      heroBottom: hero?.bottom,
+      heroControlCount: document.querySelectorAll('.catalog-hero .catalog-toolbar, .catalog-hero .catalog-view-tabs').length,
+      legacyToplineCount: document.querySelectorAll('.hero-topline').length,
+      navigationTop: navigation?.top,
+    }
+  })
   if (
-    duplicateSectionNav.viewTabs !== 0
-    || duplicateSectionNav.utility !== 0
-    || duplicateSectionNav.sidebarSections !== 4
-    || duplicateSectionNav.sidebarSecondary !== 1
+    heroAlignment.legacyToplineCount !== 0
+    || heroAlignment.heroControlCount !== 0
+    || heroAlignment.actionsTop === undefined
+    || heroAlignment.headingTop === undefined
+    || heroAlignment.heroBottom === undefined
+    || heroAlignment.navigationTop === undefined
+    || Math.abs(heroAlignment.actionsTop - heroAlignment.headingTop) > 1
+    || heroAlignment.navigationTop < heroAlignment.heroBottom
   ) {
-    throw new Error(`section navigation is duplicated or incomplete: ${JSON.stringify(duplicateSectionNav)}`)
+    throw new Error(`hero and catalog controls have incorrect structure: ${JSON.stringify(heroAlignment)}`)
   }
-
   await desktop.close()
 
   const rankings = await openPage({ width: 1440, height: 1000 }, '/rankings')
@@ -419,44 +454,58 @@ try {
   if (!(await rankings.locator('.site-bottom-link p').textContent())?.includes('DeepSeek')) {
     throw new Error('unofficial project notice is missing from the page bottom')
   }
-  // 横幅只在排行榜页出现，鲸鱼是它的主角。原来那排动作链接
-  // （免费API / 作者主页 / 插件市场开源 / 提交插件）已进侧栏，
-  // 语言切换也是；页内不该再有它们的副本。
-  const heroBanner = await rankings.evaluate(() => {
-    const hero = document.querySelector('.site-hero')
-    const whale = document.querySelector('.site-hero-whale')
+  if ((await rankings.locator('.catalog-hero .github-link[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"]').count()) !== 1) {
+    throw new Error('GitHub repository link is missing from the catalog banner')
+  }
+  if ((await rankings.locator('.catalog-hero .hero-author[href="https://www.imsai.cc/"][target="_blank"]').count()) !== 1) {
+    throw new Error('author homepage link is missing from the catalog banner')
+  }
+  if ((await rankings.locator('.catalog-hero .hero-api').textContent())?.trim() !== '免费API') {
+    throw new Error('free API action uses the wrong Chinese label')
+  }
+  if ((await rankings.locator('.catalog-hero .github-link span').textContent())?.trim() !== '插件市场开源') {
+    throw new Error('market source action uses the wrong Chinese label')
+  }
+  const languageStyle = await rankings.locator('.catalog-hero .hero-language').evaluate((node) => {
+    const selected = node.querySelector('button.selected')
     return {
-      present: Boolean(hero),
-      height: hero ? Math.round(hero.getBoundingClientRect().height) : 0,
-      whaleSrc: whale?.getAttribute('src') ?? null,
-      figures: document.querySelectorAll('.site-hero-figure').length,
-      strayActions: document.querySelectorAll('.site-hero .hero-actions, .site-hero .language-switch').length,
+      borderWidth: getComputedStyle(node).borderWidth,
+      selectedBackground: selected ? getComputedStyle(selected).backgroundColor : null,
+      switchBackground: getComputedStyle(node).backgroundColor,
     }
   })
-  if (!heroBanner.present || heroBanner.whaleSrc !== '/deepseek1024.png') {
-    throw new Error(`rankings hero banner is missing its whale: ${JSON.stringify(heroBanner)}`)
+  if (
+    languageStyle.borderWidth !== '0px'
+    || languageStyle.selectedBackground !== 'rgba(0, 0, 0, 0)'
+    || languageStyle.switchBackground !== 'rgba(0, 0, 0, 0)'
+  ) {
+    throw new Error(`language switch is too visually prominent: ${JSON.stringify(languageStyle)}`)
   }
-  if (heroBanner.figures !== 2 || heroBanner.strayActions !== 0) {
-    throw new Error(`rankings hero banner has the wrong contents: ${JSON.stringify(heroBanner)}`)
+  if ((await rankings.locator('.catalog-hero .hero-submit[href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"][target="_blank"]').count()) !== 1) {
+    throw new Error('submit button does not link to the GitHub repository')
   }
-  // 压缩是这次改版的重点：原来约 500px 占满首屏，现在必须让位给榜单。
-  if (heroBanner.height > 260) {
-    throw new Error(`rankings hero banner grew back to ${heroBanner.height}px; it must stay compact`)
+  if ((await rankings.locator('.catalog-hero .hero-brand').count()) !== 0) {
+    throw new Error('removed top-left banner title is still rendered')
   }
-  // 榜单第一行要在首屏之内。
-  const firstRowTop = await rankings.locator('.package-row').first().evaluate(
-    (node) => Math.round(node.getBoundingClientRect().top))
-  if (firstRowTop > 1000) {
-    throw new Error(`the first ranking row starts at ${firstRowTop}px, below the fold`)
+  if ((await rankings.locator('.site-header').count()) !== 0) {
+    throw new Error('the removed standalone site header is still rendered')
   }
-
+  if (await rankings.locator('.hero-heading h1 a[href="https://deepseek1024.com/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
+    throw new Error('ranking hero does not keep the shared store title')
+  }
+  if (!(await rankings.locator('.hero-heading > p:last-child').textContent())?.includes('收录插件均先经 DSH 插件规范检查与过滤')) {
+    throw new Error('ranking hero does not keep the shared plugin screening description')
+  }
+  if ((await rankings.locator('.catalog-hero .hero-lockup-mark img[src="/deepseek1024.png"]').count()) !== 1) {
+    throw new Error('hero poster mark is missing the store icon')
+  }
   if ((await rankings.locator('footer, .reset-button').count()) !== 0) {
     throw new Error('removed footer or refresh control is still rendered')
   }
-  if ((await rankings.locator('.self-install-banner').count()) !== 1) {
+  if ((await rankings.locator('.catalog-hero .self-install-banner').count()) !== 1) {
     throw new Error('rankings hero is missing the self install banner')
   }
-  const rankingsBannerText = await rankings.locator('.self-install-banner').textContent()
+  const rankingsBannerText = await rankings.locator('.catalog-hero .self-install-banner').textContent()
   for (const command of [
     'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024',
     'dsh plugin --profile web add dsh1024',
@@ -465,8 +514,8 @@ try {
       throw new Error(`rankings self install banner is missing the command: ${command}`)
     }
   }
-  await assertInstallCommandsAligned(rankings, 'desktop rankings hero')
-  await assertInstallCommandsReadable(rankings, 'rankings install commands', '.self-install-banner')
+  await assertHeroCommandsAligned(rankings, 'desktop rankings hero')
+  await assertInstallCommandsReadable(rankings, 'desktop rankings hero', '.catalog-hero')
   await assertSeo(rankings, 'desktop rankings', '/')
   await rankings.locator('.ranking-section .segmented-control button').last().click()
   await rankings.locator('.ranking-section .package-row').first().waitFor()
@@ -567,7 +616,11 @@ try {
   await assertNoHorizontalOverflow(mobile, 'mobile catalog')
   await assertVisibleSubdirectorySiblingsHaveDistinctTitles(mobile, 'mobile catalog')
   await assertMinTouchTargets(mobile, 'mobile catalog', [
-    '.shell-bar-toggle',
+    '.catalog-hero .hero-author',
+    '.catalog-hero .github-link',
+    '.catalog-hero .hero-submit',
+    '.catalog-hero .hero-language button',
+    '.catalog-view-tabs a',
     '.category-filter button',
     '.segmented-control button',
     '.self-install-banner .install-command .icon-button',
@@ -576,10 +629,14 @@ try {
     '.package-row .row-link',
     '.load-more-row .button',
   ])
+  await assertHeroCommandsAligned(mobile, 'mobile catalog hero')
+  await assertInstallCommandsReadable(mobile, 'mobile catalog hero', '.catalog-hero')
   await assertMinFontSize(mobile, 'mobile search input', 'input[type="search"]', 16)
   await assertMinFontSize(mobile, 'mobile package title', '.row-title', 14)
   await assertMinFontSize(mobile, 'mobile package description', '.row-identity p', 12)
   await assertMinFontSize(mobile, 'mobile package metrics', '.row-metrics > span', 11)
+  await assertMinFontSize(mobile, 'mobile hero description', '.hero-heading > p:last-child', 14)
+  await assertMinFontSize(mobile, 'mobile hero tally label', '.hero-tally-label', 11)
   await assertHorizontalTouchScroller(mobile, 'mobile category filters', '.category-filter')
 
   await mobile.locator('.category-filter button').nth(1).click()
@@ -615,16 +672,11 @@ try {
   if ((await mobile.locator('.split-install-menu').count()) !== 0) {
     throw new Error('mobile split install menu did not close on Escape')
   }
-  // 侧栏在窄屏是隐藏的，语言切换随站点导航一起收进顶条菜单里，
-  // 所以要先展开菜单才够得着 —— 手机上没有别的入口。
-  await mobile.locator('.shell-bar-toggle').click()
-  await mobile.locator('.shell-bar-menu .language-switch').waitFor()
-  await mobile.locator('.shell-bar-menu .language-switch button').last().click()
+  await mobile.locator('.catalog-hero .language-switch button').last().click()
   await mobile.waitForFunction(() => document.documentElement.lang === 'en')
   await assertNoHorizontalOverflow(mobile, 'English mobile catalog')
-  await mobile.locator('.shell-bar-menu .language-switch button').first().click()
+  await mobile.locator('.catalog-hero .language-switch button').first().click()
   await mobile.waitForFunction(() => document.documentElement.lang === 'zh-CN')
-  await mobile.locator('.shell-bar-toggle').click()
 
   // The visual row is also the primary mobile navigation target. Exercise a
   // point in its padding, away from the title link and copy button, so this
@@ -645,11 +697,9 @@ try {
   const mobileRankings = await openPage({ width: 390, height: 844 }, '/rankings', { touch: true })
   await waitForRankingList(mobileRankings)
   await assertMobileEnvironment(mobileRankings, 'mobile rankings')
-  await assertInstallCommandsReadable(mobileRankings, 'mobile rankings install commands', '.self-install-banner')
-  await assertMinFontSize(mobileRankings, 'mobile hero description', '.site-hero-desc', 13)
-  await assertMinFontSize(mobileRankings, 'mobile hero figure label', '.site-hero-figure dt', 11)
   await assertNoHorizontalOverflow(mobileRankings, 'mobile rankings')
   await assertMinTouchTargets(mobileRankings, 'mobile rankings', [
+    '.catalog-view-tabs a',
     '.segmented-control button',
     '.package-row .row-link',
   ])
@@ -671,17 +721,8 @@ try {
   if ((await apiDocs.locator('.api-docs-contact-link[href="https://www.imsai.cc/"][target="_blank"]').count()) !== 1) {
     throw new Error('API docs author contact does not link to imsai.cc in a new tab')
   }
-  // 正文和页内目录现在分列两栏，联系区块是正文列的第一个块。
-  if ((await apiDocs.locator('.api-docs-main > :first-child.api-docs-contact').count()) !== 1) {
-    throw new Error('API docs author contact is not the first block in the content column')
-  }
-  // 目录必须覆盖每一个大节，否则读者会漏掉没被列出的那一节。
-  const toc = await apiDocs.evaluate(() => ({
-    links: [...document.querySelectorAll('.api-docs-toc a')].map((a) => a.getAttribute('href')),
-    sections: [...document.querySelectorAll('.api-docs-section[id]')].map((s) => `#${s.id}`),
-  }))
-  if (JSON.stringify(toc.links) !== JSON.stringify(toc.sections)) {
-    throw new Error(`the on-this-page list does not match the sections: ${JSON.stringify(toc)}`)
+  if ((await apiDocs.locator('.api-docs-header + .api-docs-contact').count()) !== 1) {
+    throw new Error('API docs author contact is not the first section below the page introduction')
   }
   await assertSeo(apiDocs, 'desktop API docs', '/docs/api')
   await assertNoHorizontalOverflow(apiDocs, 'desktop API docs')
@@ -806,15 +847,21 @@ try {
   const compactMobile = await openPage({ width: 320, height: 568 }, '/rankings', { touch: true })
   await waitForRankingList(compactMobile)
   await assertNoHorizontalOverflow(compactMobile, 'compact mobile rankings')
-  // 窄屏下站点导航折进顶条菜单；语言和账号跟着一起，页面里不该有副本。
-  const compactChrome = await compactMobile.evaluate(() => ({
-    inlineLanguage: document.querySelectorAll('.page .language-switch, .site-hero .language-switch').length,
-    sidebarVisible: Boolean(document.querySelector('.shell-sidebar')?.getClientRects().length),
-    barToggle: Boolean(document.querySelector('.shell-bar-toggle')?.getClientRects().length),
-  }))
-  if (compactChrome.inlineLanguage !== 0 || compactChrome.sidebarVisible || !compactChrome.barToggle) {
-    throw new Error(`compact chrome is wrong: ${JSON.stringify(compactChrome)}`)
+  if (await compactMobile.locator('.catalog-hero .hero-language').isVisible()) {
+    throw new Error('compact mobile header did not hide the secondary language control')
   }
+  await assertMinTouchTargets(compactMobile, 'compact mobile header', [
+    '.catalog-hero .hero-author',
+    '.catalog-hero .github-link',
+    '.catalog-hero .hero-submit',
+    '.catalog-view-tabs a',
+    '.self-install-banner .install-command .icon-button',
+    '.package-row .split-install-main',
+    '.package-row .split-install-toggle',
+    '.package-row .row-link',
+  ])
+  await assertHeroCommandsAligned(compactMobile, 'compact mobile hero')
+  await assertInstallCommandsReadable(compactMobile, 'compact mobile hero', '.catalog-hero')
   await compactMobile.locator('.ranking-section .package-row .split-install-toggle').nth(3).click()
   await compactMobile.locator('.split-install-menu').waitFor()
   await assertMenuOnTop(compactMobile, 'compact split install menu')
@@ -860,7 +907,7 @@ try {
   await pet.close()
 
   if (errors.length > 0) throw new Error(`browser errors:\n${errors.join('\n')}`)
-  console.log('Visual smoke check passed: sidebar shell, community section, desktop, touch-enabled 390px mobile, compact 320px mobile, search, split install menus, self install banner, copy actions, local scrollers, and package details.')
+  console.log('Visual smoke check passed: floating nav, community section, desktop, touch-enabled 390px mobile, compact 320px mobile, search, split install menus, self install banner, copy actions, local scrollers, and package details.')
 } finally {
   await desktopContext.close()
   await mobileContext.close()

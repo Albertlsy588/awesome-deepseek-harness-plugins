@@ -2750,8 +2750,7 @@ main {
   .category-filter {
     flex-wrap: nowrap;
     gap: 6px;
-    /* 出血原本是 -12px，配的是 .page-container 的内边距。侧栏外框下
-       内容列的内边距不同，那 12px 会直接顶出视口。滚动容器留在内容盒里。 */
+    margin-right: -12px;
     overflow-x: auto;
     overscroll-behavior-inline: contain;
     padding: 2px 12px 7px 0;
@@ -4363,705 +4362,107 @@ main {
 }
 
 /* ============================================================================
-   站点外框 —— 左侧常驻导航
+   悬浮导航 —— 跨板块的去处
 
-   四个板块（排行榜 / 插件目录 / 社区 / 免费API）共用一条导航栏，切换是
-   客户端路由，不跳站，读者的登录态、语言和位置都留着。
+   目录和排行榜是同一个页面的两个视图，它们自己有页内 tab；没有归宿的是
+   页面「旁边」的东西：社区和 API 文档。与其为它们把整站改成侧栏，不如让
+   一块浮层贴在内容旁边——首页因此完全不用动。
 
-   窄屏放不下 216px 的栏，收成顶部细条 + 一个展开菜单：四个目的地做成
-   一排 chip 太挤，做成底部 tab bar 又会和页面自己的控件抢位置。
+   内容列是 min(1120px, 100% - 48px)。两侧余量只有在视口够宽时才装得下
+   一块浮层，所以有两种形态：
+     · 宽屏：固定在内容左侧的竖排浮层，带文字
+     · 其余：固定在左下角的横排胶囊，同样常驻
+   两种都是 fixed，所以每一页都有。右下角是看板娘，两边不打架。
    ========================================================================= */
 
-.shell-frame {
-  display: grid;
-  align-items: start;
-}
-
-.shell-content {
-  min-width: 0;
-}
-
-.shell-sidebar {
-  display: none;
-}
-
-/* -- 窄屏顶条 ------------------------------------------------------------ */
-
-.shell-bar {
-  position: sticky;
-  top: 0;
-  z-index: 40;
+.floating-nav {
+  position: fixed;
+  z-index: 35;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 56px;
-  padding: 0 16px;
-  padding-top: env(safe-area-inset-top);
+  gap: 2px;
+  padding: 5px;
   background: var(--surface-translucent);
   backdrop-filter: saturate(180%) blur(12px);
-  border-bottom: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg);
+  /* 左下角横排胶囊：窄屏和中等宽度的默认形态 */
+  left: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  flex-direction: row;
 }
 
-.shell-bar-toggle {
-  min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.shell-bar-menu {
-  position: sticky;
-  top: calc(56px + env(safe-area-inset-top));
-  z-index: 39;
-  display: grid;
-  gap: 2px;
-  padding: 8px 12px 12px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-  box-shadow: var(--shadow-md);
-}
-
-.brand {
+.floating-nav-item {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  color: var(--ink);
-  min-width: 0;
-}
-
-.brand:hover {
-  text-decoration: none;
-}
-
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: var(--brand);
-  color: var(--on-brand);
-  font-family: var(--font-display);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  box-shadow: 0 1px 2px var(--logo-shadow);
-  flex: none;
-}
-
-.brand-name {
-  font-family: var(--font-display);
-  font-size: 16px;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* -- 导航项（两种排法共用） ----------------------------------------------- */
-
-.nav-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: var(--radius-md);
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
   transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
 }
 
-.nav-link:hover {
+.floating-nav-item:hover {
   background: var(--surface-hover);
   color: var(--ink);
   text-decoration: none;
 }
 
-.nav-link.active {
+.floating-nav-item.active {
   background: var(--brand-soft);
   color: var(--brand-dark);
   font-weight: 600;
 }
 
-.nav-link svg {
+.floating-nav-item svg {
   flex: none;
 }
 
-/* -- 平板起：侧栏出现，顶条收起 ------------------------------------------ */
+/* 触控设备把行高撑到 44px */
+@media (pointer: coarse) {
+  .floating-nav-item {
+    min-height: 44px;
+  }
+}
 
-@media (min-width: 900px) {
-  .shell-bar,
-  .shell-bar-menu {
+/* 极窄屏只留图标，避免胶囊横跨整个屏幕。去掉文字后要显式撑成 44px
+   见方，否则按钮只剩图标那么宽，指头点不中。 */
+@media (max-width: 420px) {
+  .floating-nav-item {
+    justify-content: center;
+    min-width: 44px;
+    padding: 0;
+  }
+
+  .floating-nav-item span {
     display: none;
   }
+}
 
-  .shell-frame {
-    max-width: 1320px;
-    margin: 0 auto;
-    padding: 20px 20px 0;
-    grid-template-columns: 216px minmax(0, 1fr);
-    gap: 28px;
-  }
-
-  .shell-sidebar {
-    position: sticky;
-    top: 20px;
-    display: flex;
+/* 宽屏：竖排浮层，贴在内容列左侧的余量里。
+   1120 内容 + 两侧各 158（浮层 134 + 间距 24）= 1436，所以门槛取 1440。 */
+@media (min-width: 1440px) {
+  .floating-nav {
     flex-direction: column;
-    gap: 18px;
-    height: calc(100dvh - 40px);
+    gap: 1px;
+    left: max(16px, calc(50% - 560px - 158px));
+    bottom: auto;
+    top: 132px;
+    border-radius: var(--radius-xl);
+    padding: 6px;
+    width: 134px;
   }
 
-  .sidebar-brand {
-    padding: 4px 10px;
-  }
-
-  .sidebar-sections {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  /* 「提交插件」是动作不是目的地：自己一组，和四个板块用分隔线隔开，
-     也不共用 .sidebar-sections —— 那个类名是「板块」的意思，
-     test:visual 按它数板块个数。 */
-  .sidebar-secondary {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding-top: 10px;
-    border-top: 1px solid var(--line);
-  }
-
-  /* 语言和账号沉到栏底：它们跟着人走，不跟着页面走 */
-  .sidebar-foot {
-    margin-top: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 14px 2px 0;
-    border-top: 1px solid var(--line);
-  }
-}
-
-/* ============================================================================
-   侧栏底部：语言 + 账号
-
-   语言常驻可见，不收进账号菜单 —— 本站主要流量是未登录的搜索访客，
-   藏进账号菜单等于让他们永远换不了语言。
-   ========================================================================= */
-
-.sidebar-foot .language-switch {
-  align-self: flex-start;
-}
-
-.sidebar-account-placeholder {
-  display: block;
-  width: 100%;
-  height: 40px;
-  border-radius: var(--radius-md);
-  background: var(--surface-sunken);
-}
-
-.sidebar-signin {
-  width: 100%;
-  justify-content: center;
-  gap: 7px;
-}
-
-.sidebar-account {
-  position: relative;
-}
-
-.sidebar-account-trigger {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  min-height: 44px;
-  padding: 4px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  background: transparent;
-  text-align: start;
-  transition: background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
-}
-
-.sidebar-account-trigger:hover {
-  background: var(--surface);
-  border-color: var(--line);
-}
-
-.sidebar-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  flex: none;
-  object-fit: cover;
-  background: var(--surface-sunken);
-}
-
-.sidebar-avatar.is-fallback {
-  display: grid;
-  place-items: center;
-  background: var(--brand-soft);
-  color: var(--brand-dark);
-  font-family: var(--font-display);
-  font-size: 12px;
-}
-
-.sidebar-account-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidebar-account-caret {
-  flex: none;
-  color: var(--faint);
-  font-size: 10px;
-}
-
-/* 账号在栏底，菜单只能往上开，否则掉出视口 */
-.sidebar-account-menu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  inset-inline-start: 0;
-  z-index: 50;
-  min-width: 190px;
-  padding: 5px;
-  display: grid;
-  gap: 2px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-}
-
-.sidebar-account-menu a,
-.sidebar-account-menu button {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  min-height: 40px;
-  padding: 0 10px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 14px;
-  text-align: start;
-}
-
-.sidebar-account-menu a:hover,
-.sidebar-account-menu button:hover {
-  background: var(--surface-hover);
-  color: var(--ink);
-  text-decoration: none;
-}
-
-/* ============================================================================
-   页面骨架 —— 四个板块共用
-
-   页头（标题 + 一句话 + 页面级动作）→ 工具条（tab / 搜索 / 筛选）→
-   正文（+ 可选右栏）。读者在板块之间切换时视线不用重新找锚点。
-   ========================================================================= */
-
-.page {
-  padding-bottom: 56px;
-  min-width: 0;
-}
-
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--line);
-}
-
-.page-head-titles {
-  min-width: 0;
-}
-
-.page-head h1 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 24px;
-  letter-spacing: 0.01em;
-  text-wrap: balance;
-}
-
-.page-head-sub {
-  margin: 3px 0 0;
-  color: var(--subtle);
-  font-size: 13px;
-  max-width: 64ch;
-}
-
-.page-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-
-.page-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 16px 0;
-}
-
-.page-body {
-  display: grid;
-  gap: 24px;
-  align-items: start;
-}
-
-.page-main {
-  min-width: 0;
-}
-
-.page-rail {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-
-@media (min-width: 1180px) {
-  .page-body.has-rail {
-    grid-template-columns: minmax(0, 1fr) 288px;
-  }
-
-  .page-body.has-rail .page-rail {
-    position: sticky;
-    top: 20px;
-  }
-}
-
-/* ============================================================================
-   首屏横幅 —— 只在排行榜页
-
-   原来的 hero 约 500px 高、占满首屏，而且排行榜和插件目录两页各出现一次。
-   压成一条约 210px 的横幅之后，榜单第一行在首屏就看得见；插件目录页不再
-   出现——进那一页的人已经知道这是哪儿了。
-   ========================================================================= */
-
-.site-hero {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 16px 20px;
-  margin-bottom: 14px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xs);
-}
-
-.site-hero-whale {
-  width: 104px;
-  height: 104px;
-  flex: none;
-  object-fit: contain;
-}
-
-.site-hero-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.site-hero-eyebrow {
-  font-family: var(--font-display);
-  font-size: 12px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--subtle);
-}
-
-.site-hero-name {
-  font-family: var(--font-display);
-  font-size: 26px;
-  line-height: 1.1;
-  letter-spacing: 0.01em;
-  color: var(--brand);
-}
-
-.site-hero-desc {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: var(--muted);
-  max-width: 52ch;
-}
-
-.site-hero-figures {
-  display: flex;
-  gap: 24px;
-  flex: none;
-}
-
-.site-hero-figure {
-  text-align: end;
-}
-
-.site-hero-figure dd {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 32px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.site-hero-figure dt {
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--subtle);
-}
-
-.site-hero-figure.is-live dd {
-  color: var(--accent-teal);
-}
-
-@media (max-width: 899px) {
-  .site-hero {
-    flex-wrap: wrap;
-    gap: 14px;
-    padding: 14px;
-  }
-
-  .site-hero-whale {
-    width: 72px;
-    height: 72px;
-  }
-
-  .site-hero-figures {
-    width: 100%;
+  .floating-nav-item {
     justify-content: flex-start;
-    gap: 28px;
-    padding-top: 4px;
-    border-top: 1px solid var(--line);
+    border-radius: var(--radius-md);
   }
 
-  .site-hero-figure {
-    text-align: start;
-  }
-}
-
-/* 看板娘固定在右下角，会压住内容列最后一行。给内容留出它的高度，
-   而不是把它挪走 —— 它在所有页面常驻是有意的。 */
-.shell-content {
-  padding-bottom: 132px;
-}
-
-@media (min-width: 900px) {
-  .shell-content {
-    padding-bottom: 148px;
-  }
-}
-
-/* 目录快照时间：原来绝对定位在 hero 角上，现在是页头副标题的一段行内文字。
-   旧的 .hero-updated 规则还在（hero 已删，留着无害），这条是新位置的样式。 */
-.page-head-updated {
-  display: inline;
-  margin-inline-start: 8px;
-  color: var(--faint);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.page-head-updated::before {
-  content: '·';
-  margin-inline-end: 8px;
-}
-
-/* 窄屏菜单底部：语言 + 账号。侧栏在这个宽度是隐藏的，
-   不放这儿手机上就没有入口。 */
-.shell-bar-menu-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-
-.shell-bar-menu-foot .sidebar-account,
-.shell-bar-menu-foot .sidebar-signin {
-  flex: 1;
-  min-width: 0;
-}
-
-/* 菜单在页面顶部，账号菜单往下开 */
-.shell-bar-menu-foot .sidebar-account-menu {
-  top: calc(100% + 6px);
-  bottom: auto;
-  inset-inline-start: auto;
-  inset-inline-end: 0;
-}
-
-/* ============================================================================
-   右栏卡片 —— 排行榜 / 插件目录共用
-   ========================================================================= */
-
-.rail-card {
-  padding: 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xl);
-}
-
-.rail-card-title {
-  margin: 0 0 12px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.rail-card-body {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.rail-card-link {
-  display: inline-block;
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.rail-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0;
-}
-
-.rail-stats dt {
-  font-size: 11px;
-  color: var(--subtle);
-  line-height: 1.35;
-}
-
-.rail-stats dd {
-  margin: 3px 0 0;
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-}
-
-.rail-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.rail-list li {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 13px;
-}
-
-.rail-list a {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rail-list span {
-  flex: none;
-  font-size: 11px;
-  color: var(--subtle);
-}
-
-/* ============================================================================
-   文档页内目录 —— 免费API 页最长，没有目录只能靠滚
-   ========================================================================= */
-
-.api-docs-layout {
-  display: grid;
-  gap: 28px;
-  align-items: start;
-}
-
-/* 网格子项默认 min-width: auto，代码块和表格会把它撑过容器宽度，
-   页面就整体横向滚了。宽内容各自有自己的滚动容器。 */
-.api-docs-main {
-  min-width: 0;
-}
-
-@media (min-width: 1180px) {
-  .api-docs-layout {
-    grid-template-columns: minmax(0, 1fr) 200px;
-  }
-
-  .api-docs-toc {
-    position: sticky;
-    top: 20px;
-  }
-}
-
-.api-docs-toc {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.api-docs-toc-title {
-  margin: 0 0 6px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-
-.api-docs-toc a {
-  padding: 4px 0;
-  font-size: 13px;
-  color: var(--subtle);
-}
-
-.api-docs-toc a:hover {
-  color: var(--ink);
-  text-decoration: none;
-}
-
-@media (max-width: 1179px) {
-  .api-docs-toc {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 6px 14px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .api-docs-toc-title {
-    width: 100%;
-    margin: 0;
+  .floating-nav-item span {
+    display: inline;
   }
 }
