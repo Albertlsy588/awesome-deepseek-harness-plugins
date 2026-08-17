@@ -38,7 +38,7 @@ describe('community post metadata', () => {
     const database = communityDatabase()
     const id = await seedPost(database, '刚把 profile 切换脚本重写了一遍')
     await expect(metadataFor(database, `/community/p/${id}`)).resolves.toEqual({
-      title: '刚把 profile 切换脚本重写了一遍 — @octocat · DSH 1024 广场',
+      title: '刚把 profile 切换脚本重写了一遍 — @octocat · DSH 讨论区',
       description: '刚把 profile 切换脚本重写了一遍',
     })
     database.close()

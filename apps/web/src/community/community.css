@@ -38,8 +38,11 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  padding-bottom: 16px;
+  /* 标题块和分隔线之间要留够。16px 时副标题几乎贴在线上，读起来像
+     一整块，看不出「这条线是分节的」。 */
+  padding-bottom: 28px;
   border-bottom: 1px solid var(--line);
+  margin-bottom: 28px;
 }
 
 .community .community-head h1 {
@@ -103,7 +106,7 @@
 }
 
 /* ============================================================================
-   1024 广场 —— 社区界面样式
+   DSH 讨论区 —— 社区界面样式
 
    所有颜色 / 阴影 / 圆角 / 字体一律取自 @dsh-1024store/core/tokens.css，
    本文件里不出现任何字面色值。和主站共用一套令牌，所以两边看起来是
@@ -166,9 +169,18 @@
   text-decoration: underline;
 }
 
-.community button {
+/* 排除站点组件。这条规则是给社区自己的按钮用的，但它 0-1-1 的优先级
+   会盖过站点组件自己的 0-1-0 类选择器，而 community.css 又在 styles.css
+   之后加载 —— .github-signin 的白字就是这么变成 --ink、在深色底上彻底
+   看不见的。CLAUDE.md 里记的正是这个坑。 */
+.community button:not(.github-signin) {
   font: inherit;
   color: inherit;
+  cursor: pointer;
+}
+
+.community button.github-signin {
+  font: inherit;
   cursor: pointer;
 }
 

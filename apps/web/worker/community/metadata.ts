@@ -1,6 +1,6 @@
 import { COMMUNITY_BASE_PATH } from './routes'
 
-const SITE_NAME = 'DSH 1024 广场'
+const SITE_NAME = 'DSH 讨论区'
 
 /** First line of prose, flattened, for a share card. */
 function summarise(body: string, maximum = 120): string {

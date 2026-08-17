@@ -195,16 +195,16 @@ export function collectionCopy(
   if (view === 'community') {
     return zh
       ? {
-          title: `1024 广场 · 开发者社区 | ${SITE_NAME}`,
+          title: `DSH 讨论区 · 开发者社区 | ${SITE_NAME}`,
           description: 'DeepSeek Harness 插件开发者的公开广场：分享进展、提问、聊插件。用 GitHub 账号登录即可发言。',
-          heading: '1024 广场',
+          heading: 'DSH 讨论区',
           intro: 'DeepSeek Harness 开发者的公开广场。',
           listHeading: '最新发言',
         }
       : {
-          title: `1024 Plaza · Developer community | ${SITE_NAME}`,
+          title: `DSH Forum · Developer community | ${SITE_NAME}`,
           description: 'The open square for DeepSeek Harness plugin developers: progress, questions, and plugins. Sign in with GitHub to post.',
-          heading: '1024 Plaza',
+          heading: 'DSH Forum',
           intro: 'The open square for DeepSeek Harness developers.',
           listHeading: 'Latest posts',
         }
@@ -213,16 +213,16 @@ export function collectionCopy(
   if (view === 'communityRules') {
     return zh
       ? {
-          title: `社区规则 · 1024 广场 | ${SITE_NAME}`,
-          description: '1024 广场的发言规则：谁能发、发什么、怎么删。',
-          heading: '关于 1024 广场',
+          title: `社区规则 · DSH 讨论区 | ${SITE_NAME}`,
+          description: 'DSH 讨论区的发言规则：谁能发、发什么、怎么删。',
+          heading: '关于 DSH 讨论区',
           intro: 'DeepSeek Harness 开发者的公开广场。',
           listHeading: '规则',
         }
       : {
-          title: `Guidelines · 1024 Plaza | ${SITE_NAME}`,
-          description: 'How posting works on 1024 Plaza: who can post, what belongs here, and how removal works.',
-          heading: 'About 1024 Plaza',
+          title: `Guidelines · DSH Forum | ${SITE_NAME}`,
+          description: 'How posting works on DSH Forum: who can post, what belongs here, and how removal works.',
+          heading: 'About DSH Forum',
           intro: 'The open square for DeepSeek Harness developers.',
           listHeading: 'Guidelines',
         }

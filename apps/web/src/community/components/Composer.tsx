@@ -57,7 +57,9 @@ export function Composer({
   if (!viewer) {
     return (
       <div className={compact ? 'composer composer-compact composer-signed-out' : 'composer composer-signed-out'}>
-        <p>{t(compact ? 'signInToReact' : 'signInToPost')}</p>
+        {/* 顶层发帖框不写「登录后即可发言」——按钮自己就说清楚了。
+            评论框保留一句，因为那里按钮离上下文更远。 */}
+        {compact ? <p>{t('signInToReact')}</p> : null}
         <GitHubSignInButton onClick={startSignIn} />
       </div>
     )
