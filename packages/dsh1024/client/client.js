@@ -4,8 +4,22 @@ var module = { exports: {} }; var exports = module.exports;
 
 const React = require('react')
 const h = React.createElement
-const { useCallback, useEffect, useMemo, useRef, useState } = React
+const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React
 const NS = 'dsh1024'
+
+/**
+ * 本体的 UI 基元。它在平台 seed 表里,同步 require 拿到的是 shell 同一个实例,
+ * CSS 已随 shell 加载,零打包成本。
+ *
+ * 但同步 require 只认那张 seed 表 —— require 一个不在表里的包会 throw,并且
+ * 会把整个 factory 一起炸掉。所以这里必须兜底:拿不到就回退自绘,面板绝不能白屏。
+ */
+let primitives = null
+try {
+  primitives = require('@deepseek-ai/dsh-client-ui-primitives')
+} catch {
+  primitives = null
+}
 const SITE_URL = 'https://deepseek1024.com/'
 
 const zh = {
@@ -13,7 +27,7 @@ const zh = {
   discover: '发现', installed: '已安装', all: '全部', search: '搜索名称、作者或功能…',
   popular: '热门', newest: '最新', install: '安装', installing: '安装中…',
   remove: '卸载', removing: '卸载中…', source: '源码', empty: '没有匹配的插件',
-  more: '加载更多',
+  more: '加载更多', expand: '展开全部分类', collapse: '收起分类',
   loading: '正在加载插件目录…', loadFailed: '目录加载失败，请稍后重试。',
   confirmInstall: '这是社区第三方代码。确认信任来源并安装',
   confirmRemove: '确认卸载', restart: '项变更已完成，重启 DeepSeek Harness 后生效。',
@@ -27,7 +41,7 @@ const en = {
   discover: 'Discover', installed: 'Installed', all: 'All', search: 'Search by name, owner, or capability…',
   popular: 'Popular', newest: 'Newest', install: 'Install', installing: 'Installing…',
   remove: 'Uninstall', removing: 'Removing…', source: 'Source', empty: 'No matching plugins',
-  more: 'Load more',
+  more: 'Load more', expand: 'Show all categories', collapse: 'Show fewer categories',
   loading: 'Loading the plugin catalog…', loadFailed: 'The catalog could not be loaded. Try again later.',
   confirmInstall: 'This is third-party community code. Trust this source and install',
   confirmRemove: 'Uninstall', restart: 'change(s) completed. Restart DeepSeek Harness to apply them.',
@@ -50,40 +64,81 @@ function subscribeCatalogCount(listener) {
   return () => catalogCountListeners.delete(listener)
 }
 
+function readCatalogCount() {
+  return catalogCount
+}
+
+/** 订阅目录总数;数据变了徽标自己更新,不再靠 dispose + 重新 register。 */
+function useCatalogCount() {
+  return useSyncExternalStore(subscribeCatalogCount, readCatalogCount, readCatalogCount)
+}
+
 const CSS = `
-.dsm-root{color:var(--dsw-alias-label-primary,#202124);container-type:inline-size;display:flex;flex-direction:column;gap:14px;min-width:0}
+.dsm-root{color:var(--dsw-alias-label-primary);container-type:inline-size;display:flex;flex-direction:column;gap:14px;min-width:0}
 .dsm-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
-.dsm-brand{min-width:0;flex:1 1 260px}.dsm-brand h3{font-size:20px;line-height:1.25;margin:0 0 3px}.dsm-brand p{color:var(--dsw-alias-label-secondary,#667085);font-size:13px;line-height:1.5;margin:0}
-.dsm-meta{align-items:center;display:flex;gap:8px;flex-wrap:wrap}.dsm-pill{background:var(--dsw-alias-bg-layer-2,#f2f4f7);border-radius:999px;color:var(--dsw-alias-label-secondary,#667085);font-size:12px;padding:5px 9px}.dsm-site-link{color:var(--dsw-alias-brand-primary,#4338ca);font-size:12px;font-weight:650;text-decoration:none;white-space:nowrap}.dsm-site-link:hover{text-decoration:underline}
-.dsm-notice{align-items:center;background:var(--dsw-alias-state-warn-secondary,#fff7e6);border:1px solid var(--dsw-alias-state-warn-border,#f4c76b);border-radius:10px;display:flex;font-size:13px;gap:8px;line-height:1.45;padding:10px 12px}
+.dsm-brand{min-width:0;flex:1 1 260px}.dsm-brand h3{font-size:20px;line-height:1.25;margin:0 0 3px}.dsm-brand p{color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1.5;margin:0}
+.dsm-meta{align-items:center;display:flex;gap:8px;flex-wrap:wrap}.dsm-pill{background:var(--dsw-alias-bg-layer-2);border-radius:999px;color:var(--dsw-alias-label-secondary);font-size:12px;padding:5px 9px}.dsm-site-link{color:var(--dsw-alias-brand-primary);font-size:12px;font-weight:650;text-decoration:none;white-space:nowrap}.dsm-site-link:hover{text-decoration:underline}
+.dsm-notice{align-items:center;background:color-mix(in srgb,var(--dsw-alias-state-warn-secondary) 14%,var(--dsw-alias-bg-layer-1));border:1px solid color-mix(in srgb,var(--dsw-alias-state-warn-secondary) 42%,transparent);color:var(--dsw-alias-state-warn-label);border-radius:10px;display:flex;font-size:13px;gap:8px;line-height:1.45;padding:10px 12px}
 .dsm-update-link{color:inherit;font-weight:700;margin-left:auto;white-space:nowrap}
-.dsm-error{background:var(--dsw-alias-state-danger-secondary,#fff0f0);border:1px solid var(--dsw-alias-state-danger-border,#eaa);border-radius:10px;color:var(--dsw-alias-state-danger-primary,#a12626);font-size:13px;padding:10px 12px;white-space:pre-wrap;word-break:break-word}
-.dsm-toolbar{display:flex;flex-direction:column;gap:10px}.dsm-search{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-normal,#d0d5dd);border-radius:10px;color:inherit;font:inherit;min-height:42px;padding:0 13px;width:100%}
-.dsm-row{align-items:center;display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}.dsm-row::-webkit-scrollbar{display:none}.dsm-row-spacer{flex:1 0 12px}
-.dsm-chip,.dsm-action{appearance:none;background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-normal,#d0d5dd);border-radius:9px;color:inherit;cursor:pointer;font:inherit;font-size:13px;min-height:38px;padding:7px 12px;white-space:nowrap}
-.dsm-chip[data-active=true]{background:var(--dsw-alias-brand-secondary,#eef2ff);border-color:var(--dsw-alias-brand-primary,#4f46e5);color:var(--dsw-alias-brand-primary,#4338ca);font-weight:650}
-.dsm-action{background:var(--dsw-alias-brand-primary,#4f46e5);border-color:transparent;color:var(--dsw-alias-button-primary-foreground,#fff);font-weight:650}.dsm-action[data-kind=remove]{background:transparent;border-color:var(--dsw-alias-state-danger-border,#dc6b6b);color:var(--dsw-alias-state-danger-primary,#b42318)}
-.dsm-action[data-kind=installed]{background:var(--dsw-alias-bg-layer-2,#f2f4f7);border-color:transparent;color:var(--dsw-alias-label-secondary,#667085);cursor:default}.dsm-action:disabled{cursor:not-allowed;opacity:.55}
+.dsm-error{background:color-mix(in srgb,var(--dsw-alias-state-error-secondary) 14%,var(--dsw-alias-bg-layer-1));border:1px solid color-mix(in srgb,var(--dsw-alias-state-error-secondary) 42%,transparent);border-radius:10px;color:var(--dsw-alias-state-error-primary);font-size:13px;padding:10px 12px;white-space:pre-wrap;word-break:break-word}
+.dsm-toolbar{display:flex;flex-direction:column;gap:10px}.dsm-search{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l3);border-radius:10px;color:inherit;font:inherit;min-height:42px;padding:0 13px;width:100%}
+.dsm-row{align-items:center;display:flex;gap:8px}.dsm-row-spacer{flex:1 0 12px}
+/* 分类不再横向滚动:本体 Pill 几何(h24 / 12px / gap6)整片铺开,默认最多 3 行,
+   超出才出现展开按钮。564px 面板下是 3 行 84px,按钮不出现。 */
+.dsm-cats{display:flex;flex-wrap:wrap;gap:6px}
+.dsm-cats[data-clamped=true]{max-height:84px;overflow:hidden}
+.dsm-cat{appearance:none;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l3);border-radius:999px;color:inherit;cursor:pointer;font:inherit;font-size:12px;height:24px;line-height:1;padding:0 12px;white-space:nowrap}
+.dsm-cat[data-active=true]{background:var(--dsw-alias-button-ghost-active-fill);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);font-weight:650}
+.dsm-cats-toggle{align-self:flex-start;background:none;border:0;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;padding:2px 0;text-decoration:underline}
+.dsm-chip,.dsm-action{appearance:none;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l3);border-radius:9px;color:inherit;cursor:pointer;font:inherit;font-size:13px;min-height:38px;padding:7px 12px;white-space:nowrap}
+.dsm-chip[data-active=true]{background:var(--dsw-alias-button-ghost-active-fill);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);font-weight:650}
+.dsm-action{background:var(--dsw-alias-brand-primary);border-color:transparent;color:var(--dsw-alias-label-primary-foreground);font-weight:650}.dsm-action[data-kind=remove]{background:transparent;border-color:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary)}
+.dsm-action[data-kind=installed]{background:var(--dsw-alias-bg-layer-2);border-color:transparent;color:var(--dsw-alias-label-secondary);cursor:default}.dsm-action:disabled{cursor:not-allowed;opacity:.55}
 .dsm-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))}
-.dsm-card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-subtle,#e4e7ec);border-radius:12px;display:flex;flex-direction:column;gap:10px;min-width:0;padding:13px}
+.dsm-card{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;display:flex;flex-direction:column;gap:10px;min-width:0;padding:13px}
 .dsm-card-head{align-items:flex-start;display:flex;gap:10px}.dsm-avatar{align-items:center;background:var(--dsm-avatar,#4f46e5);border-radius:9px;color:#fff;display:flex;flex:0 0 36px;font-size:15px;font-weight:750;height:36px;justify-content:center}
-.dsm-name{font-size:14px;font-weight:700;line-height:1.35;overflow-wrap:anywhere}.dsm-owner{color:var(--dsw-alias-label-tertiary,#7c8594);font-size:12px;line-height:1.5}.dsm-source{color:var(--dsw-alias-brand-primary,#4f46e5);font-size:12px;margin-left:auto;text-decoration:none;white-space:nowrap}
-.dsm-desc{color:var(--dsw-alias-label-secondary,#586174);display:-webkit-box;font-size:13px;line-height:1.5;min-height:39px;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2}
-.dsm-card-foot{align-items:center;display:flex;gap:8px;margin-top:auto}.dsm-category{background:var(--dsw-alias-bg-layer-2,#f2f4f7);border-radius:999px;color:var(--dsw-alias-label-secondary,#667085);font-size:11px;max-width:55%;overflow:hidden;padding:4px 8px;text-overflow:ellipsis;white-space:nowrap}.dsm-grow{flex:1}
-.dsm-state{align-items:center;color:var(--dsw-alias-label-secondary,#667085);display:flex;font-size:13px;gap:8px;justify-content:center;min-height:140px;text-align:center}.dsm-spin{animation:dsm-spin .8s linear infinite;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;height:15px;width:15px}@keyframes dsm-spin{to{transform:rotate(360deg)}}
+.dsm-name{font-size:14px;font-weight:700;line-height:1.35;overflow-wrap:anywhere}.dsm-owner{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5}.dsm-source{color:var(--dsw-alias-brand-primary);font-size:12px;margin-left:auto;text-decoration:none;white-space:nowrap}
+.dsm-desc{color:var(--dsw-alias-label-secondary);display:-webkit-box;font-size:13px;line-height:1.5;min-height:39px;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.dsm-card-foot{align-items:center;display:flex;gap:8px;margin-top:auto}.dsm-category{background:var(--dsw-alias-bg-layer-2);border-radius:999px;color:var(--dsw-alias-label-secondary);font-size:11px;max-width:55%;overflow:hidden;padding:4px 8px;text-overflow:ellipsis;white-space:nowrap}.dsm-grow{flex:1}
+.dsm-state{align-items:center;color:var(--dsw-alias-label-secondary);display:flex;font-size:13px;gap:8px;justify-content:center;min-height:140px;text-align:center}.dsm-spin{animation:dsm-spin .8s linear infinite;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;height:15px;width:15px}@keyframes dsm-spin{to{transform:rotate(360deg)}}
 .dsm-more{display:flex;justify-content:center;padding:4px 0 8px}
-@media(max-width:640px){.dsm-root{gap:12px}.dsm-meta{width:100%}.dsm-row{margin-left:-2px;margin-right:-2px}.dsm-grid{grid-template-columns:1fr}.dsm-card{padding:12px}.dsm-action,.dsm-chip{min-height:42px}.dsm-source{padding:5px 0}}
-@container(max-width:360px){.dsm-head{display:block}.dsm-brand h3{font-size:18px}.dsm-meta{align-items:flex-start;flex-direction:column;margin-top:8px;width:auto}.dsm-pill{display:block}.dsm-card{position:relative}.dsm-card-head{display:block;padding-right:18px}.dsm-avatar{display:none}.dsm-source{font-size:0;margin:0;padding:6px;position:absolute;right:5px;top:4px}.dsm-source:after{content:'↗';font-size:15px}.dsm-name{font-size:13px;overflow-wrap:break-word}.dsm-desc,.dsm-category{display:none}.dsm-card-foot{display:block}.dsm-action{margin-top:2px;width:100%}.dsm-row-spacer{display:none}}
-@container(max-width:180px){.dsm-root{gap:8px}.dsm-brand p{display:none}.dsm-meta{gap:3px;margin-top:5px}.dsm-pill{background:transparent;font-size:11px;padding:0 8px}.dsm-toolbar{gap:6px}.dsm-search{font-size:11px;min-height:34px;padding:0 9px}.dsm-row{gap:5px}.dsm-chip,.dsm-action{font-size:11px;min-height:34px;padding:5px 9px}.dsm-card{gap:6px;padding:8px}.dsm-card-head{padding-right:0}.dsm-source{display:none}.dsm-name,.dsm-owner{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsm-name{font-size:12px}.dsm-owner{font-size:11px}.dsm-card-foot{margin-top:0}.dsm-action{margin-top:0}.dsm-more{padding-top:0}}
+/* 侧边栏席位:wide 是整行,窄栏是 36×36 圆形 rail 态(装不下数字,总数走 aria-label)。 */
+.dsm-rail{align-items:center;appearance:none;background:none;border:0;border-radius:8px;color:inherit;cursor:pointer;display:flex;font:inherit;font-size:13px;gap:8px;min-height:32px;padding:0 8px;width:100%}
+.dsm-rail:hover{background:var(--dsw-alias-button-ghost-active-fill)}
+.dsm-rail[data-wide=false]{border-radius:50%;height:36px;justify-content:center;padding:0;width:36px}
+.dsm-rail-icon{align-items:center;display:flex;flex:0 0 16px;height:16px;justify-content:center;width:16px}
+.dsm-rail-label{flex:1;overflow:hidden;text-align:left;text-overflow:ellipsis;white-space:nowrap}
+/* 徽标语汇照抄本体 footer 面板:margin-left:auto、12/16、tertiary、tabular-nums。 */
+.dsm-rail-badge{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px;margin-left:auto;font-variant-numeric:tabular-nums}
+.dsm-pop-backdrop{inset:0;position:fixed;z-index:2147483000}
+.dsm-pop{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;bottom:12px;box-shadow:0 12px 40px rgba(0,0,0,.24);display:flex;flex-direction:column;left:12px;max-height:min(760px,calc(100vh - 24px));overflow:auto;padding:14px;position:fixed;width:min(564px,calc(100vw - 24px));z-index:2147483001}
+@media(max-width:640px){.dsm-root{gap:12px}.dsm-meta{width:100%}.dsm-grid{grid-template-columns:1fr}.dsm-card{padding:12px}.dsm-action,.dsm-chip{min-height:42px}.dsm-source{padding:5px 0}}
+@container(max-width:360px){.dsm-head{display:block}.dsm-brand h3{font-size:18px}.dsm-meta{align-items:flex-start;flex-direction:column;margin-top:8px;width:auto}.dsm-pill{display:block}.dsm-card{position:relative}.dsm-card-head{display:block;padding-right:18px}.dsm-avatar{display:none}.dsm-source{font-size:0;margin:0;padding:6px;position:absolute;right:5px;top:4px}.dsm-source:after{content:'↗';font-size:15px}.dsm-name{font-size:13px;overflow-wrap:break-word}.dsm-desc,.dsm-category{display:none}.dsm-card-foot{display:block}.dsm-action{margin-top:2px;width:100%}.dsm-row-spacer{display:none}.dsm-cats[data-clamped=true]{max-height:112px}}
+@container(max-width:180px){.dsm-root{gap:8px}.dsm-brand p{display:none}.dsm-meta{gap:3px;margin-top:5px}.dsm-pill{background:transparent;font-size:11px;padding:0 8px}.dsm-toolbar{gap:6px}.dsm-cats{gap:4px}.dsm-cat{font-size:11px;padding:0 9px}.dsm-search{font-size:11px;min-height:34px;padding:0 9px}.dsm-row{gap:5px}.dsm-chip,.dsm-action{font-size:11px;min-height:34px;padding:5px 9px}.dsm-card{gap:6px;padding:8px}.dsm-card-head{padding-right:0}.dsm-source{display:none}.dsm-name,.dsm-owner{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsm-name{font-size:12px}.dsm-owner{font-size:11px}.dsm-card-foot{margin-top:0}.dsm-action{margin-top:0}.dsm-more{padding-top:0}}
 `
 
+/**
+ * 注入面板样式。
+ *
+ * 两件事必须这样做:
+ * 1. 打上 data-plugin / data-plugin-css。宿主的 claimStyles 会把页面上任何
+ *    未打标的 <style> 认领给「当时正在物化的插件」,那个插件热更新卸载时会
+ *    把我们的样式一并删掉。打标之后这块样式明确归我们。
+ * 2. 在 factory 体顶层调用,而不是等面板挂载。侧边栏入口在面板从未打开过时
+ *    也要有样式,放进组件的 effect 里那会儿它已经是裸的了。
+ */
 function injectStyles() {
-  if (document.getElementById('dsh1024-style')) return
+  if (typeof document === 'undefined') return
+  if (document.getElementById('dsh1024-style') !== null) return
   const style = document.createElement('style')
   style.id = 'dsh1024-style'
+  style.setAttribute('data-plugin', NS)
+  style.setAttribute('data-plugin-css', NS)
   style.textContent = CSS
   document.head.appendChild(style)
 }
+
+injectStyles()
 
 function repositoryOf(url) {
   const match = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/?$/.exec(url)
@@ -153,6 +208,10 @@ function MarketTab({ locale }) {
   const [loadFailed, setLoadFailed] = useState(false)
   const [restartChanges, setRestartChanges] = useState(0)
   const [visibleCount, setVisibleCount] = useState(40)
+  // 分类整片铺开,只有真的超过三行才给展开兜底(564px 面板下不会出现)。
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false)
+  const [categoriesOverflow, setCategoriesOverflow] = useState(false)
+  const catsRef = useRef(null)
 
   const refreshInstalled = useCallback(() => {
     return fetch('/dsh1024/installed', { cache: 'no-store' })
@@ -210,7 +269,18 @@ function MarketTab({ locale }) {
       .finally(() => { revalidating.current = false })
   }, [])
 
-  useEffect(() => { injectStyles(); load().then(revalidate) }, [load, revalidate])
+  useEffect(() => { load().then(revalidate) }, [load, revalidate])
+
+  // 面板宽度和分类数量都会变,用 ResizeObserver 判断是否真的溢出三行。
+  useEffect(() => {
+    const node = catsRef.current
+    if (node === null || typeof ResizeObserver === 'undefined') return undefined
+    const measure = () => setCategoriesOverflow(node.scrollHeight > node.clientHeight + 1)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [categories, categoriesExpanded, registry])
 
   // Coming back to a panel that has been sitting open for hours should not show
   // an hours-old catalog either.
@@ -355,12 +425,16 @@ function MarketTab({ locale }) {
         h('span', { className: 'dsm-row-spacer' }),
         h('button', { className: 'dsm-chip', type: 'button', 'data-active': sort === 'popular', onClick: () => setSort('popular') }, copy.popular),
         h('button', { className: 'dsm-chip', type: 'button', 'data-active': sort === 'newest', onClick: () => setSort('newest') }, copy.newest)),
-      h('div', { className: 'dsm-row' },
-        h('button', { className: 'dsm-chip', type: 'button', 'data-active': category === 'all', onClick: () => setCategory('all') }, copy.all),
+      h('div', { className: 'dsm-cats', ref: catsRef, 'data-clamped': !categoriesExpanded },
+        h('button', { className: 'dsm-cat', type: 'button', 'data-active': category === 'all', onClick: () => setCategory('all') }, copy.all),
         categories.map(id => h('button', {
-          className: 'dsm-chip', key: id, type: 'button', 'data-active': category === id,
+          className: 'dsm-cat', key: id, type: 'button', 'data-active': category === id,
           onClick: () => setCategory(id),
-        }, categoryLabels[id]?.[lang] || categoryLabels[id]?.en || id)))),
+        }, categoryLabels[id]?.[lang] || categoryLabels[id]?.en || id))),
+      categoriesOverflow && h('button', {
+        className: 'dsm-cats-toggle', type: 'button',
+        onClick: () => setCategoriesExpanded(value => !value),
+      }, categoriesExpanded ? copy.collapse : copy.expand)),
     loadFailed
       ? h('div', { className: 'dsm-state' }, h('span', null, copy.loadFailed, ' ',
           h('button', { className: 'dsm-chip', type: 'button', onClick: load }, copy.retry)))
@@ -374,6 +448,38 @@ function MarketTab({ locale }) {
                 h('button', {
                   className: 'dsm-chip', type: 'button', onClick: () => setVisibleCount(count => count + 40),
                 }, copy.more + ' (' + visibleCount + '/' + plugins.length + ')'))))
+}
+
+/** 侧边栏席位:图标 + 名称 + 总数徽标;点开自己的浮层。 */
+function SidebarEntry({ wide, locale }) {
+  const t = locale.bind(NS)
+  const count = useCatalogCount()
+  const [open, setOpen] = useState(false)
+  const label = t('tab')
+  const title = count === null ? label : label + ' (' + count + ')'
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onKeyDown = event => { if (event.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
+  const Icon = primitives?.IconDownloadOutline16
+  return h(React.Fragment, null,
+    h('button', {
+      className: 'dsm-rail', type: 'button', 'data-wide': wide !== false,
+      title, 'aria-label': title, 'aria-expanded': open,
+      onClick: () => setOpen(value => !value),
+    },
+      h('span', { className: 'dsm-rail-icon', 'aria-hidden': true },
+        Icon ? h(Icon, null) : '\u2b07'),
+      wide !== false && h('span', { className: 'dsm-rail-label' }, label),
+      wide !== false && count !== null && h('span', { className: 'dsm-rail-badge' }, count)),
+    open && h(React.Fragment, null,
+      h('div', { className: 'dsm-pop-backdrop', onClick: () => setOpen(false) }),
+      h('div', { className: 'dsm-pop', role: 'dialog', 'aria-label': label },
+        h(MarketTab, { locale }))))
 }
 
 exports.name = 'dsh1024/client'
@@ -408,13 +514,40 @@ exports.apply = function apply(ctx) {
       disposeEntry()
     }
   })
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: '1024store',
-    order: 100,
+  // 必须包在 slots.inject 里:裸 register 打进未声明的槽会抛错。
+  // id 用我们自己的,绝不能复用官方面板的 id(会把它顶掉);
+  // order 10 让我们稳定排在官方面板之下、设置之上。
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+    name: 'sidebar.footer.action',
+    id: 'dsh1024-store',
+    order: 10,
     label: () => t('tab'),
     locale: NS,
-  }, () => h(MarketTab, { locale: ctx.locale })))
+  }, props => h(SidebarEntry, { wide: props?.wide !== false, locale: ctx.locale })))
+  // 左侧导航行的 label 是纯字符串投影(渲染成 <span>{row.label}</span>),
+  // 没法塞徽标节点,所以总数只能拼进字符串。投影按 slots 版本记忆化,
+  // 因此总数变化时要重新 register 才会重算——与上面 tab 同一套办法。
+  ctx.slots.inject('settings.section', () => {
+    let disposeSection = () => {}
+    const register = () => {
+      disposeSection = ctx.slots.register({
+        name: 'settings.section',
+        id: '1024store',
+        order: 100,
+        label: () => t('tab') + (catalogCount === null ? '' : ' (' + catalogCount + ')'),
+        locale: NS,
+      }, () => h(MarketTab, { locale: ctx.locale }))
+    }
+    register()
+    const unsubscribe = subscribeCatalogCount(() => {
+      disposeSection()
+      register()
+    })
+    return () => {
+      unsubscribe()
+      disposeSection()
+    }
+  })
 }
 
 return module.exports; } });

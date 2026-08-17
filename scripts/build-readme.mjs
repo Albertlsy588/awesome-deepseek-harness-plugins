@@ -162,22 +162,106 @@ function heroImage(registry, locale) {
 // GitHub stops rendering Markdown at 500 KiB and gives no truncation notice: every
 // entry past that byte offset simply does not exist for readers. Measured against the
 // live catalog on 2026-08-16, an uncapped projection was 594 KB and silently dropped
-// its last 479 plugins. Curated categories are always listed in full; the
-// auto-discovered `unclassified` bucket is the only one large enough to blow the
-// budget, so it is the only one capped. Its natural (name) ordering is reused as-is —
-// `added` carries no usable ordering signal here, since the topic-scan backfill gave
-// most of the bucket the same date.
-const githubRenderLimit = 500 * 1024
-const unclassifiedListLimit = 500
+// its last 479 plugins.
+//
+// The cap is a byte budget, not an entry count, because an entry costs whatever its
+// rendered line costs and that cost moves under us. A fixed 500-entry cap on the
+// auto-discovered `unclassified` bucket held only while that bucket was the sole one
+// big enough to matter and its lines were short. The classification pass ended both
+// conditions in one go: it gave every entry a bilingual description (roughly doubling
+// the average line) and emptied `unclassified` into the curated categories, so a cap
+// keyed to a bucket and counted in entries had nothing left to trim and reported no
+// truncation while the projection sailed 210 KB past the limit. Any entry count that
+// fits today is a silent truncation the next time descriptions grow, so the budget is
+// measured in the only unit GitHub actually enforces.
+//
+// Both projections are budgeted separately: the same entry costs about three bytes per
+// Chinese character in README.md against one per ASCII character in catalog/README.md,
+// and the two descriptions are written independently, so one shared entry count would
+// truncate one file needlessly while overshooting the other. Each locale is fitted in
+// two passes — render the whole file with every list emptied to price what is not the
+// lists themselves (prose, index, summaries, truncation notices), then split what is
+// left between the groups.
+//
+// That split is max-min fair (see `fairShares`) rather than first-come: a category that
+// needs less than an equal share is listed in full and releases the surplus, so only
+// the genuinely oversized categories are cut, and never so that an earlier one can be
+// whole at a later one's expense. Curated categories are served first and `unclassified`
+// takes the leftover, which reproduces the old rule exactly whenever the curated set
+// fits: full curated lists, `unclassified` capped.
+//
+// Every pass reads sorted arrays and integer byte counts, so the same input always
+// yields the same output: no clock, no Map iteration order, no hashing. Each list keeps
+// its natural (name) ordering — `added` carries no usable ordering signal here, since
+// the topic-scan backfill gave most of the catalog the same date.
+export const githubRenderLimit = 500 * 1024
+// Headroom below the hard limit. The fitted lists land just under `limit - margin`; the
+// margin absorbs the few bytes the counts in each summary and truncation notice gain as
+// the lists fill, and leaves room for GitHub to be stricter than we measure.
+const renderSafetyMargin = 8 * 1024
 
-function withVisiblePlugins(group) {
-  const capped = group.id === 'unclassified' && group.plugins.length > unclassifiedListLimit
-  return {
-    ...group,
-    total: group.plugins.length,
-    visible: capped ? group.plugins.slice(0, unclassifiedListLimit) : group.plugins,
-    capped,
+// An entry costs its rendered bytes plus the newline that joins it to the list.
+function entryCost(plugin, locale) {
+  return Buffer.byteLength(pluginLine(plugin, locale), 'utf8') + 1
+}
+
+function listCost(group, locale) {
+  return group.plugins.reduce((total, plugin) => total + entryCost(plugin, locale), 0)
+}
+
+function withVisiblePlugins(group, locale, budget) {
+  const visible = []
+  let spent = 0
+  for (const plugin of group.plugins) {
+    const cost = entryCost(plugin, locale)
+    if (spent + cost > budget) break
+    spent += cost
+    visible.push(plugin)
   }
+  return { ...group, total: group.plugins.length, visible, capped: visible.length < group.plugins.length }
+}
+
+// Max-min fair split of `budget` over the given list costs: every group may spend an
+// equal share, a group that needs less than its share takes only what it needs and
+// releases the surplus, and the round repeats until no group is newly satisfied. Small
+// categories are therefore never truncated to make room for a large one. Returns the
+// per-group allowance in input order plus whatever is still unspent.
+function fairShares(costs, budget) {
+  const shares = costs.map(() => 0)
+  let open = costs.map((_, index) => index)
+  let remaining = budget
+  while (open.length > 0) {
+    const share = Math.floor(remaining / open.length)
+    const satisfied = open.filter(index => costs[index] <= share)
+    if (satisfied.length === 0) {
+      for (const index of open) shares[index] = share
+      remaining -= share * open.length
+      break
+    }
+    for (const index of satisfied) {
+      shares[index] = costs[index]
+      remaining -= costs[index]
+    }
+    open = open.filter(index => costs[index] > share)
+  }
+  return { shares, remaining }
+}
+
+// Pass one prices the projection with every list emptied: a zero budget still renders
+// each summary and truncation notice, so the measurement covers every byte the finished
+// file spends outside the lists. Whatever is left under the limit is what pass two may
+// spend on entries.
+function fitGroups(registry, groups, locale) {
+  const emptied = groups.map(group => withVisiblePlugins(group, locale, 0))
+  const overhead = Buffer.byteLength(renderReadme(registry, groups, emptied, locale), 'utf8')
+  const budget = Math.max(githubRenderLimit - renderSafetyMargin - overhead, 0)
+  const curated = groups.map((group, index) => index).filter(index => groups[index].id !== 'unclassified')
+  const { shares, remaining } = fairShares(curated.map(index => listCost(groups[index], locale)), budget)
+  // Anything outside the curated set — in practice only `unclassified` — is served last,
+  // out of what the curated categories left behind.
+  const budgets = groups.map(() => remaining)
+  curated.forEach((groupIndex, shareIndex) => { budgets[groupIndex] = shares[shareIndex] })
+  return groups.map((group, index) => withVisiblePlugins(group, locale, budgets[index]))
 }
 
 export function assertRenderable(files) {
@@ -185,7 +269,7 @@ export function assertRenderable(files) {
     const bytes = Buffer.byteLength(content, 'utf8')
     assert(
       bytes <= githubRenderLimit,
-      `${relative} is ${bytes} bytes; GitHub renders at most ${githubRenderLimit} and silently drops everything past that offset. Lower unclassifiedListLimit in scripts/build-readme.mjs.`,
+      `${relative} is ${bytes} bytes; GitHub renders at most ${githubRenderLimit} and silently drops everything past that offset. The plugin lists are already fitted to a byte budget, so this means everything around them — prose, the category index, the per-category summaries — no longer fits: trim that copy or raise renderSafetyMargin in scripts/build-readme.mjs.`,
     )
   }
 }
@@ -204,8 +288,8 @@ function categoryIndex(groups, locale) {
 // line, and category labels contain "&", so the summary text must be HTML-escaped.
 // The <a id> anchor stays outside the block so the category index still jumps to a
 // collapsed group.
-function categorySections(groups, locale) {
-  return groups.map(withVisiblePlugins).map(group => {
+function categorySections(prepared, locale) {
+  return prepared.map(group => {
     const count = group.capped
       ? (locale === 'zh' ? `显示 ${group.visible.length} / 共 ${group.total} 个` : `showing ${group.visible.length} of ${group.total}`)
       : (locale === 'zh' ? `${group.total} 个插件` : `${group.total} plugins`)
@@ -213,8 +297,8 @@ function categorySections(groups, locale) {
     if (group.capped) {
       const rest = group.total - group.visible.length
       lines.push(locale === 'zh'
-        ? `- *其余 ${rest} 个待分类插件未在此列出，可在[在线网站](https://deepseek1024.com/)搜索或浏览完整目录。*`
-        : `- *The remaining ${rest} unclassified plugins are not listed here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*`)
+        ? `- *GitHub 单个文件能渲染的长度有上限，本分类还有 ${rest} 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*`
+        : `- *GitHub only renders so much of one file, so ${rest} more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*`)
     }
     return [
       `<a id="${group.id}"></a>`,
@@ -229,7 +313,7 @@ function categorySections(groups, locale) {
   }).join('\n\n')
 }
 
-function chineseReadme(registry, groups) {
+function chineseReadme(registry, groups, prepared) {
   const total = registry.plugins.length
   return `# DSH 1024Store
 
@@ -385,11 +469,11 @@ npx wrangler deploy --secrets-file .dev.vars
 
 ## 插件分类
 
-分组默认折叠，点开即可展开。策展分类完整列出；自动发现的「待分类」条目太多，只列出其中一部分，完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。
+分组默认折叠，点开即可展开。GitHub 对单个文件的渲染长度有上限，条目较多的分类只列出其中一部分（分类标题会写明列出了多少），完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。
 
 ${categoryIndex(groups, 'zh')}
 
-${categorySections(groups, 'zh')}
+${categorySections(prepared, 'zh')}
 
 ## 免责声明
 
@@ -407,7 +491,7 @@ ${categorySections(groups, 'zh')}
 `
 }
 
-function englishReadme(registry, groups) {
+function englishReadme(registry, groups, prepared) {
   const total = registry.plugins.length
   return `# Awesome DeepSeek Harness Plugins
 
@@ -448,19 +532,23 @@ Monorepo subpackage plugins add the subdirectory to the spec (for example \`gith
 
 ## Categories
 
-Groups are collapsed by default. Curated categories are listed in full; the auto-discovered Unclassified bucket lists only a subset — search the [live website](https://deepseek1024.com/) for the complete catalog.
+Groups are collapsed by default. GitHub renders only so much of a single file, so the largest categories list a subset — each summary says how many — while smaller ones are complete. Search the [live website](https://deepseek1024.com/) for the full catalog.
 
 ${categoryIndex(groups, 'en')}
 
-${categorySections(groups, 'en')}
+${categorySections(prepared, 'en')}
 `
+}
+
+function renderReadme(registry, groups, prepared, locale) {
+  return locale === 'zh' ? chineseReadme(registry, groups, prepared) : englishReadme(registry, groups, prepared)
 }
 
 export async function buildReadmeFiles(registry, categories) {
   const groups = groupPlugins(registry, categories)
-  const files = {
-    'README.md': chineseReadme(registry, groups),
-    'catalog/README.md': englishReadme(registry, groups),
+  const files = {}
+  for (const [locale, relative] of [['zh', 'README.md'], ['en', 'catalog/README.md']]) {
+    files[relative] = renderReadme(registry, groups, fitGroups(registry, groups, locale), locale)
   }
   assertRenderable(files)
   return files

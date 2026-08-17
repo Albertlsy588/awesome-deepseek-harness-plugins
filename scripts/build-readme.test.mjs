@@ -10,6 +10,7 @@ import {
   adaptLegacyRegistry,
   buildReadmeFiles,
   catalogRevision,
+  githubRenderLimit,
   groupPlugins,
   loadRegistry,
   normalizeRegistry,
@@ -18,6 +19,36 @@ import {
 } from './build-readme.mjs'
 
 const script = path.join(path.dirname(fileURLToPath(import.meta.url)), 'build-readme.mjs')
+
+// Entries whose descriptions can be made arbitrarily long: `padding` adds that many
+// characters to each locale, costing one byte each in English and three in Chinese —
+// the asymmetry the byte budget has to price separately.
+function bucketPlugins(category, count, padding, prefix = 'scanned') {
+  return Array.from({ length: count }, (_, index) => {
+    const suffix = String(index).padStart(4, '0')
+    return {
+      id: `scanner/${prefix}-${suffix}`,
+      name: `${prefix}-${suffix}`,
+      owner: 'scanner',
+      url: `https://github.com/scanner/${prefix}-${suffix}`,
+      category,
+      description: {
+        en: `Discovered by the topic scan.${'x'.repeat(padding)}`,
+        zh: `由 topic 扫描发现。${'描'.repeat(padding)}`,
+      },
+      added: '2026-08-15',
+      stars: null,
+    }
+  })
+}
+
+function unclassifiedPlugins(count, padding) {
+  return bucketPlugins('unclassified', count, padding)
+}
+
+function listedEntries(content, prefix = 'scanned') {
+  return (content.match(new RegExp(`^- \\[${prefix}-\\d{4}\\]`, 'gm')) ?? []).length
+}
 
 const categories = [
   { id: 'tools', order: 50, label: { en: 'Tools & Capabilities', zh: '工具与能力' } },
@@ -205,55 +236,145 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   assert.match(en, /\]\(\.\.\/docs\/api\.md\)/)
 })
 
-test('caps only the unclassified bucket and keeps the projection renderable', async () => {
-  // 3 unclassified entries with a limit of 500 stay uncapped; build a bucket big
-  // enough to trip the cap without depending on the production catalog.
-  const many = Array.from({ length: 620 }, (_, index) => ({
-    id: `scanner/plugin-${String(index).padStart(4, '0')}`,
-    name: `scanned-${String(index).padStart(4, '0')}`,
-    owner: 'scanner',
-    url: `https://github.com/scanner/plugin-${String(index).padStart(4, '0')}`,
-    category: 'unclassified',
-    description: { en: 'Discovered by the topic scan.', zh: '由 topic 扫描发现。' },
-    added: '2026-08-15',
-    stars: null,
-  }))
-  const big = { ...registryFixture, plugins: [...registryFixture.plugins, ...many] }
+test('lists every category that fits and caps only the bucket that overflows', async () => {
+  // Entries are priced in bytes, so the bucket has to be heavy enough to threaten the
+  // limit before anything is dropped; 620 padded entries do that without depending on
+  // the production catalog.
+  const big = { ...registryFixture, plugins: [...registryFixture.plugins, ...unclassifiedPlugins(620, 1200)] }
   const files = await buildReadmeFiles(normalizeRegistry(big), categories)
   const zh = files['README.md']
   const en = files['catalog/README.md']
 
-  // Curated categories keep every entry.
+  // Curated categories keep every entry, however tight the budget gets.
   assert.match(zh, /<summary><strong>工具与能力<\/strong> · 3 个插件<\/summary>/)
   assert.match(en, /<summary><strong>Tools &amp; Capabilities<\/strong> · 3 plugins<\/summary>/)
+  assert.match(zh, /<summary><strong>UI 增强<\/strong> · 1 个插件<\/summary>/)
+  assert.match(en, /<summary><strong>UI Enhancements<\/strong> · 1 plugin/)
+  for (const [name, content] of Object.entries(files)) {
+    assert.ok(content.includes('alpha-tool') && content.includes('Zeta-Tool') && content.includes('ui-thing'), `${name} dropped a curated entry`)
+  }
 
-  // The unclassified bucket is capped, and says so instead of pretending to be whole.
-  assert.match(zh, /<summary><strong>待分类<\/strong> · 显示 500 \/ 共 621 个<\/summary>/)
-  assert.match(en, /<summary><strong>Unclassified<\/strong> · showing 500 of 621<\/summary>/)
-  assert.match(zh, /其余 121 个待分类插件未在此列出/)
-  assert.match(en, /The remaining 121 unclassified plugins are not listed here/)
+  // The unclassified bucket is the only one that could not fit, and says so instead of
+  // pretending to be whole.
+  const zhListed = listedEntries(zh)
+  const enListed = listedEntries(en)
+  assert.ok(zhListed > 0 && zhListed < 620, `zh listed ${zhListed} of 620`)
+  assert.ok(enListed > 0 && enListed < 620, `en listed ${enListed} of 620`)
+  assert.ok(zh.includes(`<summary><strong>待分类</strong> · 显示 ${zhListed} / 共 621 个</summary>`), 'zh summary must report what it listed')
+  assert.ok(en.includes(`<summary><strong>Unclassified</strong> · showing ${enListed} of 621</summary>`), 'en summary must report what it listed')
+  assert.ok(zh.includes(`本分类还有 ${621 - zhListed} 个插件没能列在这里`), 'zh must say how many are missing')
+  assert.ok(en.includes(`so ${621 - enListed} more plugins in this category did not fit here`), 'en must say how many are missing')
+  // Only the overflowing bucket carries a notice.
+  assert.equal((zh.match(/本分类还有 /g) ?? []).length, 1, 'no category that fits may claim to be truncated')
+  assert.equal((en.match(/more plugins in this category did not fit here/g) ?? []).length, 1)
+  // Both notices point readers at the full catalog.
+  assert.match(zh, /完整目录请在\[在线网站\]\(https:\/\/deepseek1024\.com\/\)搜索浏览。\*/)
+  assert.match(en, /search or browse the full catalog on the \[live website\]\(https:\/\/deepseek1024\.com\/\)\.\*/)
+
+  // Each projection gets its own budget: a Chinese entry costs about three bytes per
+  // character, so a shared entry count would either truncate English needlessly or
+  // overshoot Chinese.
+  assert.ok(enListed > zhListed, `English (${enListed}) must fit more entries than Chinese (${zhListed})`)
 
   // The category index still reports the true total, not the truncated one.
   assert.match(zh, /- \[待分类\]\(#unclassified\) \(621\)/)
+  assert.match(en, /- \[Unclassified\]\(#unclassified\) \(621\)/)
+})
 
-  const listed = (zh.match(/^- \[scanned-\d{4}\]/gm) ?? []).length
-  assert.equal(listed, 500, 'exactly the cap should be listed')
+test('caps by rendered bytes rather than by a fixed entry count', async () => {
+  const withBucket = plugins => ({ ...registryFixture, plugins: [...registryFixture.plugins, ...plugins] })
+  const short = await buildReadmeFiles(normalizeRegistry(withBucket(unclassifiedPlugins(620, 0))), categories)
+  const long = await buildReadmeFiles(normalizeRegistry(withBucket(unclassifiedPlugins(620, 1200))), categories)
+
+  // Short entries are cheap, so all 620 fit — the retired 500-entry cap would have
+  // hidden 120 of them for no reason.
+  assert.equal(listedEntries(short['README.md']), 620, 'a cheap bucket must not be truncated')
+  assert.match(short['README.md'], /<summary><strong>待分类<\/strong> · 621 个插件<\/summary>/)
+
+  // The same 620 entries with long bilingual descriptions run out of budget well before
+  // entry 500: exactly the case a fixed count cannot see, and the one that shipped a
+  // silently truncated README.
+  const capped = listedEntries(long['README.md'])
+  assert.ok(capped > 0 && capped < 500, `a heavy bucket must cap below the retired 500 limit, listed ${capped}`)
+})
+
+test('keeps both projections inside the GitHub render limit and spends the budget it has', async () => {
+  // Descriptions far past anything the catalog holds today: the fitted list has to
+  // absorb this without the guard ever firing.
+  const registry = { ...registryFixture, plugins: [...registryFixture.plugins, ...unclassifiedPlugins(2000, 3000)] }
+  const files = await buildReadmeFiles(normalizeRegistry(registry), categories)
+  for (const [name, content] of Object.entries(files)) {
+    const bytes = Buffer.byteLength(content, 'utf8')
+    assert.ok(bytes <= githubRenderLimit, `${name} is ${bytes} bytes, over the ${githubRenderLimit} render limit`)
+    // The budget must be a fit, not a panic: leaving a fifth of the limit unused would
+    // mean hiding entries that had room.
+    assert.ok(bytes > githubRenderLimit * 0.8, `${name} is only ${bytes} bytes and wastes its budget`)
+    assert.ok(listedEntries(content) > 0, `${name} must still list some of the bucket`)
+  }
+})
+
+test('generates byte-identical projections for the same input', async () => {
+  const build = order => buildReadmeFiles(
+    normalizeRegistry({ ...registryFixture, plugins: [...registryFixture.plugins, ...unclassifiedPlugins(620, 1200)] }),
+    order,
+  )
+  const first = await build(categories)
+  // Category input order must not leak into the output either: groups are sorted, and
+  // the fit reads a sorted array rather than any map iteration order.
+  const second = await build([...categories].reverse())
+
+  assert.deepEqual(Object.keys(first), Object.keys(second), 'the same files must be emitted in the same order')
+  for (const name of Object.keys(first)) {
+    assert.ok(
+      Buffer.from(first[name], 'utf8').equals(Buffer.from(second[name], 'utf8')),
+      `${name} must be byte-identical across builds`,
+    )
+  }
 })
 
 test('refuses to emit a projection GitHub would silently truncate', async () => {
-  // One entry whose description alone blows the 500 KiB budget: the guard must throw
-  // rather than ship a file whose tail is invisible on GitHub.
-  const huge = {
+  // The byte budget only governs the entries; it cannot shrink the frame around them.
+  // 2000 categories put the index and the per-category summaries alone past the limit,
+  // and the guard must throw rather than ship a file whose tail is invisible on GitHub.
+  const many = Array.from({ length: 2000 }, (_, index) => ({
+    id: `bucket-${String(index).padStart(4, '0')}`,
+    order: index,
+    label: { en: `Bucket ${index}`, zh: `分类 ${index}` },
+  }))
+  const spread = {
     ...registryFixture,
-    plugins: [{
-      ...registryFixture.plugins[0],
-      description: { en: 'x'.repeat(600 * 1024), zh: 'x'.repeat(600 * 1024) },
-    }],
+    plugins: many.flatMap((category, index) => bucketPlugins(category.id, 2, 0, `spread${String(index).padStart(4, '0')}`)),
   }
   await assert.rejects(
-    buildReadmeFiles(normalizeRegistry(huge), categories),
+    buildReadmeFiles(normalizeRegistry(spread), many),
     /GitHub renders at most \d+ and silently drops everything past that offset/,
   )
+})
+
+test('splits a tight budget fairly instead of starving the last categories', async () => {
+  // Two oversized categories and one small one, all curated: the old rule (curated
+  // always whole) cannot hold here, so the budget has to be shared. A first-come split
+  // would list the first category in full and leave the second empty.
+  const registry = {
+    ...registryFixture,
+    plugins: [
+      ...bucketPlugins('tools', 700, 1200, 'tooled'),
+      ...bucketPlugins('ui', 700, 1200, 'skinned'),
+      ...bucketPlugins('fun', 4, 1200, 'played'),
+    ],
+  }
+  const files = await buildReadmeFiles(normalizeRegistry(registry), categories)
+  for (const [name, content] of Object.entries(files)) {
+    const tools = listedEntries(content, 'tooled')
+    const ui = listedEntries(content, 'skinned')
+    // The small category needs far less than an equal share, so it stays whole.
+    assert.equal(listedEntries(content, 'played'), 4, `${name} truncated a category that fits`)
+    // Both oversized categories are cut, and neither is starved for the other.
+    assert.ok(tools > 0 && tools < 700, `${name} listed ${tools} of 700 tools entries`)
+    assert.ok(ui > 0 && ui < 700, `${name} listed ${ui} of 700 ui entries`)
+    assert.ok(Math.abs(tools - ui) <= 1, `${name} split unevenly: ${tools} vs ${ui}`)
+    assert.ok(Buffer.byteLength(content, 'utf8') <= githubRenderLimit, `${name} is over the render limit`)
+  }
 })
 
 test('leads both projections with the homepage screenshot from the assets branch', async () => {
