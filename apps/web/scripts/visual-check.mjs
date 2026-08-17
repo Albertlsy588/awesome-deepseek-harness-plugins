@@ -79,6 +79,42 @@ async function assertVisibleSubdirectorySiblingsHaveDistinctTitles(page, label) 
   }
 }
 
+/**
+ * A ranking seat that stands for a whole repository has to say so and open.
+ *
+ * Boards ranked by a repository-level metric (stars, growth, activity, newest)
+ * seat a repository once, because every plugin it publishes carries the same
+ * numbers. The seat therefore has to disclose how many plugins it represents
+ * and let the reader reach them; a bare count told neither. Skips when the
+ * dataset happens to hold no multi-plugin repository.
+ */
+async function assertRepositorySeatDisclosure(page, label) {
+  const toggle = page.locator('.package-row .row-repo-toggle').first()
+  if ((await toggle.count()) === 0) return
+  const caption = (await toggle.textContent())?.trim() ?? ''
+  if (!/\d/.test(caption)) {
+    throw new Error(`${label} repository seat does not say how many plugins it stands for: "${caption}"`)
+  }
+  if ((await toggle.getAttribute('aria-expanded')) !== 'false') {
+    throw new Error(`${label} repository seat does not start collapsed`)
+  }
+  const panelId = await toggle.getAttribute('aria-controls')
+  if (!panelId) throw new Error(`${label} repository seat is not wired to a panel`)
+  await toggle.click()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    throw new Error(`${label} repository seat did not expand`)
+  }
+  const listed = await page.locator(`#${panelId} li a`).count()
+  if (listed < 2) {
+    throw new Error(`${label} expanded repository seat lists ${listed} plugins, expected the whole repository`)
+  }
+  await assertNoHorizontalOverflow(page, `${label} with a repository seat expanded`)
+  await toggle.click()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'false') {
+    throw new Error(`${label} repository seat did not collapse again`)
+  }
+}
+
 async function assertMobileEnvironment(page, label) {
   const result = await page.evaluate(() => ({
     maxTouchPoints: navigator.maxTouchPoints,
@@ -429,6 +465,7 @@ try {
 
   const rankings = await openPage({ width: 1440, height: 1000 }, '/rankings')
   await rankings.locator('.ranking-section').waitFor()
+  await assertRepositorySeatDisclosure(rankings, 'desktop rankings')
   if ((await rankings.locator('.directory-section').count()) !== 0) {
     throw new Error('desktop rankings unexpectedly renders the directory')
   }
@@ -702,7 +739,11 @@ try {
     '.catalog-view-tabs a',
     '.segmented-control button',
     '.package-row .row-link',
+    // Small on purpose so it does not shout over the plugin name; its hit area
+    // is grown separately, and that is what this guards.
+    '.package-row .row-repo-toggle',
   ])
+  await assertRepositorySeatDisclosure(mobileRankings, 'mobile rankings')
   await assertHorizontalTouchScroller(
     mobileRankings,
     'mobile GitHub ranking modes',

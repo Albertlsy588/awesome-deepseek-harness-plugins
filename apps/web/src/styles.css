@@ -1420,17 +1420,121 @@ main {
   white-space: nowrap;
 }
 
-/* Marks a ranking seat that stands for several plugins of one repository. */
-.row-siblings {
+/* A ranking seat that stands for a whole repository. The control is labelled
+   rather than a bare count: the reader has to be able to tell that the row
+   represents several plugins AND that it can be opened. */
+.row-repo-toggle {
+  display: inline-flex;
   flex: none;
-  padding: 1px 5px;
-  border: 1px solid var(--line);
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 6px;
+  border: 1px solid var(--brand-border);
   border-radius: 999px;
-  color: var(--faint);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  line-height: 1.4;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
   white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.row-repo-toggle:hover {
+  border-color: var(--brand-underline);
+  background: var(--surface);
+}
+
+.row-repo-caret {
+  transition: transform var(--duration-fast) var(--ease);
+}
+
+.is-expanded .row-repo-caret {
+  transform: rotate(180deg);
+}
+
+/* The stretched row link opens a single plugin. A seat standing for a whole
+   repository opens the repository instead, so it gives the row back. */
+.package-row.is-expandable .row-link::after {
+  content: none;
+}
+
+.package-row.is-expandable {
+  cursor: pointer;
+}
+
+.row-repo-panel {
+  grid-column: 1 / -1;
+  margin: 6px 0 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--brand-wash);
+}
+
+.row-repo-panel[hidden] {
+  display: none;
+}
+
+.row-repo-panel ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 4px 18px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  list-style: none;
+}
+
+.row-repo-panel li {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.row-repo-panel li a {
+  flex: none;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.row-repo-panel li a:hover {
+  text-decoration: underline;
+}
+
+.repo-seat-tag {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.repo-plugin-desc {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-repo-browse {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 8px;
+  color: var(--brand-dark);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.row-repo-browse:hover {
+  text-decoration: underline;
 }
 
 .row-identity p {
@@ -2853,6 +2957,23 @@ main {
   .row-identity {
     grid-column: 3;
     grid-row: 1;
+  }
+
+  /* The pill stays small so it does not shout over the plugin name, but a
+     repeated control needs a 44px target on touch, so the hit area grows
+     without the paint growing with it. */
+  .row-repo-toggle {
+    position: relative;
+  }
+
+  .row-repo-toggle::after {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 44px;
+    content: '';
+    transform: translateY(-50%);
   }
 
   /* 窄屏先保名字：来源标签换到第二行，不跟名字抢同一行的宽度。子目录插件的

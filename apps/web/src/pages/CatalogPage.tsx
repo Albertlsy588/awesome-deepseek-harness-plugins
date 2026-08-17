@@ -14,7 +14,7 @@ import { LoadingState } from '../components/LoadingState'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { PackageRow } from '../components/PackageRow'
 import { SelfInstallBanner } from '../components/SelfInstallBanner'
-import type { CatalogSort, Language, RankingMode } from '../lib/api'
+import type { CatalogPlugin, CatalogSort, Language, RankingMode } from '../lib/api'
 import {
   deriveCatalogView,
   getCachedCatalog,
@@ -228,6 +228,21 @@ export function CatalogPage({ view }: CatalogPageProps) {
     () => new Map(catalog?.categories.map((item) => [item.id, item]) ?? []),
     [catalog?.categories],
   )
+
+  // Boards ranked by a repository-level metric seat a repository once, so a
+  // seat has to be able to show what it stands for. The catalog response
+  // already carries every plugin, so grouping them here costs no request.
+  const pluginsByRepository = useMemo(() => {
+    const groups = new Map<string, CatalogPlugin[]>()
+    for (const plugin of catalog?.packages ?? []) {
+      const key = `${plugin.owner}/${plugin.repository}`.toLocaleLowerCase('en-US')
+      const group = groups.get(key)
+      if (group) group.push(plugin)
+      else groups.set(key, [plugin])
+    }
+    for (const group of groups.values()) group.sort((a, b) => a.name.localeCompare(b.name))
+    return groups
+  }, [catalog?.packages])
 
   // Incremental directory rendering; the visible count resets whenever the
   // filter combination changes (key mismatch falls back to the first page).
@@ -535,6 +550,9 @@ export function CatalogPage({ view }: CatalogPageProps) {
                     category={categoryMap.get(plugin.category)}
                     index={index}
                     ranking={rankingMode}
+                    repositoryPlugins={pluginsByRepository.get(
+                      `${plugin.owner}/${plugin.repository}`.toLocaleLowerCase('en-US'),
+                    )}
                   />
                 ))}
               </div>

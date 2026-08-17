@@ -1,5 +1,14 @@
-import { ArrowUpRight, CalendarDays, Download, Star, TrendingUp, Users } from 'lucide-react'
-import { memo } from 'react'
+import {
+  ArrowUpRight,
+  CalendarDays,
+  ChevronDown,
+  Download,
+  Layers,
+  Star,
+  TrendingUp,
+  Users,
+} from 'lucide-react'
+import { memo, useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
 import { packagePath, pluginListIdentity } from '../lib/api'
@@ -15,6 +24,14 @@ interface PackageRowProps {
   category?: CategoryResult
   index: number
   ranking?: RankingMode
+  /**
+   * Every plugin of this row's repository, this one included.
+   *
+   * Only ranking rows get it, and only boards ranked by a repository-level
+   * metric collapse in the first place. Taken from the catalog the page already
+   * holds, so an expanded row costs no request.
+   */
+  repositoryPlugins?: CatalogPlugin[]
 }
 
 // Memoized so appending a page of rows leaves already-mounted rows untouched.
@@ -23,8 +40,11 @@ export const PackageRow = memo(function PackageRow({
   category,
   index,
   ranking,
+  repositoryPlugins,
 }: PackageRowProps) {
   const { language, t } = useI18n()
+  const [expanded, setExpanded] = useState(false)
+  const panelId = useId()
   const growth = ranking === 'growth24h'
     ? plugin.growth24h
     : ranking === 'growth7d'
@@ -47,7 +67,9 @@ export const PackageRow = memo(function PackageRow({
         ? plugin.installs30d ?? 0
         : plugin.installCount ?? 0
   // Only the repository-level boards collapse, so this is zero everywhere else.
-  const siblings = ranking ? (plugin as { repositorySiblings?: number }).repositorySiblings ?? 0 : 0
+  const collapsed = ranking ? (plugin as { repositorySiblings?: number }).repositorySiblings ?? 0 : 0
+  const siblings = collapsed > 0 ? repositoryPlugins ?? [] : []
+  const expandable = siblings.length > 1
   const relevantDate = ranking === 'active'
     ? plugin.pushedAt
     : ranking === 'newest'
@@ -56,7 +78,22 @@ export const PackageRow = memo(function PackageRow({
   const listIdentity = pluginListIdentity(plugin)
 
   return (
-    <article className={`package-row${ranking ? ' ranking-row' : ''}`}>
+    <article
+      className={`package-row${ranking ? ' ranking-row' : ''}${expandable ? ' is-expandable' : ''}${
+        expanded ? ' is-expanded' : ''
+      }`}
+      // A seat that stands for a whole repository opens that repository rather
+      // than one of its plugins, so the stretched row link steps aside (see
+      // `.is-expandable .row-link::after` in styles.css) and the row toggles.
+      // Anything the reader can actually click keeps doing its own job; the
+      // toggle button below is what makes this reachable from the keyboard.
+      onClick={expandable
+        ? (event) => {
+            if ((event.target as HTMLElement).closest('a, button')) return
+            setExpanded((value) => !value)
+          }
+        : undefined}
+    >
       <span className={`row-index${index < 3 && ranking ? ' is-leading' : ''}`} aria-label={`${t('rank')} ${index + 1}`}>
         {String(index + 1).padStart(2, '0')}
       </span>
@@ -78,13 +115,23 @@ export const PackageRow = memo(function PackageRow({
             </Link>
           </h3>
           <span className="row-owner">{listIdentity.sourceLabel}</span>
-          {siblings > 0 ? (
+          {expandable ? (
             // Stars, growth and activity are repository facts, so this row
-            // stands for its whole repository. Saying how many it stands for
-            // keeps the seat honest instead of quietly hiding the rest.
-            <span className="row-siblings" title={`+${siblings} ${t('siblingPlugins')}`}>
-              +{siblings}
-            </span>
+            // stands for its whole repository. A bare "+23" told the reader a
+            // number but not what it meant or that anything could be done with
+            // it, so it is a labelled disclosure control instead.
+            <button
+              type="button"
+              className="row-repo-toggle"
+              aria-expanded={expanded}
+              aria-controls={panelId}
+              aria-label={expanded ? t('repoCollapse') : t('repoExpand')}
+              onClick={() => setExpanded((value) => !value)}
+            >
+              <Layers size={12} aria-hidden="true" />
+              {siblings.length} {t('repoPluginCount')}
+              <ChevronDown className="row-repo-caret" size={13} aria-hidden="true" />
+            </button>
           ) : null}
         </div>
         <p>{plugin.description[language]}</p>
@@ -171,6 +218,44 @@ export const PackageRow = memo(function PackageRow({
       >
         <ArrowUpRight size={17} aria-hidden="true" />
       </span>
+
+      {expandable ? (
+        // Spans every grid column so the panel reads as part of the row rather
+        // than as a new entry in the list.
+        <div className="row-repo-panel" id={panelId} hidden={!expanded}>
+          <ul>
+            {siblings.map((sibling) => {
+              const identity = pluginListIdentity(sibling)
+              const isSeat = sibling.id === plugin.id
+              // Until a plugin has copy of its own it inherits the repository
+              // blurb, so printing it here would repeat the row above once per
+              // sibling and differentiate nothing.
+              const ownDescription = sibling.description[language] !== plugin.description[language]
+                ? sibling.description[language]
+                : ''
+              return (
+                <li key={sibling.id} className={isSeat ? 'is-seat' : undefined}>
+                  <Link
+                    to={packagePath(sibling)}
+                    target={ROW_LINK_TARGET}
+                    rel={ROW_LINK_TARGET ? 'noreferrer' : undefined}
+                  >
+                    {identity.displayName}
+                  </Link>
+                  {isSeat ? <span className="repo-seat-tag">{t('repoThisSeat')}</span> : null}
+                  {ownDescription ? (
+                    <span className="repo-plugin-desc">{ownDescription}</span>
+                  ) : null}
+                </li>
+              )
+            })}
+          </ul>
+          <Link className="row-repo-browse" to={`/plugins?q=${encodeURIComponent(plugin.repository)}`}>
+            {t('repoBrowseAll')}
+            <ArrowUpRight size={13} aria-hidden="true" />
+          </Link>
+        </div>
+      ) : null}
     </article>
   )
 })
