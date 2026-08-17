@@ -102,19 +102,30 @@ export type CatalogSort =
   | 'active'
   | 'name'
 
+/**
+ * A ranking row.
+ *
+ * `repositorySiblings` is how many further plugins of the same repository this
+ * board had to leave out. It is zero on the install boards, which are ranked by
+ * a per-plugin metric and therefore never collapsed.
+ */
+export interface RankedPlugin extends CatalogPlugin {
+  repositorySiblings: number
+}
+
 export interface CatalogResponse {
   packages: CatalogPlugin[]
   rankings: {
-    stars: CatalogPlugin[]
-    installs: CatalogPlugin[]
-    installs24h: CatalogPlugin[]
-    installs7d: CatalogPlugin[]
-    installs30d: CatalogPlugin[]
-    growth24h: CatalogPlugin[]
-    growth7d: CatalogPlugin[]
-    growth30d: CatalogPlugin[]
-    newest: CatalogPlugin[]
-    active: CatalogPlugin[]
+    stars: RankedPlugin[]
+    installs: RankedPlugin[]
+    installs24h: RankedPlugin[]
+    installs7d: RankedPlugin[]
+    installs30d: RankedPlugin[]
+    growth24h: RankedPlugin[]
+    growth7d: RankedPlugin[]
+    growth30d: RankedPlugin[]
+    newest: RankedPlugin[]
+    active: RankedPlugin[]
   }
   categories: CategoryResult[]
   meta: {

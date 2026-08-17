@@ -1420,6 +1420,19 @@ main {
   white-space: nowrap;
 }
 
+/* Marks a ranking seat that stands for several plugins of one repository. */
+.row-siblings {
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 .row-identity p {
   margin: 3px 0 0;
   overflow: hidden;

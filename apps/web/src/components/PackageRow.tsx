@@ -46,6 +46,8 @@ export const PackageRow = memo(function PackageRow({
       : ranking === 'installs30d'
         ? plugin.installs30d ?? 0
         : plugin.installCount ?? 0
+  // Only the repository-level boards collapse, so this is zero everywhere else.
+  const siblings = ranking ? (plugin as { repositorySiblings?: number }).repositorySiblings ?? 0 : 0
   const relevantDate = ranking === 'active'
     ? plugin.pushedAt
     : ranking === 'newest'
@@ -76,6 +78,14 @@ export const PackageRow = memo(function PackageRow({
             </Link>
           </h3>
           <span className="row-owner">{listIdentity.sourceLabel}</span>
+          {siblings > 0 ? (
+            // Stars, growth and activity are repository facts, so this row
+            // stands for its whole repository. Saying how many it stands for
+            // keeps the seat honest instead of quietly hiding the rest.
+            <span className="row-siblings" title={`+${siblings} ${t('siblingPlugins')}`}>
+              +{siblings}
+            </span>
+          ) : null}
         </div>
         <p>{plugin.description[language]}</p>
       </div>

@@ -4,6 +4,7 @@ import type {
   CatalogSnapshotResult,
   CatalogSort,
   CategoryResult,
+  RankedPlugin,
   RegistryPlugin,
   StoredCatalogSnapshot,
 } from '../types'
@@ -157,29 +158,66 @@ export function filterCatalogPackages(
     .sort(comparePlugins(query.sort))
 }
 
+const RANKING_SIZE = 100
+
+/** A ranking row for a board whose metric already tells siblings apart. */
+function ranked(plugins: CatalogPlugin[]): RankedPlugin[] {
+  return plugins.slice(0, RANKING_SIZE).map((plugin) => ({ ...plugin, repositorySiblings: 0 }))
+}
+
+/**
+ * One seat per repository, for boards ranked by a repository-level metric.
+ *
+ * Stars, forks and `pushed_at` are fetched per repository (`metricKey` in
+ * github-metrics.ts) and the star history is keyed the same way, so every
+ * plugin a monorepo publishes carries byte-identical numbers. Ranked flat, they
+ * sort adjacently and the board degenerates: one 24-package repository would
+ * take 24 of the 100 star seats with 24 copies of the same star count, and the
+ * reader learns nothing from 23 of them.
+ *
+ * Collapsing is deliberately confined to those boards. The install boards rank
+ * by a per-plugin counter, so a repository holding many seats there earned each
+ * one, and folding them away would hide a real result.
+ *
+ * The whole list is walked rather than just the first hundred, so the seat that
+ * survives can report how many siblings it stands for.
+ */
+function collapseByRepository(plugins: CatalogPlugin[]): RankedPlugin[] {
+  const seats = new Map<string, RankedPlugin>()
+  for (const plugin of plugins) {
+    const key = `${plugin.owner}/${plugin.repository}`.toLocaleLowerCase('en-US')
+    const seat = seats.get(key)
+    if (seat === undefined) {
+      seats.set(key, { ...plugin, repositorySiblings: 0 })
+    } else {
+      seat.repositorySiblings += 1
+    }
+  }
+  return [...seats.values()].slice(0, RANKING_SIZE)
+}
+
 export function buildCatalog(result: CatalogSnapshotResult, query: CatalogQuery): CatalogResponse {
   const { snapshot, source } = result
   const filtered = filterCatalogPackages(snapshot.plugins, query)
 
+  // Growth comes from the repository's star history, so this collapses too.
   const growthRanking = (sort: 'growth24h' | 'growth7d' | 'growth30d') =>
-    [...snapshot.plugins]
-      .filter((plugin) => hasGrowthForSort(plugin, sort))
-      .sort(comparePlugins(sort))
-      .slice(0, 100)
+    collapseByRepository(
+      [...snapshot.plugins]
+        .filter((plugin) => hasGrowthForSort(plugin, sort))
+        .sort(comparePlugins(sort)),
+    )
 
   const installRanking = (
     sort: 'installs' | 'installs24h' | 'installs7d' | 'installs30d',
-  ) => [...snapshot.plugins]
+  ) => ranked([...snapshot.plugins]
     .filter((plugin) => (installsForSort(plugin, sort) ?? 0) > 0)
-    .sort(comparePlugins(sort))
-    .slice(0, 100)
+    .sort(comparePlugins(sort)))
 
   return {
     packages: filtered,
     rankings: {
-      stars: [...snapshot.plugins]
-        .sort(comparePlugins('stars'))
-        .slice(0, 100),
+      stars: collapseByRepository([...snapshot.plugins].sort(comparePlugins('stars'))),
       installs: installRanking('installs'),
       installs24h: installRanking('installs24h'),
       installs7d: installRanking('installs7d'),
@@ -187,10 +225,10 @@ export function buildCatalog(result: CatalogSnapshotResult, query: CatalogQuery)
       growth24h: growthRanking('growth24h'),
       growth7d: growthRanking('growth7d'),
       growth30d: growthRanking('growth30d'),
-      newest: [...snapshot.plugins].sort(comparePlugins('newest')).slice(0, 100),
-      active: [...snapshot.plugins]
-        .sort(comparePlugins('active'))
-        .slice(0, 100),
+      // `added` falls back to the repository's updated_at and `pushedAt` is a
+      // repository column, so siblings tie on both of these boards as well.
+      newest: collapseByRepository([...snapshot.plugins].sort(comparePlugins('newest'))),
+      active: collapseByRepository([...snapshot.plugins].sort(comparePlugins('active'))),
     },
     categories: categoryResults(snapshot),
     meta: {

@@ -71,9 +71,15 @@ export type CatalogSort =
   | 'name'
 export type RankingMode = Exclude<CatalogSort, 'name'>
 
+/** Mirrors RankedPlugin in worker/types.ts. */
+export interface RankedPlugin extends CatalogPlugin {
+  /** Further plugins of the same repository this board left out. */
+  repositorySiblings: number
+}
+
 export interface CatalogResponse {
   packages: CatalogPlugin[]
-  rankings: Record<RankingMode, CatalogPlugin[]>
+  rankings: Record<RankingMode, RankedPlugin[]>
   categories: CategoryResult[]
   meta: {
     total: number

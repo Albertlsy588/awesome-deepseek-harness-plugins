@@ -6,6 +6,7 @@ import {
   parseCatalogQuery,
   repositoryName,
 } from '../worker/lib/catalog'
+import type { CatalogPlugin } from '../worker/types'
 import { TEST_PLUGINS, TEST_REGISTRY, testCatalogResult } from './fixtures'
 
 describe('catalog queries', () => {
@@ -47,10 +48,18 @@ describe('catalog queries', () => {
     expect(result.rankings.growth30d[0]?.name).toBe('dsh-crosstalk')
     expect(result.rankings.newest[0]?.name).toBe('dsh-agent-teams')
     expect(result.rankings.active[0]?.name).toBe('deepseek-harness-tui')
-    expect(result.rankings.stars).toHaveLength(TEST_PLUGINS.length)
-    expect(result.rankings.newest).toHaveLength(TEST_PLUGINS.length)
-    expect(result.rankings.active).toHaveLength(TEST_PLUGINS.length)
-    expect(result.rankings.growth24h).toHaveLength(TEST_PLUGINS.length - 1)
+    // The fixture's two omdsh-dev/dsh-suite plugins share a repository, and
+    // therefore share their stars, growth and pushed_at. The boards ranked by
+    // those numbers seat the repository once; the install boards, ranked per
+    // plugin, still seat both.
+    const distinctRepositories = new Set(
+      TEST_PLUGINS.map((plugin) => `${plugin.owner}/${plugin.repository}`.toLowerCase()),
+    ).size
+    expect(distinctRepositories).toBe(TEST_PLUGINS.length - 1)
+    expect(result.rankings.stars).toHaveLength(distinctRepositories)
+    expect(result.rankings.newest).toHaveLength(distinctRepositories)
+    expect(result.rankings.active).toHaveLength(distinctRepositories)
+    expect(result.rankings.growth24h).toHaveLength(distinctRepositories - 1)
     expect(result.rankings.installs).toHaveLength(TEST_PLUGINS.length - 1)
     expect(result.rankings.installs24h).toHaveLength(4)
   })
@@ -125,5 +134,120 @@ describe('catalog queries', () => {
     }
     expect(repositoryName(scoped)).toBe('repository-name')
     expect(findPlugin([scoped], 'example', 'repository-name')?.name).toBe('@scope/package-name')
+  })
+})
+
+describe('ranking seats', () => {
+  /** A monorepo: four plugins that share one repository, and one outsider. */
+  function monorepoResult(overrides: Partial<CatalogPlugin> = {}) {
+    const base = TEST_PLUGINS[0]
+    const sibling = (path: string, extra: Partial<CatalogPlugin> = {}): CatalogPlugin => ({
+      ...base,
+      id: `mono/repo/packages/${path}`,
+      name: path,
+      owner: 'mono',
+      repository: 'repo',
+      url: 'https://github.com/mono/repo',
+      // Every repository-level number is identical, which is the whole problem.
+      stars: 3374,
+      forks: 191,
+      pushedAt: '2026-08-16T12:00:00Z',
+      updatedAt: '2026-08-16T12:00:00Z',
+      growth24h: 120,
+      growth7d: 400,
+      growth30d: 900,
+      added: '2026-08-16',
+      latestReleaseAt: null,
+      installCount: 0,
+      installs24h: 0,
+      installs7d: 0,
+      installs30d: 0,
+      ...overrides,
+      ...extra,
+    })
+    const outsider: CatalogPlugin = {
+      ...base,
+      id: 'solo/plugin',
+      name: 'solo-plugin',
+      owner: 'solo',
+      repository: 'plugin',
+      url: 'https://github.com/solo/plugin',
+      stars: 10,
+      forks: 1,
+      pushedAt: '2026-08-15T12:00:00Z',
+      updatedAt: '2026-08-15T12:00:00Z',
+      growth24h: 5,
+      growth7d: 5,
+      growth30d: 5,
+      added: '2026-08-15',
+      latestReleaseAt: null,
+      installCount: 0,
+      installs24h: 0,
+      installs7d: 0,
+      installs30d: 0,
+    }
+    const result = testCatalogResult()
+    return {
+      ...result,
+      snapshot: {
+        ...result.snapshot,
+        plugins: [sibling('alpha'), sibling('beta'), sibling('gamma'), sibling('delta'), outsider],
+      },
+    }
+  }
+
+  const query = { q: '', category: '', sort: 'stars' as const }
+
+  it('gives a repository one seat on every board ranked by a repository metric', () => {
+    const { rankings } = buildCatalog(monorepoResult(), query)
+
+    for (const board of ['stars', 'growth24h', 'growth7d', 'growth30d', 'newest', 'active'] as const) {
+      // Four identical star counts used to take four seats and tell the reader
+      // nothing with three of them.
+      expect(rankings[board].map((plugin) => plugin.id))
+        .toEqual(['mono/repo/packages/alpha', 'solo/plugin'])
+      expect(rankings[board][0]?.repositorySiblings).toBe(3)
+      expect(rankings[board][1]?.repositorySiblings).toBe(0)
+    }
+  })
+
+  it('leaves the install boards alone, because installs tell siblings apart', () => {
+    const result = monorepoResult()
+    result.snapshot.plugins = result.snapshot.plugins.map((plugin, index) => ({
+      ...plugin,
+      installCount: (index + 1) * 10,
+      installs24h: (index + 1) * 10,
+      installs7d: (index + 1) * 10,
+      installs30d: (index + 1) * 10,
+    }))
+
+    const { rankings } = buildCatalog(result, query)
+
+    for (const board of ['installs', 'installs24h', 'installs7d', 'installs30d'] as const) {
+      // A repository that earned four seats here earned each of them.
+      expect(rankings[board]).toHaveLength(5)
+      expect(rankings[board].every((plugin) => plugin.repositorySiblings === 0)).toBe(true)
+    }
+  })
+
+  it('keeps the best-ranked sibling as the seat', () => {
+    const result = monorepoResult()
+    result.snapshot.plugins = result.snapshot.plugins.map((plugin) => (
+      plugin.id === 'mono/repo/packages/gamma'
+        ? { ...plugin, pushedAt: '2026-08-20T12:00:00Z' }
+        : plugin
+    ))
+
+    const { rankings } = buildCatalog(result, query)
+
+    expect(rankings.active[0]?.id).toBe('mono/repo/packages/gamma')
+    expect(rankings.active[0]?.repositorySiblings).toBe(3)
+  })
+
+  it('does not collapse the catalog listing itself', () => {
+    // Searching for a package must find that package, not its repository.
+    const { packages } = buildCatalog(monorepoResult(), query)
+
+    expect(packages).toHaveLength(5)
   })
 })
