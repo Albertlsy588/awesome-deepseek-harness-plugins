@@ -1,5 +1,5 @@
 import { consumeQuota, type QuotaLimits } from '../lib/api-quota'
-import { sanitizeReturnTo } from '../lib/auth'
+import { sanitizeReturnTo, timingSafeEqualStrings } from '../lib/auth'
 import { normalizePluginId, parsePluginId } from '../lib/plugin-id'
 import { Hono } from 'hono'
 import type { ApiError, CommunityStats, FeedResponse, ThreadResponse, Viewer } from './contract'
@@ -16,6 +16,13 @@ import {
   ThreadFullError,
   type ViewerContext,
 } from './posts'
+import { moderate } from './moderation'
+import {
+  loadBlockedTerms,
+  MAX_TERMS_PER_SYNC,
+  recordModerationEvent,
+  replaceBlockedTerms,
+} from './moderation-store'
 import {
   extractPluginMentions,
   MAX_POST_LENGTH,
@@ -31,6 +38,7 @@ import {
 } from './session'
 
 const MAX_REQUEST_BYTES = 16 * 1024
+const MODERATION_SYNC_CATEGORIES = new Set(['political', 'sexual', 'abuse', 'spam'])
 
 /**
  * Writing costs more than tapping, so the windows differ. Reads are unmetered:
@@ -88,9 +96,9 @@ function crossOriginRejected(context: CommunityContext): boolean {
  * incrementally and abandoned the moment it runs over. Buffering the whole
  * thing before measuring it would make the cap advisory.
  */
-async function boundedJson(context: CommunityContext): Promise<unknown | undefined> {
+async function boundedJson(context: CommunityContext, maximumBytes = MAX_REQUEST_BYTES): Promise<unknown | undefined> {
   const declared = context.req.header('Content-Length')
-  if (declared && (!/^\d+$/.test(declared) || Number(declared) > MAX_REQUEST_BYTES)) return undefined
+  if (declared && (!/^\d+$/.test(declared) || Number(declared) > maximumBytes)) return undefined
 
   const body = context.req.raw.body
   if (!body) return {}
@@ -101,7 +109,7 @@ async function boundedJson(context: CommunityContext): Promise<unknown | undefin
     const result = await reader.read()
     if (result.done) break
     total += result.value.byteLength
-    if (total > MAX_REQUEST_BYTES) {
+    if (total > maximumBytes) {
       await reader.cancel()
       return undefined
     }
@@ -285,6 +293,28 @@ export function registerCommunityRoutes(
     )
     if (limited) return limited
 
+    // 审核在写入之前，也在插件解析之前 —— 被拒的正文不该产生任何副作用。
+    const verdict = await moderate(context.env, validated.body, {
+      terms: await loadBlockedTerms(context.env.CATALOG_DB, nowMs),
+    })
+    if (!verdict.allowed) {
+      await recordModerationEvent(
+        context.env.CATALOG_DB,
+        signer.user.id,
+        verdict.category,
+        verdict.source,
+        new Date(nowMs).toISOString(),
+      )
+      // 不回显命中了什么。告诉发帖人踩了哪一类、哪个词，等于告诉他改哪个
+      // 字能过；分类器不可用时也用同一句，免得可用性变成一个可探测的信号。
+      return fail(context, 400, {
+        error: verdict.category === 'unavailable'
+          ? '内容审核暂时不可用，请稍后再发。'
+          : '这条内容没有通过社区审核。',
+        code: 'INVALID_REQUEST',
+      })
+    }
+
     // Mentions are resolved against the catalog now, not at render time: a card
     // is only stored for a plugin that exists, so the feed never has to decide
     // what to do with a dangling reference.
@@ -363,6 +393,36 @@ export function registerCommunityRoutes(
       return context.json({ likeCount, liked: method === 'POST' })
     })
   }
+
+  // 词表灌入。全量替换，鉴权复用 CATALOG_SYNC_TOKEN —— 两者都是「把一份
+  // 本地维护的清单推上线」，没必要再开一把钥匙。词表本身不在仓库里。
+  app.post('/api/v1/community/moderation/terms', async (context) => {
+    const configured = context.env?.CATALOG_SYNC_TOKEN?.trim()
+    if (!configured || configured.length < 32 || !context.env?.CATALOG_DB) {
+      return fail(context, 503, { error: 'Moderation sync is not configured.', code: 'SERVICE_UNAVAILABLE' })
+    }
+    const presented = (context.req.header('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+    if (!presented || !timingSafeEqualStrings(configured, presented)) {
+      return fail(context, 403, { error: 'Forbidden.', code: 'FORBIDDEN' })
+    }
+
+    const payload = await boundedJson(context, 512 * 1024)
+    const terms = (payload as { terms?: unknown })?.terms
+    if (!Array.isArray(terms) || terms.length > MAX_TERMS_PER_SYNC) {
+      return fail(context, 400, { error: 'Invalid term list.', code: 'INVALID_REQUEST' })
+    }
+    const parsed = terms.filter((entry): entry is { term: string; category: never } =>
+      Boolean(entry) && typeof entry === 'object'
+      && typeof (entry as { term?: unknown }).term === 'string'
+      && MODERATION_SYNC_CATEGORIES.has((entry as { category?: unknown }).category as string))
+    if (parsed.length !== terms.length) {
+      return fail(context, 400, { error: 'Invalid term list.', code: 'INVALID_REQUEST' })
+    }
+
+    const result = await replaceBlockedTerms(
+      context.env.CATALOG_DB, parsed, new Date(dependencies.clock()).toISOString())
+    return context.json(result)
+  })
 
   app.get('/api/v1/community/stats', async (context) => {
     context.header('Cache-Control', 'public, max-age=60')

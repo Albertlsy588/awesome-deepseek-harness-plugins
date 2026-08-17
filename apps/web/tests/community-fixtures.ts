@@ -32,6 +32,7 @@ export function communityDatabase(): DatabaseSync {
   const database = migratedDatabase(
     new URL('../../web/migrations/0004_api_accounts.sql', import.meta.url),
     new URL('../../web/migrations/0007_community.sql', import.meta.url),
+    new URL('../../web/migrations/0008_community_moderation.sql', import.meta.url),
   )
   database.exec(`
     CREATE TABLE catalog_repositories (

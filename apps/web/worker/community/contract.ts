@@ -77,3 +77,10 @@ export interface ApiError {
   /** Set on RATE_LIMITED / DAILY_QUOTA_EXCEEDED. */
   retryAfterSeconds?: number
 }
+
+/** 审核分类。`unavailable` 不是一类内容，是分类器不可用时的拒绝理由。 */
+export type ModerationCategory = 'political' | 'sexual' | 'abuse' | 'spam' | 'unavailable'
+
+export type ModerationVerdict =
+  | { allowed: true }
+  | { allowed: false; category: ModerationCategory; source: 'lexicon' | 'classifier' }
