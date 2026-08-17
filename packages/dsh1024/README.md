@@ -49,6 +49,10 @@ executing the registry's display command. Mutating routes require same-origin
 POST requests and serialize plugin operations. Plugin changes take effect after
 restarting DeepSeek Harness.
 
+The store is reachable from three places: the sidebar footer (with a live
+catalog count, and a popover it opens itself), the Settings navigation, and the
+Settings → Plugins tab. Removing any of them fails the package preflight.
+
 The catalog renders from the last response immediately, then silently
 revalidates in the background every time the panel opens or the window becomes
 visible again, so a newly listed plugin appears without any refresh button and

@@ -524,13 +524,30 @@ exports.apply = function apply(ctx) {
     label: () => t('tab'),
     locale: NS,
   }, props => h(SidebarEntry, { wide: props?.wide !== false, locale: ctx.locale })))
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: '1024store',
-    order: 100,
-    label: () => t('tab'),
-    locale: NS,
-  }, () => h(MarketTab, { locale: ctx.locale })))
+  // 左侧导航行的 label 是纯字符串投影(渲染成 <span>{row.label}</span>),
+  // 没法塞徽标节点,所以总数只能拼进字符串。投影按 slots 版本记忆化,
+  // 因此总数变化时要重新 register 才会重算——与上面 tab 同一套办法。
+  ctx.slots.inject('settings.section', () => {
+    let disposeSection = () => {}
+    const register = () => {
+      disposeSection = ctx.slots.register({
+        name: 'settings.section',
+        id: '1024store',
+        order: 100,
+        label: () => t('tab') + (catalogCount === null ? '' : ' (' + catalogCount + ')'),
+        locale: NS,
+      }, () => h(MarketTab, { locale: ctx.locale }))
+    }
+    register()
+    const unsubscribe = subscribeCatalogCount(() => {
+      disposeSection()
+      register()
+    })
+    return () => {
+      unsubscribe()
+      disposeSection()
+    }
+  })
 }
 
 return module.exports; } });

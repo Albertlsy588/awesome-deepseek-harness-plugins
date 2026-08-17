@@ -20,6 +20,9 @@ if (!client.includes('/dsh1024/update')) failures.push('client update self-check
 if (manifest.exports?.['./package.json'] === undefined) failures.push('exports["./package.json"] must exist so the harness loads the client half')
 if (!client.includes("const SITE_URL = 'https://deepseek1024.com/'")) failures.push('1024 main website link is missing')
 if (!client.includes("name: 'settings.section'")) failures.push('left settings navigation entry is missing')
+// 三个入口全留:设置页导航行、设置-插件标签页、侧边栏底部动作。任一被误删都要拦下。
+if (!client.includes("name: 'sidebar.footer.action'")) failures.push('sidebar footer entry is missing')
+if (!client.includes("id: 'dsh1024-store'")) failures.push('sidebar footer entry must keep its own slot id')
 
 if (failures.length > 0) {
   console.error(`preflight failed:\n- ${failures.join('\n- ')}`)
