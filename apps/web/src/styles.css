@@ -1464,12 +1464,10 @@ main {
   transform: rotate(180deg);
 }
 
-/* The stretched row link opens a single plugin. A seat standing for a whole
-   repository opens the repository instead, so it gives the row back. */
-.package-row.is-expandable .row-link::after {
-  content: none;
-}
-
+/* A repository row renders its title as plain text, not a link, so there is no
+   stretched overlay to switch off — the row's job is to open its panel. The
+   rows inside that panel are ordinary plugin rows and keep their overlay, which
+   is what makes their whole width, trailing arrow included, clickable. */
 .package-row.is-expandable {
   cursor: pointer;
 }
@@ -2918,6 +2916,23 @@ main {
     grid-template-rows: minmax(44px, auto) 44px;
     gap: 4px 8px;
     padding: 8px;
+  }
+
+  /* The panel's rows must follow the narrow grid too. The desktop rule that
+     drops the avatar column is more specific than the shared `.package-row`
+     one here, so without this the children keep six fixed desktop columns
+     (~678px) inside a ~307px panel and the overflow is silently clipped. The
+     second track stays as a slim indent instead of the 40px avatar slot. */
+  .row-repo-panel .package-row {
+    grid-template-columns: 24px 8px minmax(0, 1fr) auto;
+  }
+
+  /* The shared rule spans the ordinal down both rows, which is right when an
+     avatar fills the first one. These rows have no avatar, so spanning left the
+     number floating in the gutter beside nothing; it belongs next to the name. */
+  .row-repo-panel .package-row .row-index {
+    grid-row: 1;
+    align-self: center;
   }
 
   .row-index {

@@ -125,6 +125,26 @@ async function assertRepositorySeatDisclosure(page, label, { touchTargets = fals
       '.row-repo-panel .package-row .split-install-main',
       '.row-repo-panel .package-row .split-install-toggle',
     ])
+    // The panel's rows carry the desktop grid unless the narrow rule overrides
+    // it, and `.row-repo-panel .package-row` outranks the shared `.package-row`
+    // one — so a missing override does not overflow the page, it silently
+    // clips ~680px of columns inside a ~300px panel.
+    const clipped = await page.locator('.row-repo-panel .package-row').evaluateAll((rows) =>
+      rows.filter((row) => row.scrollWidth > row.clientWidth + 1).length)
+    if (clipped > 0) {
+      throw new Error(`${label} clips ${clipped} rows inside the repository panel`)
+    }
+  }
+
+  // The whole width of a plugin row navigates, trailing arrow included: the
+  // stretched overlay must survive inside the panel. Scoping the repository
+  // row's overlay reset with a descendant selector once switched it off for
+  // every row in the panel, which left the arrow inert and looked like a
+  // broken link rather than a CSS scope bug.
+  const overlay = await page.locator(`#${panelId} .package-row .row-link`).first()
+    .evaluate((node) => getComputedStyle(node, '::after').content)
+  if (overlay === 'none') {
+    throw new Error(`${label} panel rows lost the stretched row link`)
   }
   await assertNoHorizontalOverflow(page, `${label} with a repository seat expanded`)
   await toggle.click()
