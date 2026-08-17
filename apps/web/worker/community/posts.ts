@@ -80,10 +80,16 @@ interface PluginRow {
  * pointing at a 404.
  */
 /**
- * D1 rejects a query with more than 100 bound parameters, and the hot feed
- * hydrates up to HOT_CANDIDATES posts at once. Chunking below the ceiling is
- * what keeps a busy feed from failing outright — and it cannot be caught by a
- * test against node:sqlite, which has no such limit.
+ * D1 rejects a query with more than 100 bound parameters.
+ *
+ * 分片是给 getThread 用的：一个帖子页要显示根帖加最多 MAX_REPLIES_PER_THREAD
+ * 条评论，201 个 id 是真实需要，不是设计缺陷。
+ *
+ * 时间线不需要它 —— listLatest / listByAuthor 一页 FEED_PAGE_SIZE 条，
+ * listHot 先排序切片再 hydrate。曾经有过一版 listHot 是先 hydrate 全部 300
+ * 条候选再排序，扔掉其中 280 条，那才是让这个上限变成问题的原因。
+ *
+ * node:sqlite 的上限是 32766，所以这条限制在本地测试里永远不会触发。
  */
 const D1_MAX_BOUND_PARAMETERS = 90
 
@@ -189,6 +195,15 @@ const HOT_CANDIDATES = 300
  * function, not a migration plus a new index. A reply is weighted above a like
  * because writing one costs more than tapping one.
  */
+/** 排序只看这三个字段，行里就有，不必先 hydrate。 */
+function rowScore(row: PostRow): Pick<Post, 'likeCount' | 'replyCount' | 'createdAt'> {
+  return {
+    likeCount: Number(row.like_count),
+    replyCount: Number(row.reply_count),
+    createdAt: row.created_at,
+  }
+}
+
 export function hotScore(
   post: Pick<Post, 'likeCount' | 'replyCount' | 'createdAt'>,
   nowMs: number,
@@ -215,11 +230,19 @@ export async function listHot(
       LIMIT ?3`,
   ).bind(viewer.userId, since, HOT_CANDIDATES).all<PostRow>()
 
-  const posts = await hydrate(db, results, viewer)
-  posts.sort((left, right) => hotScore(right, nowMs) - hotScore(left, nowMs) || right.id - left.id)
+  // 先排序、切片，再 hydrate。排序只需要 like_count / reply_count /
+  // created_at，这三个字段行里就有，不必先把插件卡片查出来。
+  //
+  // 反过来做（先 hydrate 全部候选再排序）意味着查 300 条帖子的插件引用、
+  // 扔掉其中 280 条 —— 而且那个 IN 列表会撑到 300 个绑定参数，超过 D1
+  // 单条查询 100 个的上限，只能靠分片绕过。切完再 hydrate 之后列表最多
+  // pageSize 条，一条查询就够了。
+  const ranked = [...results].sort((left, right) =>
+    hotScore(rowScore(right), nowMs) - hotScore(rowScore(left), nowMs) || right.id - left.id)
+  const posts = await hydrate(db, ranked.slice(0, pageSize), viewer)
   // Hot is a single ranked page: a cursor over a score that moves with every
   // like would hand out duplicates and gaps.
-  return { posts: posts.slice(0, pageSize), nextCursor: null }
+  return { posts, nextCursor: null }
 }
 
 export async function listByAuthor(

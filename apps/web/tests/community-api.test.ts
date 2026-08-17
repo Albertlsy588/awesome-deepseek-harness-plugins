@@ -579,3 +579,53 @@ describe('development sign-in', () => {
     database.close()
   })
 })
+
+describe('hot feed hydration', () => {
+  it('loads plugin cards for the page it returns, not every candidate it considered', async () => {
+    // 排序在 Worker 里做，所以候选集比一页大得多。曾经有一版先 hydrate 全部
+    // 候选再排序，扔掉绝大多数 —— 而那个 IN 列表会超过 D1 单条查询 100 个
+    // 绑定参数的上限。node:sqlite 没有这个上限，所以只能靠数参数来守。
+    const database = communityDatabase()
+    const cookie = await signIn(database, 'octocat', 1)
+    const environment = env(database)
+    const instance = app()
+
+    const db = sqliteD1(database)
+    const user = await upsertGitHubUser(
+      db, { id: 1, login: 'octocat', name: null, avatarUrl: null }, new Date(NOW).toISOString())
+    for (let index = 0; index < 60; index += 1) {
+      await db.prepare(
+        'INSERT INTO community_posts (author_id, body, like_count, created_at) VALUES (?, ?, ?, ?)',
+      ).bind(user.id, `post ${index}`, index, new Date(NOW - index * 1000).toISOString()).run()
+    }
+
+    let widestPluginLookup = 0
+    const counting = {
+      ...environment,
+      CATALOG_DB: {
+        ...db,
+        prepare(sql: string) {
+          const statement = db.prepare(sql)
+          if (!sql.includes('community_post_plugins')) return statement
+          return {
+            ...statement,
+            bind(...params: unknown[]) {
+              widestPluginLookup = Math.max(widestPluginLookup, params.length)
+              return statement.bind(...params)
+            },
+          }
+        },
+      },
+    } as unknown as Env
+
+    const response = await instance.request(
+      `${ORIGIN}/api/v1/community/feed?tab=hot`, { headers: { Cookie: cookie } }, counting)
+    const page = (await response.json()) as FeedResponse
+
+    expect(page.posts.length).toBeLessThanOrEqual(20)
+    // 上限是页大小，不是候选数。60 条候选、20 条一页 —— 若退回先 hydrate
+    // 再排序，这里会是 60。
+    expect(widestPluginLookup).toBeLessThanOrEqual(page.posts.length)
+    database.close()
+  })
+})
