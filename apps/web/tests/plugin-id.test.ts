@@ -9,7 +9,7 @@ import {
   pluginPathFromPackagePath,
   pluginRepositoryFullName,
   pluginSourceUrl,
-} from '@dsh-1024store/core/plugin-id'
+} from '../worker/lib/plugin-id'
 
 describe('plugin identity', () => {
   it('parses repository-level and subdirectory ids', () => {

@@ -1,4 +1,4 @@
-import { pluginDetailPath } from '@dsh-1024store/core/plugin-id'
+import { pluginDetailPath } from './lib/plugin-id'
 import type { CatalogPlugin, Language, RegistryPlugin } from './types'
 
 /**
@@ -121,7 +121,7 @@ const HERO_INTRO = {
   zh: '收录插件均先经 DSH 插件规范检查与过滤，再按包装 CLI 上报的安装记录、GitHub Star、发布记录与仓库活跃度比较，发现成熟工具与潜力新项目。',
 }
 
-export type CollectionView = 'rankings' | 'catalog' | 'apiDocs' | 'account'
+export type CollectionView = 'rankings' | 'catalog' | 'apiDocs' | 'account' | 'community' | 'communityRules'
 
 export interface CollectionCopy {
   title: string
@@ -192,6 +192,42 @@ export function collectionCopy(
           listHeading: 'Endpoints',
         }
   }
+  if (view === 'community') {
+    return zh
+      ? {
+          title: `1024 广场 · 开发者社区 | ${SITE_NAME}`,
+          description: 'DeepSeek Harness 插件开发者的公开广场：分享进展、提问、聊插件。用 GitHub 账号登录即可发言。',
+          heading: '1024 广场',
+          intro: 'DeepSeek Harness 开发者的公开广场。',
+          listHeading: '最新发言',
+        }
+      : {
+          title: `1024 Plaza · Developer community | ${SITE_NAME}`,
+          description: 'The open square for DeepSeek Harness plugin developers: progress, questions, and plugins. Sign in with GitHub to post.',
+          heading: '1024 Plaza',
+          intro: 'The open square for DeepSeek Harness developers.',
+          listHeading: 'Latest posts',
+        }
+  }
+
+  if (view === 'communityRules') {
+    return zh
+      ? {
+          title: `社区规则 · 1024 广场 | ${SITE_NAME}`,
+          description: '1024 广场的发言规则：谁能发、发什么、怎么删。',
+          heading: '关于 1024 广场',
+          intro: 'DeepSeek Harness 开发者的公开广场。',
+          listHeading: '规则',
+        }
+      : {
+          title: `Guidelines · 1024 Plaza | ${SITE_NAME}`,
+          description: 'How posting works on 1024 Plaza: who can post, what belongs here, and how removal works.',
+          heading: 'About 1024 Plaza',
+          intro: 'The open square for DeepSeek Harness developers.',
+          listHeading: 'Guidelines',
+        }
+  }
+
   if (view === 'account') {
     return zh
       ? {

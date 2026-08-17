@@ -23,7 +23,6 @@
     "worker",
     "tests",
     "worker-configuration.d.ts",
-    "../community/worker",
-    "../../packages/dsh-core/src/testing/node-runtime.d.ts"
+    "tests/node-runtime.d.ts"
   ]
 }

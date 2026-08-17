@@ -6,7 +6,7 @@ import {
   createSession,
   sanitizeReturnTo,
   upsertGitHubUser,
-} from '@dsh-1024store/core/auth'
+} from '../worker/lib/auth'
 import { accountsDatabase, sqliteD1 } from './d1-sqlite'
 import { testCatalogResult } from './fixtures'
 

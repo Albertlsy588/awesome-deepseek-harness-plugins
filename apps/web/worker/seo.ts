@@ -1,5 +1,5 @@
 import { comparePlugins, findPluginById, findPluginsUnder, hasGrowthForSort, repositoryName } from './lib/catalog'
-import { pluginDetailPath, pluginSourceUrl } from '@dsh-1024store/core/plugin-id'
+import { pluginDetailPath, pluginSourceUrl } from './lib/plugin-id'
 import {
   renderCollectionShell,
   renderNotFoundShell,
@@ -193,6 +193,50 @@ export function metadataForPath(
       status: 200,
       shell: renderSimpleShell(copy.heading, copy.intro),
       imageAlt: `${SITE_NAME} — ${copy.heading}`,
+    }
+  }
+
+  // The community's static pages. A single post's title is not static copy —
+  // it is a row in D1 — so worker/index.ts layers that over this. See
+  // worker/community/metadata.ts.
+  if (pathname === '/community' || pathname.startsWith('/community/p/')) {
+    const copy = collectionCopy('community', language, 0)
+    return {
+      title: copy.title,
+      description: copy.description,
+      canonical: absoluteUrl(pathname === '/community' ? '/community' : pathname),
+      robots: 'index,follow',
+      schema: graph([...siteNodes(), simplePageNode(pathname, copy, language)]),
+      status: 200,
+      shell: renderSimpleShell(copy.heading, copy.intro),
+      imageAlt: `${SITE_NAME} — ${copy.heading}`,
+    }
+  }
+
+  if (pathname === '/community/about') {
+    const copy = collectionCopy('communityRules', language, 0)
+    return {
+      title: copy.title,
+      description: copy.description,
+      canonical: absoluteUrl('/community/about'),
+      robots: 'index,follow',
+      schema: graph([...siteNodes(), simplePageNode('/community/about', copy, language)]),
+      status: 200,
+      shell: renderSimpleShell(copy.heading, copy.intro),
+    }
+  }
+
+  if (pathname.startsWith('/community/u/')) {
+    const copy = collectionCopy('community', language, 0)
+    return {
+      title: copy.title,
+      description: copy.description,
+      canonical: null,
+      // A profile is a view over posts that are indexed on their own pages.
+      robots: 'noindex,follow',
+      schema: graph(siteNodes()),
+      status: 200,
+      shell: renderSimpleShell(copy.heading, copy.intro),
     }
   }
 

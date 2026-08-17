@@ -1,5 +1,5 @@
 import type { PluginInstallMethod } from '../../worker/lib/install-methods'
-import { normalizePluginId } from '@dsh-1024store/core/plugin-id'
+import { normalizePluginId } from '../../worker/lib/plugin-id'
 import { SELF_OFFICIAL_COMMAND, SELF_PLUGIN_ID, SELF_TRACKED_COMMAND } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { InstallCommand } from './InstallCommand'

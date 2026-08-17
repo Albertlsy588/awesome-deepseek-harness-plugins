@@ -7,7 +7,7 @@ import type {
   RegistryPlugin,
   StoredCatalogSnapshot,
 } from '../types'
-import { normalizePluginId } from '@dsh-1024store/core/plugin-id'
+import { normalizePluginId } from './plugin-id'
 
 export interface CatalogQuery {
   q: string

@@ -33,10 +33,8 @@ There is no bundled registry, no `catalog/generated/` artifact, and no disaster-
 | `README.md` | Primary Chinese plugin directory (bot projection) | No |
 | `catalog/README.md` | English plugin directory (bot projection) | No |
 | `packages/dsh1024/` | The publishable `dsh1024` package: wrapper CLI (official DSH plugin command delegation, local verification, install-event delivery) plus the in-DSH marketplace plugin | Yes |
-| `apps/web/src/` | React interface for the catalog | Yes |
-| `apps/web/worker/` | Hono API for the catalog, plus the GitHub OAuth exchange for the whole family | Yes |
-| `apps/community/` | The developer community at `/community`: its own React app and API routes, built into and mounted onto the site Worker | Yes |
-| `packages/dsh-core/` | Source-only modules both apps need: session handling, rate limiting, plugin identity, design tokens | Yes |
+| `apps/web/src/` | React interface: the catalog, and `src/community/` for the community section | Yes |
+| `apps/web/worker/` | Hono API, the only process that reads or writes D1; `worker/community/` holds the community's routes | Yes |
 | `scripts/` | Trusted pull-request review, catalog sync, README generation, and their tests | Yes |
 | `.github/workflows/` | PR review/merge, CI, catalog sync, and deployment automation | Yes |
 
@@ -71,7 +69,6 @@ Install analytics use the same D1 database as star history but separate tables. 
 ## Growth rules
 
 A shared package should only be introduced when at least two applications need the same runtime
-code. `packages/dsh-core` was created when the community became a second front-end: both render the
-same brand from the same tokens, and both resolve sessions against the same `api_sessions` rows —
-two copies of that logic would be a security bug the moment they drifted. Add to it only when a second app genuinely needs the module;
+code. There is currently one application, so there is no such package: the community is a section
+of `apps/web`, grouped under `src/community/` and `worker/community/` rather than split out. Add to it only when a second app genuinely needs the module;
 app-specific code stays in the app. D1 owns all published catalog records; source-controlled entries are the reviewed submission form and remain independently auditable through pull requests.

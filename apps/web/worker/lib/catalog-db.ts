@@ -9,7 +9,7 @@ import {
   parsePluginId,
   pluginInstallCommand,
   pluginPathFromPackagePath,
-} from '@dsh-1024store/core/plugin-id'
+} from './plugin-id'
 
 interface RepositoryIdentityRow {
   id: number

@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
-import { registerCommunityRoutes } from '../../community/worker/app'
+import { registerCommunityRoutes } from './community/routes'
 import { registerAuthRoutes } from './auth-api'
-import { ANONYMOUS_QUOTA, AUTHENTICATED_QUOTA, consumeQuota } from '@dsh-1024store/core/api-quota'
-import { authenticateApiKey, sha256Hex, timingSafeEqualStrings } from '@dsh-1024store/core/auth'
+import { ANONYMOUS_QUOTA, AUTHENTICATED_QUOTA, consumeQuota } from './lib/api-quota'
+import { authenticateApiKey, sha256Hex, timingSafeEqualStrings } from './lib/auth'
 import {
   buildCatalog,
   filterCatalogPackages,
@@ -18,7 +18,7 @@ import {
   pluginInstallCommand,
   pluginRepositoryFullName,
   PLUGIN_ID_MAX_LENGTH,
-} from '@dsh-1024store/core/plugin-id'
+} from './lib/plugin-id'
 import { syncCuratedEntries, type CuratedCatalogEntry } from './lib/catalog-db'
 import { loadCatalogSnapshot, refreshCatalogSnapshot } from './lib/catalog-store'
 import { categoryDescriptor, isKnownCategoryId, projectCategories } from './lib/categories'
@@ -72,7 +72,7 @@ const MAX_INSTALL_EVENT_BYTES = 8 * 1024
 const MAX_CATALOG_SYNC_BYTES = 2 * 1024 * 1024
 const SLUG_PART = /^[A-Za-z0-9_.-]+$/
 // owner/repository, optionally extended with a monorepo subdirectory path.
-// isPluginId additionally rejects `.`/`..` segments (see @dsh-1024store/core/plugin-id).
+// isPluginId additionally rejects `.`/`..` segments (see lib/plugin-id.ts).
 const ENTRY_ID = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)*$/
 const ENTRY_DATE = /^\d{4}-\d{2}-\d{2}$/
 const ENTRY_KEYS = new Set(['id', 'name', 'repository', 'category', 'description', 'added'])

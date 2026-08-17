@@ -2,7 +2,7 @@
 
 ## Public URL stability
 
-- Canonical public paths: `/` (rankings), `/plugins` (catalog), `/plugins/:owner/:name` (plugin detail), `/docs/api` (public API reference), `/community` and `/community/p/:id` (developer community), `/account` and `/community/u/:login` (noindex).
+- Canonical public paths: `/` (rankings), `/plugins` (catalog), `/plugins/:owner/:name` (plugin detail), `/docs/api` (public API reference), `/community` (community feed), `/community/p/:id` (post), `/community/about` (rules), `/account` and `/community/u/:login` (noindex).
 - Plugin API routes use the `/api/v1/` prefix with plural resources (`/api/v1/plugins`, `/api/v1/plugins/:owner/:name`). The outward-facing search API is `https://api.deepseek1024.com/v1/plugins/search`.
 - `/plugin`, `/plugin/:owner/:name`, `/packages`, `/packages/:owner/:name` and `/rankings` are permanent 301 **sources only**. Do not cite them as live URLs.
 - Treat public route paths as permanent SEO contracts. Do not rename or remove them without explicit user approval and a migration plan covering permanent redirects, canonical URLs, and existing inbound links.
@@ -25,7 +25,7 @@ is the single place that decides which is which; `apps/web/tests/public-api.test
 
 That host exists for third-party consumers, and its one substantive endpoint is metered
 independently of the site. `/v1/plugins/search` enforces a per-caller quota — `ANONYMOUS_QUOTA`
-and `AUTHENTICATED_QUOTA` in `packages/dsh-core/src/api-quota.ts`, counters kept in D1 through
+and `AUTHENTICATED_QUOTA` in `apps/web/worker/lib/api-quota.ts`, counters kept in D1 through
 `consumeQuota`: 10/min and 50/day anonymous, 30/min and 500/day with a key. Anonymous callers are
 keyed by `ip:<HMAC of CF-Connecting-IP>` so the raw address never reaches D1; authenticated callers
 are keyed by `user:<id>` and not by key id, so rotating or minting keys cannot open a fresh window.
@@ -69,49 +69,42 @@ npm run deploy
 
 Extend `apps/web/tests/public-api.test.ts` whenever you change which host serves what.
 
-## The community lives inside this Worker
+## The site is one app with four sections
 
-`apps/community` is a second front-end, not a second service. It is built with
-`base: '/community/'` into this Worker's asset directory, its API routes are
-registered onto the same Hono app (`registerCommunityRoutes` in
-`apps/web/worker/app.ts`), and its tables share the same D1. One hostname, one
-deploy, one migration sequence.
+`/` (rankings), `/plugins` (catalog), `/community`, `/docs/api` are sections of a
+single React app behind one persistent sidebar (`src/components/AppShell.tsx`).
+Switching between them is a client-side route change — no reload, so the reader
+keeps their session, their language and their scroll position. There is one
+Worker, one build, one deploy, one migration sequence.
 
-That is what makes a session there the same session as here: the ordinary
-`dsh_session` cookie, no `Domain` scoping, no second OAuth app, no cross-origin
-handoff. Sign-in is `/api/v1/community/sign-in`, which validates the return path
-and redirects to the site's own `/api/v1/auth/github/login`.
+The community's code is grouped rather than separated: `src/community/` for the
+UI, `worker/community/` for its routes and D1 access, `tests/community-*.ts` for
+its tests. It is not a package or a workspace, because nothing else consumes it.
 
-Three things this arrangement depends on:
+Four things this depends on:
 
-1. **`/community/*` is carved out before the SPA fallback.** `not_found_handling`
-   is `single-page-application`, so an unknown path returns the *catalog's*
-   `index.html`. Without the carve-out in `apps/community/worker/serve.ts`, a
-   community permalink would boot the wrong app and return 200 while doing it.
-   `apps/web/tests/community-routing.test.ts` guards this.
-2. **The community build runs after the site build.** It writes into
-   `apps/web/dist/client/community`, which the site build creates and empties.
-   Reversing the order in the root `build` script silently ships a deploy with no
-   community in it.
-3. **`apps/community/worker/env.d.ts` declares the bindings, not
-   `worker-configuration.d.ts`.** Wrangler's generated types do
-   `import("./worker/index")`, which would pull this entire Worker into the
-   community's TypeScript project. `Env` is global, so a wrong type there still
-   fails this app's typecheck.
+1. **`src/community/community.css` is scoped entirely under `.community`.** The
+   section and the catalog share generic class names — `.button-primary`,
+   `.back-link`, `.avatar-image` — and an unscoped rule here silently restyles the
+   catalog. That has already happened once: the community's own `.language-switch`
+   rules overrode the site's, and only `test:visual` noticed. Keep new rules
+   scoped.
+2. **Community links go through `src/community/lib/paths.ts`.** A bare `/p/12`
+   was correct while the section had its own router basename; inside the site it
+   lands on the catalog. `test:visual` asserts no `.post` link escapes the prefix.
+3. **A post's title comes from D1, everything else from the templates.** Static
+   community copy lives in `seo-templates.ts` with the rest of the site's; only
+   `communityPostMetadata` (`worker/community/metadata.ts`) reads a row, and
+   `worker/index.ts` layers it over the static metadata.
+4. **`COMMUNITY_DEV_LOGIN` is read through a cast, not declared on `Env`.** It is
+   not a binding: it appears in no wrangler config, only in git-ignored
+   `.dev.vars`, which `wrangler deploy` does not read. Declaring it would invite
+   someone to "fix" the missing binding by adding it to `wrangler.jsonc`, which is
+   the one thing that must not happen — the loopback hostname check would then be
+   all that stands between a visitor and a session for any login they name.
 
-Add the community's public paths to the SEO contract at the top of this file when
-they stabilise; `/community` and `/community/p/:id` are indexable, `/community/u/:login`
-is not.
-
-There is a development-only sign-in at `/api/v1/community/dev-login`, gated on
-**both** a `COMMUNITY_DEV_LOGIN` var that exists only in git-ignored
-`apps/web/.dev.vars` (and deliberately not in `wrangler.jsonc`, so no deploy can
-carry it) **and** a loopback hostname. Never move that flag into `wrangler.jsonc`.
-
-Local development runs two servers: `npm run dev` serves the site and the whole
-API on 5641, and `npm run dev:community` serves the community front-end on
-5642/community, proxying `/api` to the first. Cookies are not isolated by port, so
-one sign-in covers both.
+Seed the local community with `npm run seed:community` (writes only to the
+miniflare SQLite file under `apps/web/.wrangler`).
 
 ## Responsive web support
 

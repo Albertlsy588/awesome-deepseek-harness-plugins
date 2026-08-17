@@ -6,7 +6,7 @@ import type {
 } from '../types'
 import { repositoryName } from './catalog'
 import { emptyInstallMetrics } from './install-metrics'
-import { parsePluginId } from '@dsh-1024store/core/plugin-id'
+import { parsePluginId } from './plugin-id'
 
 type JsonObject = Record<string, unknown>
 

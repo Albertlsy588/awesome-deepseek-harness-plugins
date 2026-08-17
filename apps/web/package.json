@@ -23,7 +23,6 @@
     "npm": ">=10"
   },
   "dependencies": {
-    "@dsh-1024store/core": "*",
     "hono": "^4.13.1",
     "lucide-react": "^1.31.0",
     "react": "^19.2.8",

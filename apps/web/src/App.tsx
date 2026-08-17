@@ -1,5 +1,11 @@
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
+import { AboutPage as CommunityAboutPage } from './community/pages/AboutPage'
+import { FeedPage as CommunityFeedPage } from './community/pages/FeedPage'
+import { ThreadPage as CommunityThreadPage } from './community/pages/ThreadPage'
+import { UserPage as CommunityUserPage } from './community/pages/UserPage'
+import { CommunityLayout } from './community/components/CommunityLayout'
+import { SessionProvider } from './community/lib/session'
 import { AccountPage } from './pages/AccountPage'
 import { ApiDocsPage } from './pages/ApiDocsPage'
 import { CatalogPage } from './pages/CatalogPage'
@@ -31,6 +37,15 @@ export function App() {
         <Route path="/rankings" element={<CatalogPage view="rankings" />} />
         <Route path="/plugins/:owner/*" element={<PackagePage />} />
         <Route path="/docs/api" element={<ApiDocsPage />} />
+        {/* One section of the site, not a separate app. SessionProvider wraps
+            only this subtree: the catalog has no use for a viewer, and fetching
+            one on every page load would be a request nobody reads. */}
+        <Route path="/community" element={<SessionProvider><CommunityLayout /></SessionProvider>}>
+          <Route index element={<CommunityFeedPage />} />
+          <Route path="p/:id" element={<CommunityThreadPage />} />
+          <Route path="u/:login" element={<CommunityUserPage />} />
+          <Route path="about" element={<CommunityAboutPage />} />
+        </Route>
         <Route path="/account" element={<AccountPage />} />
         <Route path="/plugin" element={<LegacyCatalogRedirect />} />
         <Route path="/plugin/:owner/*" element={<LegacyPackageRedirect />} />

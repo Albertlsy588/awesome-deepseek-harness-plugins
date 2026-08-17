@@ -21,7 +21,7 @@ import {
   timingSafeEqualStrings,
   upsertGitHubUser,
   type ApiUser,
-} from '@dsh-1024store/core/auth'
+} from './lib/auth'
 
 export interface AuthDependencies {
   clock: () => number

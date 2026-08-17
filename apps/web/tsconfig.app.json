@@ -22,6 +22,8 @@
   "include": [
     "src",
     "worker/lib/catalog.ts",
+    "worker/community/contract.ts",
+    "worker/community/post-body.ts",
     "worker/lib/plugin-id.ts",
     "worker/lib/install-methods.ts",
     "worker/lib/visit-id.ts",

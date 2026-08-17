@@ -280,6 +280,53 @@ try {
   }
   await legacyCatalog.close()
 
+  // 站点外框：四个板块共用一条侧栏，切换是客户端路由（不整页跳转），
+  // 且社区板块必须真的被渲染出来 —— 它和目录站共用一份 SPA fallback，
+  // 路由分流一旦错了会静默地渲染成另一个板块。
+  const shell = await openPage({ width: 1440, height: 900 }, '/community')
+  await shell.locator('.community-head').waitFor()
+  const sections = await shell.locator('.shell-sidebar .nav-link').evaluateAll(
+    (links) => links.map((link) => link.getAttribute('href')),
+  )
+  if (JSON.stringify(sections) !== JSON.stringify(['/', '/plugins', '/community', '/docs/api'])) {
+    throw new Error(`sidebar sections drifted: ${JSON.stringify(sections)}`)
+  }
+  const activeHref = await shell.locator('.shell-sidebar .nav-link.active').getAttribute('href')
+  if (activeHref !== '/community') {
+    throw new Error(`sidebar does not mark the open section: ${activeHref}`)
+  }
+  // 社区内部链接必须带板块前缀，否则会落到目录站的路由上。
+  const strayLinks = await shell.locator('.post a[href^="/"]').evaluateAll(
+    (links) => links.map((link) => link.getAttribute('href')).filter((href) => !href.startsWith('/community/')),
+  )
+  if (strayLinks.length > 0) {
+    throw new Error(`community links missing the section prefix: ${JSON.stringify(strayLinks)}`)
+  }
+  // 切到另一个板块：不整页跳转，侧栏跟着变。
+  await shell.locator('.shell-sidebar .nav-link[href="/plugins"]').click()
+  await shell.waitForURL('**/plugins')
+  await shell.locator('.catalog-hero').waitFor()
+  await assertNoHorizontalOverflow(shell, 'desktop shell after section switch')
+  await shell.close()
+
+  const mobileShell = await openPage({ width: 390, height: 844 }, '/community', { touch: true })
+  await mobileShell.locator('.community-head').waitFor()
+  await assertNoHorizontalOverflow(mobileShell, 'mobile community')
+  await assertMinTouchTargets(mobileShell, 'mobile community actions', [
+    '.shell-bar-toggle', '.tab', '.post-action',
+  ])
+  // 窄屏侧栏收成一个展开菜单，展开后仍不能撑破页面。
+  await mobileShell.locator('.shell-bar-toggle').tap()
+  await mobileShell.locator('.shell-bar-menu .nav-link').first().waitFor()
+  await assertMinTouchTargets(mobileShell, 'mobile section menu', ['.shell-bar-menu .nav-link'])
+  await assertNoHorizontalOverflow(mobileShell, 'mobile community with the menu open')
+  await mobileShell.close()
+
+  const compactCommunity = await openPage({ width: 320, height: 568 }, '/community', { touch: true })
+  await compactCommunity.locator('.community-head').waitFor()
+  await assertNoHorizontalOverflow(compactCommunity, 'compact community')
+  await compactCommunity.close()
+
   const desktop = await openPage({ width: 1440, height: 1000 }, '/plugins')
   await desktop.locator('.directory-section .package-list').waitFor()
   if ((await desktop.locator('.ranking-section').count()) !== 0) {
@@ -826,7 +873,7 @@ try {
   await pet.close()
 
   if (errors.length > 0) throw new Error(`browser errors:\n${errors.join('\n')}`)
-  console.log('Visual smoke check passed: desktop, touch-enabled 390px mobile, compact 320px mobile, search, split install menus, self install banner, copy actions, local scrollers, and package details.')
+  console.log('Visual smoke check passed: sidebar shell, community section, desktop, touch-enabled 390px mobile, compact 320px mobile, search, split install menus, self install banner, copy actions, local scrollers, and package details.')
 } finally {
   await desktopContext.close()
   await mobileContext.close()

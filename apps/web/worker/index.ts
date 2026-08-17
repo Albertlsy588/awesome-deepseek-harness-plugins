@@ -1,6 +1,6 @@
-import { isCommunityRoute, serveCommunity } from '../../community/worker/serve'
 import { createApp } from './app'
-import { cleanupExpiredAuthRows } from '@dsh-1024store/core/auth'
+import { communityPostMetadata } from './community/metadata'
+import { cleanupExpiredAuthRows } from './lib/auth'
 import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
 import { runPluginClassifyTask } from './lib/plugin-classify-task'
 import { runPluginDiscoveryTask } from './lib/plugin-discovery-task'
@@ -63,7 +63,6 @@ const worker = {
       return app.fetch(new Request(rewritten.toString(), request), env, ctx)
     }
     if (url.pathname === '/api/live') return handleLiveStats(request, env)
-    if (isCommunityRoute(url.pathname)) return serveCommunity(request, url, env)
     const trailingSlashRedirect = canonicalTrailingSlashRedirect(url)
     if (trailingSlashRedirect) return trailingSlashRedirect
     if (isWorkerRoute(url.pathname)) return app.fetch(request, env, ctx)
@@ -99,6 +98,12 @@ const worker = {
         return Response.redirect(target.toString(), 301)
       }
       const metadata = metadataForPath(url.pathname, seo)
+      // A post's own title comes from D1, not from the static templates.
+      const post = await communityPostMetadata(url, env).catch(() => null)
+      if (post) {
+        metadata.title = post.title
+        metadata.description = post.description
+      }
       if (collectionQueryKind(url) === 'filtered') {
         metadata.robots = 'noindex,follow'
         // A noindexed permutation pointing its canonical at the unfiltered page
