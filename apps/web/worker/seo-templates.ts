@@ -110,7 +110,8 @@ export function pluginDescription(
 }
 
 /**
- * The hero paragraph both collection views render. It is shared rather than
+ * The screening paragraph both collection views render, now in the page head
+ * rather than a hero. It is shared rather than
  * per-view because the masthead is shared, and the pre-hydration shell has to
  * state exactly what the rendered page states.
  */

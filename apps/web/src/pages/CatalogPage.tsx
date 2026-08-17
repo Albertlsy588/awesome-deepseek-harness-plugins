@@ -1,19 +1,10 @@
-import {
-  AlertCircle,
-  ArrowUpRight,
-  Code,
-  ListFilter,
-  PackagePlus,
-  Search,
-  Trophy,
-  UserRound,
-} from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertCircle, PackagePlus, Search } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { LoadingState } from '../components/LoadingState'
-import { LanguageSwitch } from '../components/LanguageSwitch'
 import { PackageRow } from '../components/PackageRow'
 import { SelfInstallBanner } from '../components/SelfInstallBanner'
+import { SiteHero } from '../components/SiteHero'
 import type { CatalogSort, Language, RankingMode } from '../lib/api'
 import {
   deriveCatalogView,
@@ -21,9 +12,9 @@ import {
   isCatalogFresh,
   loadCatalog,
 } from '../lib/catalog-cache'
-import { publicAsset } from '../lib/assets'
 import { formatDateTime, formatNumber, formatRelativeUpdate } from '../lib/format'
 import { useI18n } from '../lib/i18n'
+import { pluginDetailPath } from '../../worker/lib/plugin-id'
 import { useLiveStats } from '../lib/useLiveStats'
 import {
   collectionCopy,
@@ -61,57 +52,6 @@ function rankingLabel(mode: RankingMode): Parameters<ReturnType<typeof useI18n>[
   return 'recentlyActive'
 }
 
-function useCountUp(target: number | null, animate: boolean): number | null {
-  const [value, setValue] = useState<number | null>(null)
-  const previousRef = useRef(0)
-  useEffect(() => {
-    if (target === null) return
-    const from = previousRef.current
-    if (
-      !animate
-      || target === from
-      || window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ) {
-      previousRef.current = target
-      setValue(target)
-      return
-    }
-    let frame = 0
-    const start = performance.now()
-    const step = (now: number) => {
-      const progress = Math.min(Math.max((now - start) / 900, 0), 1)
-      const eased = 1 - (1 - progress) ** 3
-      const next = Math.round(from + (target - from) * eased)
-      previousRef.current = next
-      setValue(next)
-      if (progress < 1) frame = window.requestAnimationFrame(step)
-    }
-    frame = window.requestAnimationFrame(step)
-    // Animation frames stop entirely in hidden/background tabs; make sure the
-    // final value still lands once the duration has passed.
-    const settle = window.setTimeout(() => {
-      previousRef.current = target
-      setValue(target)
-    }, 1100)
-    return () => {
-      window.cancelAnimationFrame(frame)
-      window.clearTimeout(settle)
-    }
-  }, [animate, target])
-  return value
-}
-
-// Isolates the per-frame count-up state so the animation re-renders this leaf
-// only, not the whole page while up to 100 package rows are mounted.
-function TallyCount({ total, language, animate }: {
-  total: number | null
-  language: Language
-  animate: boolean
-}) {
-  const value = useCountUp(total, animate)
-  return <>{value === null ? '--' : formatNumber(value, language)}</>
-}
-
 function CatalogUpdatedAt({ value, language }: { value: string; language: Language }) {
   const [now, setNow] = useState(() => Date.now())
 
@@ -124,16 +64,13 @@ function CatalogUpdatedAt({ value, language }: { value: string; language: Langua
   if (!label) return null
 
   return (
-    <time className="hero-updated" dateTime={value} title={formatDateTime(value, language)}>
+    <time className="page-head-updated" dateTime={value} title={formatDateTime(value, language)}>
       {label}
     </time>
   )
 }
 
 // Play the hero entrance (CSS rise + count-up) once per page load, not every
-// time the router remounts this page on the way back from a detail view.
-let heroIntroPlayed = false
-
 interface CatalogPageProps {
   view: 'catalog' | 'rankings'
 }
@@ -153,10 +90,6 @@ export function CatalogPage({ view }: CatalogPageProps) {
   // The full unfiltered catalog; every filter/sort/search view derives from it
   // synchronously, so selection feedback never waits on the network.
   const [fullCatalog, setFullCatalog] = useState(() => getCachedCatalog())
-  const [playIntro] = useState(() => !heroIntroPlayed)
-  useEffect(() => {
-    heroIntroPlayed = true
-  }, [])
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [reload, setReload] = useState(0)
@@ -258,11 +191,14 @@ export function CatalogPage({ view }: CatalogPageProps) {
       : catalog?.rankings[rankingMode] ?? []
     return candidates.slice(0, 100)
   }, [catalog, query, rankingMode])
+  // 右栏用：按发布时间取最近几条，两个板块共用。
+  const latestAdditions = useMemo(
+    () => (catalog?.rankings.newest ?? []).slice(0, 5),
+    [catalog],
+  )
   const isGrowthMode =
     rankingMode === 'growth24h' || rankingMode === 'growth7d' || rankingMode === 'growth30d'
   const isPendingRanking = !query && isGrowthMode
-  const catalogHref = query ? `/plugins?q=${encodeURIComponent(query)}` : '/plugins'
-  const rankingsHref = query ? `/?q=${encodeURIComponent(query)}` : '/'
   const canonicalPath = view === 'catalog' ? '/plugins' : '/'
   // Titles, descriptions and JSON-LD come from the same module the Worker uses,
   // so a client-side navigation cannot disagree with the served HTML.
@@ -308,107 +244,47 @@ export function CatalogPage({ view }: CatalogPageProps) {
   })
 
   return (
-    <div
-      className={`catalog-page ${view === 'rankings' ? 'rankings-page' : 'directory-page'}${playIntro ? '' : ' hero-static'}`}
-    >
-      <section className="catalog-hero">
-        <div className="page-container catalog-hero-inner">
-          <header className="hero-stage">
-            <div className="hero-actions" aria-label={t('siteActions')}>
-              <Link
-                className="hero-action-link hero-api"
-                to="/docs/api"
-                aria-label={collectionCopy('apiDocs', language).heading}
-              >
-                <Code size={16} aria-hidden="true" />
-                <span>{t('navApi')}</span>
-              </Link>
-              <a
-                className="hero-action-link hero-author"
-                href="https://www.imsai.cc/"
-                target="_blank"
-                rel="noreferrer"
-              >
-                <UserRound size={16} aria-hidden="true" />
-                <span>{t('authorHome')}</span>
-                <ArrowUpRight size={12} aria-hidden="true" />
-              </a>
-              <a
-                className="hero-action-link github-link"
-                href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"
-                target="_blank"
-                rel="noreferrer"
-              >
-                <img src={publicAsset('github-mark.svg')} alt="" aria-hidden="true" />
-                <span>{t('marketSource')}</span>
-                <ArrowUpRight size={12} aria-hidden="true" />
-              </a>
-              <a
-                className="hero-action-link hero-submit"
-                href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins"
-                target="_blank"
-                rel="noreferrer"
-              >
-                <PackagePlus size={16} aria-hidden="true" />
-                <span>{t('submit')}</span>
-              </a>
-              <LanguageSwitch className="hero-language" />
-            </div>
-            <div className="hero-heading">
-              <div className="hero-lockup">
-                <span className="hero-lockup-mark" aria-hidden="true">
-                  <img src={publicAsset('deepseek1024.png')} alt="" />
-                </span>
-                <div className="hero-lockup-copy">
-                  <p className="hero-eyebrow">{t('heroEyebrow')}</p>
-                  <h1>
-                    <a
-                      href="https://deepseek1024.com/"
-                      aria-label="DeepSeek Harness Plugin 1024Store"
-                    >
-                      <span>DeepSeek Harness Plugin</span>
-                      <em>1024Store</em>
-                    </a>
-                  </h1>
-                </div>
-              </div>
-              <p>{copy.intro}</p>
-            </div>
+    <div className={`page catalog-page ${view === 'rankings' ? 'rankings-page' : 'directory-page'}`}>
+      {/* 只在排行榜页。安装命令紧跟其后，整行宽——它是全站主 CTA。 */}
+      {view === 'rankings' && (
+        <>
+          <SiteHero
+            total={catalog?.meta.catalogTotal ?? null}
+            liveCount={stats?.online ?? null}
+            connected={connected}
+            language={language}
+          />
+          <SelfInstallBanner />
+        </>
+      )}
 
-            <dl className="hero-tally">
-              <div className="hero-tally-count">
-                <dt className="hero-tally-label">{t('totalPlugins')}</dt>
-                <dd className="hero-tally-value">
-                  <TallyCount
-                    total={catalog?.meta.catalogTotal ?? null}
-                    language={language}
-                    animate={playIntro}
-                  />
-                </dd>
-              </div>
-              <div className="hero-live">
-                <dt className="hero-live-label">
-                  <span className={connected ? 'live-dot is-connected' : 'live-dot'} aria-hidden="true" />
-                  {t('online')}
-                </dt>
-                <dd className="hero-live-count">
-                  {stats ? formatNumber(stats.online, language) : '--'}
-                </dd>
-              </div>
-              {catalog?.meta.generatedAt && (
-                <CatalogUpdatedAt value={catalog.meta.generatedAt} language={language} />
-              )}
-            </dl>
-
-            <SelfInstallBanner />
-          </header>
+      <header className="page-head">
+        <div className="page-head-titles">
+          <h1>{copy.heading}</h1>
+          <p className="page-head-sub">
+            {copy.intro}
+            {catalog?.meta.generatedAt && (
+              <CatalogUpdatedAt value={catalog.meta.generatedAt} language={language} />
+            )}
+          </p>
         </div>
-      </section>
+        <div className="page-head-actions">
+          <a
+            className="button button-primary"
+            href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/CONTRIBUTING.md"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <PackagePlus size={16} aria-hidden="true" />
+            {t('submit')}
+          </a>
+        </div>
+      </header>
 
-      <div className="page-container catalog-content">
-        <section className="catalog-navigation" aria-label={`${t('search')} / ${t('catalog')} / ${t('rankings')}`}>
-          <section className="catalog-toolbar" aria-label={t('search')}>
-            <label className="search-control">
+      <div className="catalog-content page-body has-rail">
+        <div className="page-main">
+        <div className="page-toolbar">
+          <label className="search-control">
               <Search size={19} aria-hidden="true" />
               <span className="visually-hidden">{t('search')}</span>
               <input
@@ -417,27 +293,13 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 onChange={(event) => setDraftQuery(event.target.value)}
                 placeholder={t('searchPlaceholder')}
               />
-              {catalog && (
-                <small>
-                  {catalog.meta.total} {t(catalog.meta.total === 1 ? 'result' : 'results')}
-                </small>
-              )}
-            </label>
-          </section>
-
-          <nav className="catalog-view-tabs" aria-label={`${t('catalog')} / ${t('rankings')}`}>
-            <Link to={rankingsHref} className={view === 'rankings' ? 'selected' : undefined} aria-current={view === 'rankings' ? 'page' : undefined}>
-              <Trophy size={16} aria-hidden="true" />
-              {t('rankings')}
-            </Link>
-            <Link to={catalogHref} className={view === 'catalog' ? 'selected' : undefined} aria-current={view === 'catalog' ? 'page' : undefined}>
-              <ListFilter size={16} aria-hidden="true" />
-              <span>
-                {t('catalog')}{catalog ? ` (${formatNumber(catalog.meta.catalogTotal, language)})` : ''}
-              </span>
-            </Link>
-          </nav>
-        </section>
+            {catalog && (
+              <small>
+                {catalog.meta.total} {t(catalog.meta.total === 1 ? 'result' : 'results')}
+              </small>
+            )}
+          </label>
+        </div>
 
         {view === 'catalog' && (
           <section className="category-section" aria-labelledby="categories-heading">
@@ -625,6 +487,52 @@ export function CatalogPage({ view }: CatalogPageProps) {
             )}
           </section>
         )}
+        </div>
+
+        <aside className="page-rail" aria-label={t('catalogFacts')}>
+          <section className="rail-card">
+            <h2 className="rail-card-title">{t('catalogFacts')}</h2>
+            <dl className="rail-stats">
+              <div>
+                <dt>{t('categories')}</dt>
+                <dd>{catalog ? formatNumber(catalog.categories.length, language) : '—'}</dd>
+              </div>
+              <div>
+                <dt>{t('totalPlugins')}</dt>
+                <dd>{catalog ? formatNumber(catalog.meta.catalogTotal, language) : '—'}</dd>
+              </div>
+            </dl>
+          </section>
+
+          {/* 「所有插件都验证过能装上」是这个目录区别于随便一个 awesome
+              列表的地方，值得一直说着 —— 原来只在 hero 的一行小字里。 */}
+          <section className="rail-card">
+            <h2 className="rail-card-title">{t('curationTitle')}</h2>
+            <p className="rail-card-body">{t('curationBody')}</p>
+            <a
+              className="rail-card-link"
+              href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/CONTRIBUTING.md"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t('submit')}
+            </a>
+          </section>
+
+          {latestAdditions.length > 0 && (
+            <section className="rail-card">
+              <h2 className="rail-card-title">{t('latestReleases')}</h2>
+              <ul className="rail-list">
+                {latestAdditions.map((plugin) => (
+                  <li key={plugin.id}>
+                    <Link to={pluginDetailPath(plugin.id)}>{plugin.name}</Link>
+                    <span>{categoryMap.get(plugin.category)?.[language] ?? plugin.category}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </aside>
       </div>
     </div>
   )

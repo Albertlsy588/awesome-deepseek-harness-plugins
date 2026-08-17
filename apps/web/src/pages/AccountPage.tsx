@@ -1,7 +1,6 @@
 import { Check, Copy, KeyRound, LogOut } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { LanguageSwitch } from '../components/LanguageSwitch'
 import {
   API_ORIGIN,
   createApiKey,
@@ -128,13 +127,6 @@ export function AccountPage() {
 
   return (
     <div className="page-container account-page">
-      <div className="detail-utility">
-        <Link className="detail-brand" to="/" aria-label="DeepSeek Harness Store homepage">
-          <img className="brand-mark" src={publicAsset('deepseek1024-icon.png')} alt="" aria-hidden="true" />
-          <span>DeepSeek Harness <strong>{t('market')}</strong></span>
-        </Link>
-        <LanguageSwitch />
-      </div>
 
       <header className="account-header">
         <h1>{t('accountTitle')}</h1>

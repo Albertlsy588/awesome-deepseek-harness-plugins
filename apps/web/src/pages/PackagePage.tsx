@@ -25,11 +25,9 @@ import remarkGfm from 'remark-gfm'
 import { CategoryTag } from '../components/CategoryTag'
 import { InstallMethods } from '../components/InstallMethods'
 import { InstallOptions } from '../components/InstallOptions'
-import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
 import { pluginDetailPath, pluginSourceUrl } from '../../worker/lib/plugin-id'
 import { ApiError, getPackage, repositoryName, type PackageDetail } from '../lib/api'
-import { publicAsset } from '../lib/assets'
 import { formatDate, formatDateTime, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import {
@@ -197,13 +195,6 @@ export function PackagePage() {
 
   return (
     <div className="page-container package-detail-page">
-      <div className="detail-utility">
-        <Link className="detail-brand" to="/" aria-label="DeepSeek Harness Store homepage">
-          <img className="brand-mark" src={publicAsset('deepseek1024-icon.png')} alt="" aria-hidden="true" />
-          <span>DeepSeek Harness <strong>{t('market')}</strong></span>
-        </Link>
-        <LanguageSwitch />
-      </div>
 
       <Link className="back-link" to="/plugins">
         <ArrowLeft size={16} aria-hidden="true" />

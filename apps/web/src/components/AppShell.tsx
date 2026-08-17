@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { BookOpen, ExternalLink, LayoutGrid, MessagesSquare, Trophy } from 'lucide-react'
+import { BookOpen, ExternalLink, LayoutGrid, MessagesSquare, PackagePlus, Trophy } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useI18n } from '../lib/i18n'
+import { LanguageSwitch } from './LanguageSwitch'
 import { KanbanGirl } from './KanbanGirl'
+import { SidebarAccount } from './SidebarAccount'
 
 /**
  * The four sections of the site, in one persistent rail.
@@ -64,6 +66,21 @@ export function AppShell() {
       {menuOpen ? (
         <nav id="site-sections" className="shell-bar-menu" aria-label={t('siteActions')}>
           <SectionLinks onNavigate={() => setMenuOpen(false)} />
+          <a
+            className="nav-link"
+            href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/CONTRIBUTING.md"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <PackagePlus size={17} aria-hidden="true" />
+            <span>{t('submit')}</span>
+          </a>
+          {/* The sidebar is hidden at this width, so language and account have
+              to live here too — otherwise a phone has no way to switch either. */}
+          <div className="shell-bar-menu-foot">
+            <LanguageSwitch />
+            <SidebarAccount />
+          </div>
         </nav>
       ) : null}
 
@@ -78,12 +95,27 @@ export function AppShell() {
             <SectionLinks />
           </div>
 
-          <div className="sidebar-foot">
-            <p>{t('unofficialNotice')}</p>
-            <a href="https://www.deepseek.com/harness/" target="_blank" rel="noreferrer">
-              {t('officialHarness')}
-              <ExternalLink size={12} aria-hidden="true" />
+          {/* An action, not a destination, so it sits below a rule rather than
+              among the four sections. It is the only path a visitor has to
+              contribute, and it used to be buried in the home page hero. */}
+          <div className="sidebar-secondary">
+            <a
+              className="nav-link"
+              href="https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/CONTRIBUTING.md"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <PackagePlus size={17} aria-hidden="true" />
+              <span>{t('submit')}</span>
             </a>
+          </div>
+
+          {/* Language stays visible rather than folding into the account menu:
+              most of this site's traffic is signed-out search traffic, and a
+              preference they cannot find is a preference they cannot use. */}
+          <div className="sidebar-foot">
+            <LanguageSwitch />
+            <SidebarAccount />
           </div>
         </nav>
 
@@ -92,7 +124,7 @@ export function AppShell() {
         </main>
       </div>
 
-      <div className="site-bottom-link">
+      <div className="site-bottom-link shell-bottom-note">
         <p>{t('unofficialNotice')}</p>
         <a href="https://www.deepseek.com/harness/" target="_blank" rel="noreferrer">
           {t('officialHarness')}
