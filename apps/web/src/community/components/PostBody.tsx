@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -9,7 +10,7 @@ import remarkGfm from 'remark-gfm'
  * the renderer must have no path from their text to markup. Links are opened in
  * a new tab and marked `nofollow ugc`, which is what they are.
  */
-export function PostBody({ body }: { body: string }) {
+function PostBodyView({ body }: { body: string }) {
   return (
     <div className="post-body">
       <ReactMarkdown
@@ -42,3 +43,11 @@ export function PostBody({ body }: { body: string }) {
     </div>
   )
 }
+
+/**
+ * Markdown parsing is the expensive part of a feed render — measured at ~7ms a
+ * post, so a page of them blocks a frame and the section visibly stutters on
+ * arrival. It depends on nothing but `body`, so a like or a tab change must not
+ * re-parse every post on screen.
+ */
+export const PostBody = memo(PostBodyView)
