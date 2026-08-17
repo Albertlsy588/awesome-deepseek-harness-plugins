@@ -1,26 +1,5 @@
 export const SESSION_COOKIE = 'dsh_session'
 export const OAUTH_STATE_COOKIE = 'dsh_oauth_state'
-
-/**
- * The registrable domain the session cookie is scoped to, so one sign-in covers
- * the site and every sibling app (the community lives on a subdomain and reads
- * the same `api_sessions` rows). Left unset on localhost, where a bare hostname
- * cannot carry a Domain attribute — cookies ignore ports, so a session minted on
- * 127.0.0.1:5641 already reaches a dev server on another port.
- */
-export const SESSION_COOKIE_DOMAIN = 'deepseek1024.com'
-
-/**
- * Hosts the sign-in flow may hand a session back to. GitHub OAuth Apps accept a
- * single callback URL, so every app in the family authenticates through the apex
- * and is redirected home afterwards. This list is deliberately hardcoded: an
- * environment variable here is one typo away from an open redirect.
- */
-const CROSS_SITE_RETURN_HOSTS = new Set(['community.deepseek1024.com'])
-
-function isLoopbackHost(hostname: string): boolean {
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]'
-}
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 export const API_KEY_PREFIX = 'dsh_live_'
 export const API_KEY_RANDOM_BYTES = 20
@@ -94,81 +73,16 @@ export function timingSafeEqualStrings(expected: string, presented: string): boo
 }
 
 /**
- * Where a completed sign-in is allowed to land. Two shapes survive:
- *
- *   - a same-site absolute path (`/account`), returned unchanged, and
- *   - an absolute URL on a host in CROSS_SITE_RETURN_HOSTS, so a sibling app
- *     that cannot own the OAuth callback can still send its users through here.
- *
- * Everything else collapses to the root. Control characters are rejected so the
- * value can never smuggle CR/LF into a Location header, and `//evil.com` is
- * rejected before it can be read as a protocol-relative URL.
- *
- * `selfUrl` is the request URL of the sign-in endpoint. It only widens the rule
- * on a loopback host, where the sibling app runs on another port of the same
- * machine and no public host exists to allow-list.
+ * Only same-site absolute paths survive; anything else falls back to the root.
+ * Control characters are rejected so the value can never smuggle CR/LF into a
+ * Location header, and `//evil.example` is rejected before it can be read as a
+ * protocol-relative URL.
  */
-export function sanitizeReturnTo(value: string | undefined, selfUrl?: string): string {
+export function sanitizeReturnTo(value: string | undefined): string {
   if (!value || value.length > 512) return '/'
+  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return '/'
   if ([...value].some((char) => char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f)) return '/'
-  if (value.startsWith('/')) {
-    return value.startsWith('//') || value.startsWith('/\\') ? '/' : value
-  }
-
-  let target: URL
-  try {
-    target = new URL(value)
-  } catch {
-    return '/'
-  }
-  if (CROSS_SITE_RETURN_HOSTS.has(target.host) && target.protocol === 'https:') return target.toString()
-
-  const developmentHost = selfUrl ? isLoopbackHost(new URL(selfUrl).hostname) : false
-  if (developmentHost && isLoopbackHost(target.hostname) && (target.protocol === 'http:' || target.protocol === 'https:')) {
-    return target.toString()
-  }
-  return '/'
-}
-
-/**
- * Every value the client presented under one cookie name, in header order,
- * capped at MAX_SESSION_COOKIE_VALUES.
- *
- * A session cookie that used to be host-only and is now `Domain`-scoped means a
- * returning browser holds two cookies with the same name, and both are sent.
- * Reading just the first would leave the other one live after a sign-out — the
- * user sees a logged-out page while a valid session row survives in D1. Callers
- * validate every value and revoke every value.
- *
- * The cap is what keeps that from becoming an amplifier: each value costs a
- * database round trip, and the Cookie header is attacker-controlled on an
- * unauthenticated endpoint. A real browser can hold at most two of these — one
- * host-only, one Domain-scoped — so four is already generous, and anything
- * beyond it is somebody probing.
- */
-export const MAX_SESSION_COOKIE_VALUES = 4
-
-export function readCookieValues(cookieHeader: string | null | undefined, name: string): string[] {
-  if (!cookieHeader) return []
-  const values: string[] = []
-  for (const pair of cookieHeader.split(';')) {
-    if (values.length >= MAX_SESSION_COOKIE_VALUES) break
-    const separator = pair.indexOf('=')
-    if (separator === -1) continue
-    if (pair.slice(0, separator).trim() !== name) continue
-    const value = pair.slice(separator + 1).trim()
-    if (value.length > 0) values.push(value)
-  }
-  return values
-}
-
-/** The Domain a session cookie gets on this host, or undefined on localhost. */
-export function sessionCookieDomain(requestUrl: string): string | undefined {
-  const { hostname } = new URL(requestUrl)
-  if (hostname === SESSION_COOKIE_DOMAIN || hostname.endsWith(`.${SESSION_COOKIE_DOMAIN}`)) {
-    return SESSION_COOKIE_DOMAIN
-  }
-  return undefined
+  return value
 }
 
 export function buildGitHubAuthorizeUrl(clientId: string, redirectUri: string, state: string): string {
@@ -310,30 +224,6 @@ export async function deleteSession(db: D1Database, token: string): Promise<void
   await db.prepare('DELETE FROM api_sessions WHERE token_hash = ?')
     .bind(await sha256Hex(token))
     .run()
-}
-
-/**
- * Resolve the first valid session among every `dsh_session` value the browser
- * sent. See readCookieValues for why there can be more than one.
- */
-export async function resolveSessionUser(
-  db: D1Database,
-  cookieHeader: string | null | undefined,
-  nowMs: number,
-): Promise<ApiUser | null> {
-  for (const token of readCookieValues(cookieHeader, SESSION_COOKIE)) {
-    const user = await getSessionUser(db, token, nowMs)
-    if (user) return user
-  }
-  return null
-}
-
-/** Sign-out has to revoke every presented session, not just the one it read. */
-export async function deleteSessions(db: D1Database, tokens: readonly string[]): Promise<void> {
-  if (tokens.length === 0) return
-  const hashes = await Promise.all(tokens.map(sha256Hex))
-  await db.batch(hashes.map((hash) =>
-    db.prepare('DELETE FROM api_sessions WHERE token_hash = ?').bind(hash)))
 }
 
 interface ApiKeyRow {

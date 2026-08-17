@@ -1,10 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 import { createSession, upsertGitHubUser } from '@dsh-1024store/core/auth'
-import { createApp } from '../worker/app'
 import { hotScore } from '../worker/lib/posts'
-import { isAdmin, signInUrl } from '../worker/lib/session'
-import { communityDatabase, seedPlugin, sqliteD1 } from './fixtures'
+import { isAdmin } from '../worker/lib/session'
+import { communityApp, communityDatabase, seedPlugin, sqliteD1 } from './fixtures'
 import type { FeedResponse, Post, ThreadResponse } from '../worker/lib/contract'
 
 const NOW = Date.parse('2026-08-17T08:00:00Z')
@@ -18,7 +17,7 @@ function env(database: DatabaseSync, adminLogins = ''): Env {
 }
 
 function app(clock: () => number = () => NOW) {
-  return createApp({ clock })
+  return communityApp({ clock })
 }
 
 /** A signed-in browser: the cookie the main site's OAuth callback would have set. */
@@ -514,25 +513,26 @@ describe('pagination', () => {
 })
 
 describe('sign-in routing', () => {
-  it('sends a community visitor to the main site and back', () => {
-    expect(signInUrl('https://community.deepseek1024.com/p/12', '/p/12'))
-      .toBe('https://deepseek1024.com/api/v1/auth/github/login?returnTo=https%3A%2F%2Fcommunity.deepseek1024.com%2Fp%2F12')
-  })
-
-  it('sends a local visitor to the port the OAuth callback is registered against', () => {
-    expect(signInUrl('http://localhost:5642/', '/'))
-      .toBe('http://localhost:5641/api/v1/auth/github/login?returnTo=http%3A%2F%2Flocalhost%3A5642%2F')
+  it('hands off to the site’s own GitHub sign-in, carrying the return path', async () => {
+    const database = communityDatabase()
+    const response = await app().request(
+      `${ORIGIN}/api/v1/community/sign-in?returnTo=%2Fcommunity%2Fp%2F12`, {}, env(database))
+    expect(response.headers.get('Location'))
+      .toBe('/api/v1/auth/github/login?returnTo=%2Fcommunity%2Fp%2F12')
+    database.close()
   })
 
   it('refuses to redirect anywhere the query string asks for', async () => {
     const database = communityDatabase()
-    const response = await app().request(
-      `${ORIGIN}/api/v1/community/sign-in?returnTo=https://evil.example/steal`,
-      {},
-      env(database),
-    )
-    expect(response.headers.get('Location'))
-      .toBe('https://deepseek1024.com/api/v1/auth/github/login?returnTo=https%3A%2F%2Fcommunity.deepseek1024.com%2F')
+    const environment = env(database)
+    // Rejected values, and same-site paths outside the community, both land on
+    // the community's own home rather than the catalog's.
+    for (const hostile of ['https://evil.example/steal', '//evil.example', '/\\evil.example', '/account']) {
+      const response = await app().request(
+        `${ORIGIN}/api/v1/community/sign-in?returnTo=${encodeURIComponent(hostile)}`, {}, environment)
+      expect(response.headers.get('Location'), hostile)
+        .toBe('/api/v1/auth/github/login?returnTo=%2Fcommunity')
+    }
     database.close()
   })
 })

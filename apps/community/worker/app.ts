@@ -26,7 +26,6 @@ import {
   createDevSession,
   currentUser,
   devLoginEnabled,
-  signInUrl,
   signOut,
   type CommunityContext,
 } from './lib/session'
@@ -42,11 +41,30 @@ const POST_QUOTA: QuotaLimits = { perMinute: 5, perDay: 50 }
 const REPLY_QUOTA: QuotaLimits = { perMinute: 10, perDay: 200 }
 const LIKE_QUOTA: QuotaLimits = { perMinute: 30, perDay: 500 }
 
-export interface AppDependencies {
+export interface CommunityDependencies {
   clock: () => number
 }
 
 type CommunityApp = Hono<{ Bindings: Env }>
+
+/** Where the community lives on the site. A permanent public path. */
+export const COMMUNITY_BASE_PATH = '/community'
+
+/**
+ * Where a sign-in started from the community may return to.
+ *
+ * sanitizeReturnTo does the security half — it rejects absolute URLs, control
+ * characters, and the protocol-relative forms — and collapses anything it does
+ * not like to `/`. That is the catalog's home page, which is a confusing place
+ * to land after signing in from the community, so anything outside the
+ * community's own subtree comes back here instead.
+ */
+function communityReturnTo(raw: string | undefined): string {
+  const safe = sanitizeReturnTo(raw)
+  return safe === COMMUNITY_BASE_PATH || safe.startsWith(`${COMMUNITY_BASE_PATH}/`)
+    ? safe
+    : COMMUNITY_BASE_PATH
+}
 
 function fail(context: CommunityContext, status: 400 | 401 | 403 | 404 | 413 | 429 | 503, body: ApiError) {
   return context.json(body, status)
@@ -127,8 +145,18 @@ const BODY_MESSAGES: Record<string, string> = {
   control_characters: 'That post contains characters that are not allowed.',
 }
 
-export function createApp(dependencies: AppDependencies = { clock: () => Date.now() }): CommunityApp {
-  const app = new Hono<{ Bindings: Env }>()
+/**
+ * Mount the community API onto the site's Hono app.
+ *
+ * The community is a separate front-end in `apps/community/src`, but it is not a
+ * separate service: it runs in the main Worker, on the main hostname, against
+ * the same D1. That is what makes a session here the same session as on the
+ * catalog, with no cookie scoping and no second OAuth app.
+ */
+export function registerCommunityRoutes(
+  app: CommunityApp,
+  dependencies: CommunityDependencies = { clock: () => Date.now() },
+): void {
 
   async function viewerContext(context: CommunityContext): Promise<ViewerContext> {
     const signer = await currentUser(context)
@@ -140,28 +168,26 @@ export function createApp(dependencies: AppDependencies = { clock: () => Date.no
   app.get('/api/v1/community/me', async (context) => {
     context.header('Cache-Control', 'no-store')
     const signer = await currentUser(context)
-    if (!signer) return context.json({ viewer: null, signInUrl: signInUrl(context.req.url, '/') })
+    if (!signer) return context.json({ viewer: null })
     const viewer: Viewer = {
       login: signer.user.githubLogin,
       name: signer.user.githubName,
       avatarUrl: signer.user.avatarUrl,
       admin: signer.admin,
     }
-    return context.json({ viewer, signInUrl: null })
+    return context.json({ viewer })
   })
 
   app.get('/api/v1/community/sign-in', (context) => {
-    // sanitizeReturnTo with no self URL accepts only a same-site path, which is
-    // exactly the rule here. Hand-rolling it missed `/\evil.example`, which some
-    // browsers read as protocol-relative.
-    const safe = sanitizeReturnTo(context.req.query('returnTo') ?? '/')
-    // On a developer's machine there is usually no OAuth app to talk to, so the
-    // same button signs in locally instead of dead-ending on a port that is not
-    // listening. Both gates in devLoginEnabled still apply.
+    const safe = communityReturnTo(context.req.query('returnTo'))
+    // On a developer's machine there is usually no OAuth app configured, so the
+    // same button signs in locally instead of dead-ending. Both gates in
+    // devLoginEnabled still apply.
     if (devLoginEnabled(context)) {
       return context.redirect(`/api/v1/community/dev-login?returnTo=${encodeURIComponent(safe)}`, 302)
     }
-    return context.redirect(signInUrl(context.req.url, safe), 302)
+    // The site's own sign-in, same origin: no cross-host handoff to arrange.
+    return context.redirect(`/api/v1/auth/github/login?returnTo=${encodeURIComponent(safe)}`, 302)
   })
 
   app.post('/api/v1/community/sign-out', async (context) => {
@@ -183,7 +209,7 @@ export function createApp(dependencies: AppDependencies = { clock: () => Date.no
       return fail(context, 400, { error: 'Invalid login.', code: 'INVALID_REQUEST' })
     }
     await createDevSession(context, login)
-    return context.redirect(sanitizeReturnTo(context.req.query('returnTo')), 302)
+    return context.redirect(communityReturnTo(context.req.query('returnTo')), 302)
   })
 
   app.get('/api/v1/community/feed', async (context) => {
@@ -344,9 +370,6 @@ export function createApp(dependencies: AppDependencies = { clock: () => Date.no
     return context.json(stats satisfies CommunityStats)
   })
 
-  app.all('/api/*', (context) => fail(context, 404, { error: 'Not found.', code: 'NOT_FOUND' }))
-
-  return app
 }
 
 /** The subset of the mentioned ids the catalog actually publishes. */

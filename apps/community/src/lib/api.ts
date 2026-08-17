@@ -38,7 +38,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface Session {
   viewer: Viewer | null
-  signInUrl: string | null
 }
 
 export const api = {

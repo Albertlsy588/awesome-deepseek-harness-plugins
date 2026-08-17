@@ -2,7 +2,7 @@
 
 ## Public URL stability
 
-- Canonical public paths: `/` (rankings), `/plugins` (catalog), `/plugins/:owner/:name` (plugin detail), `/docs/api` (public API reference), `/account` (noindex).
+- Canonical public paths: `/` (rankings), `/plugins` (catalog), `/plugins/:owner/:name` (plugin detail), `/docs/api` (public API reference), `/community` and `/community/p/:id` (developer community), `/account` and `/community/u/:login` (noindex).
 - Plugin API routes use the `/api/v1/` prefix with plural resources (`/api/v1/plugins`, `/api/v1/plugins/:owner/:name`). The outward-facing search API is `https://api.deepseek1024.com/v1/plugins/search`.
 - `/plugin`, `/plugin/:owner/:name`, `/packages`, `/packages/:owner/:name` and `/rankings` are permanent 301 **sources only**. Do not cite them as live URLs.
 - Treat public route paths as permanent SEO contracts. Do not rename or remove them without explicit user approval and a migration plan covering permanent redirects, canonical URLs, and existing inbound links.
@@ -69,56 +69,49 @@ npm run deploy
 
 Extend `apps/web/tests/public-api.test.ts` whenever you change which host serves what.
 
-## Two Workers, one database, one sign-in
+## The community lives inside this Worker
 
-`apps/web` and `apps/community` are separate Workers on separate hostnames, bound to the **same**
-D1. The community never runs an OAuth exchange: a GitHub OAuth App accepts exactly one callback
-URL, and that URL belongs to `deepseek1024.com`. So sign-in always happens on the main site, and
-the session it issues is readable on both hosts.
+`apps/community` is a second front-end, not a second service. It is built with
+`base: '/community/'` into this Worker's asset directory, its API routes are
+registered onto the same Hono app (`registerCommunityRoutes` in
+`apps/web/worker/app.ts`), and its tables share the same D1. One hostname, one
+deploy, one migration sequence.
 
-That works because of three things, all of which live in `packages/dsh-core/src/auth.ts`:
+That is what makes a session there the same session as here: the ordinary
+`dsh_session` cookie, no `Domain` scoping, no second OAuth app, no cross-origin
+handoff. Sign-in is `/api/v1/community/sign-in`, which validates the return path
+and redirects to the site's own `/api/v1/auth/github/login`.
 
-1. **The session cookie carries `Domain=deepseek1024.com`** (`sessionCookieDomain`), so the
-   subdomain receives it. On localhost the attribute is omitted — a bare hostname cannot carry
-   one — which is harmless, because cookies are not isolated by port and a session minted at
-   `localhost:5641` already reaches a dev server on another port.
-2. **`sanitizeReturnTo` has a hardcoded cross-site allow-list** (`CROSS_SITE_RETURN_HOSTS`). It is
-   deliberately not configurable: an environment variable there is one typo away from an open
-   redirect. A same-site path still returns unchanged; a loopback peer is allowed only when the
-   sign-in request itself arrived on loopback.
-3. **Every `dsh_session` value is read and revoked, not just the first.** The cookie used to be
-   host-only, so a browser that signed in before the change presents *two* cookies of that name
-   and sends both. `readCookieValues` / `resolveSessionUser` / `deleteSessions` handle the set;
-   reading only the first would leave a live session row behind after sign-out — a signed-out page
-   over a live session. `apps/web/tests/auth-api.test.ts` guards this.
+Three things this arrangement depends on:
 
-Three ways this gets broken:
+1. **`/community/*` is carved out before the SPA fallback.** `not_found_handling`
+   is `single-page-application`, so an unknown path returns the *catalog's*
+   `index.html`. Without the carve-out in `apps/community/worker/serve.ts`, a
+   community permalink would boot the wrong app and return 200 while doing it.
+   `apps/web/tests/community-routing.test.ts` guards this.
+2. **The community build runs after the site build.** It writes into
+   `apps/web/dist/client/community`, which the site build creates and empties.
+   Reversing the order in the root `build` script silently ships a deploy with no
+   community in it.
+3. **`apps/community/worker/env.d.ts` declares the bindings, not
+   `worker-configuration.d.ts`.** Wrangler's generated types do
+   `import("./worker/index")`, which would pull this entire Worker into the
+   community's TypeScript project. `Env` is global, so a wrong type there still
+   fails this app's typecheck.
 
-1. **Adding a host to `CROSS_SITE_RETURN_HOSTS` without thinking.** Anything listed there can
-   receive a live session. Only hosts this project controls belong in it.
-2. **Reaching for `getCookie(context, SESSION_COOKIE)` again.** Hono returns the first match. Use
-   `resolveSessionUser`, or the migration hazard above comes back.
-3. **Editing `routes` in either `wrangler.jsonc`.** Each file is the authoritative binding list for
-   its own Worker. `apps/web` owns the three main hostnames; `apps/community` owns
-   `community.deepseek1024.com`. They must never overlap, and a deploy that drops an entry unbinds
-   that hostname.
+Add the community's public paths to the SEO contract at the top of this file when
+they stabilise; `/community` and `/community/p/:id` are indexable, `/community/u/:login`
+is not.
 
-The community's schema lives in `apps/community/migrations/`, numbered independently — wrangler
-tracks applied migrations by filename in a shared `d1_migrations` table, and the two sets never
-collide. Ordering does matter once: community tables reference `api_users`, which the web app's
-`0004_api_accounts.sql` creates, so the root `db:migrate:local` / `db:migrate:remote` scripts run
-the web migrations first. Deploy the two Workers separately: `npm run deploy` and
-`npm run deploy:community`.
+There is a development-only sign-in at `/api/v1/community/dev-login`, gated on
+**both** a `COMMUNITY_DEV_LOGIN` var that exists only in git-ignored
+`apps/web/.dev.vars` (and deliberately not in `wrangler.jsonc`, so no deploy can
+carry it) **and** a loopback hostname. Never move that flag into `wrangler.jsonc`.
 
-There is a development-only sign-in at `/api/v1/community/dev-login`, gated on **both** a
-`COMMUNITY_DEV_LOGIN` var that exists only in git-ignored `.dev.vars` (and deliberately not in
-`wrangler.jsonc`, so no deploy can carry it) **and** a loopback hostname. Never move that flag
-into `wrangler.jsonc`.
-
-`.dev.vars` shows up in `dist/dsh_community/` after a build. That is the Vite plugin staging it for
-`vite preview`; it is not in the uploaded assets (`dist/client/`) and not in the deploy manifest
-(`dist/dsh_community/wrangler.json`), and `wrangler deploy` does not read `.dev.vars` at all.
-`apps/community/tests/deploy-config.test.ts` asserts the flag never appears in `wrangler.jsonc`.
+Local development runs two servers: `npm run dev` serves the site and the whole
+API on 5641, and `npm run dev:community` serves the community front-end on
+5642/community, proxying `/api` to the first. Cookies are not isolated by port, so
+one sign-in covers both.
 
 ## Responsive web support
 

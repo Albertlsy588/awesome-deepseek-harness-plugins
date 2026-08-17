@@ -1,3 +1,4 @@
+import { isCommunityRoute, serveCommunity } from '../../community/worker/serve'
 import { createApp } from './app'
 import { cleanupExpiredAuthRows } from '@dsh-1024store/core/auth'
 import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
@@ -62,6 +63,7 @@ const worker = {
       return app.fetch(new Request(rewritten.toString(), request), env, ctx)
     }
     if (url.pathname === '/api/live') return handleLiveStats(request, env)
+    if (isCommunityRoute(url.pathname)) return serveCommunity(request, url, env)
     const trailingSlashRedirect = canonicalTrailingSlashRedirect(url)
     if (trailingSlashRedirect) return trailingSlashRedirect
     if (isWorkerRoute(url.pathname)) return app.fetch(request, env, ctx)

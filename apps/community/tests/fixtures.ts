@@ -1,5 +1,21 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { Hono } from 'hono'
 import { migratedDatabase, sqliteD1 } from '@dsh-1024store/core/testing/d1'
+import { registerCommunityRoutes, type CommunityDependencies } from '../worker/app'
+
+/**
+ * The community routes on a bare Hono app.
+ *
+ * In production they are mounted onto the site's app, which also carries the
+ * catalog, SEO, and auth routes. Registering them alone keeps these tests about
+ * the community and keeps the site's Worker out of this TypeScript project.
+ * `apps/web/tests/app.test.ts` is where the mount itself is covered.
+ */
+export function communityApp(dependencies: CommunityDependencies) {
+  const app = new Hono<{ Bindings: Env }>()
+  registerCommunityRoutes(app, dependencies)
+  return app
+}
 
 /**
  * A database with the real accounts migration and the real community migration
@@ -15,7 +31,7 @@ import { migratedDatabase, sqliteD1 } from '@dsh-1024store/core/testing/d1'
 export function communityDatabase(): DatabaseSync {
   const database = migratedDatabase(
     new URL('../../web/migrations/0004_api_accounts.sql', import.meta.url),
-    new URL('../migrations/0001_community.sql', import.meta.url),
+    new URL('../../web/migrations/0007_community.sql', import.meta.url),
   )
   database.exec(`
     CREATE TABLE catalog_repositories (

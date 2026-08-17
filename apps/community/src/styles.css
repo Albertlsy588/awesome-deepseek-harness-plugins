@@ -89,6 +89,10 @@ button {
 
 /* ==========================================================================
    骨架
+
+   桌面：左侧常驻导航栏（品牌在顶、账号在底）+ 中间信息流 + 右栏。
+   窄屏：导航栏放不下（200px 是手机屏幕的一半），改成顶部细条承载品牌与
+         账号，导航项落到页脚。同一套组件，两种排法。
    ========================================================================== */
 
 .shell {
@@ -96,26 +100,29 @@ button {
   min-height: 100dvh;
 }
 
-.shell-header {
+/* -- 窄屏顶栏 ------------------------------------------------------------ */
+
+.shell-topbar {
   position: sticky;
   top: 0;
   z-index: 30;
-  background: var(--surface-translucent);
-  backdrop-filter: saturate(180%) blur(12px);
-  border-bottom: 1px solid var(--line);
-  padding-top: env(safe-area-inset-top);
-}
-
-.shell-header-inner {
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 0 16px;
-  /* Minus the 1px bottom border, which --header-height includes. */
-  height: calc(var(--header-height) - 1px);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  height: calc(var(--header-height) - 1px);
+  padding: 0 16px;
+  padding-top: env(safe-area-inset-top);
+  background: var(--surface-translucent);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+
+.shell-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
 }
 
 .brand {
@@ -124,10 +131,6 @@ button {
   gap: 9px;
   color: var(--ink);
   min-width: 0;
-}
-
-.brand:hover {
-  text-decoration: none;
 }
 
 .brand-mark {
@@ -154,12 +157,7 @@ button {
   text-overflow: ellipsis;
 }
 
-.shell-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
+/* -- 主体网格 ------------------------------------------------------------ */
 
 .shell-body {
   max-width: 1240px;
@@ -167,7 +165,10 @@ button {
   padding: 0 16px 64px;
   display: grid;
   gap: 24px;
-  grid-template-areas: "main" "nav" "rail";
+  grid-template-areas:
+    "main"
+    "rail"
+    "footnav";
 }
 
 .shell-main {
@@ -175,39 +176,74 @@ button {
   min-width: 0;
 }
 
-.shell-nav {
-  grid-area: nav;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-
 .shell-rail {
   grid-area: rail;
   min-width: 0;
 }
 
-/* 平板起：左导航固定成一列，主内容让出宽度 */
+/* 窄屏下侧栏不渲染成侧栏，导航项走页脚 */
+.shell-sidebar {
+  display: none;
+}
+
+.shell-footnav {
+  grid-area: footnav;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* -- 平板起：左侧栏出现，顶栏收起 ---------------------------------------- */
+
 @media (min-width: 900px) {
-  .shell-body {
-    grid-template-columns: 188px minmax(0, 1fr);
-    grid-template-areas:
-      "nav main"
-      "nav rail";
-    align-items: start;
-    gap: 32px;
-    padding-top: 24px;
+  .shell-topbar,
+  .shell-footnav {
+    display: none;
   }
 
-  .shell-nav {
+  .shell-body {
+    grid-template-columns: 208px minmax(0, 1fr);
+    grid-template-areas:
+      "sidebar main"
+      "sidebar rail";
+    align-items: start;
+    gap: 32px;
+    padding-top: 20px;
+  }
+
+  .shell-sidebar {
+    grid-area: sidebar;
+    /* 常驻：整屏高度，跟着页面滚但自己不滚 */
     position: sticky;
-    top: calc(var(--header-height) + 24px);
+    top: 20px;
+    display: flex;
     flex-direction: column;
-    flex-wrap: nowrap;
-    padding-top: 0;
-    border-top: none;
+    gap: 20px;
+    height: calc(100vh - 40px);
+    height: calc(100dvh - 40px);
+  }
+
+  .sidebar-brand {
+    padding: 4px 10px;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* 账号沉到栏底，和桌面应用一样把身份放在离内容最远的地方 */
+  .sidebar-foot {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
   }
 
   .shell-rail {
@@ -215,16 +251,15 @@ button {
   }
 }
 
-/* 桌面：三栏。主栏封顶 640px —— 再宽一行文字就不好读了 */
 @media (min-width: 1180px) {
   .shell-body {
-    grid-template-columns: 188px minmax(0, 640px) 300px;
-    grid-template-areas: "nav main rail";
+    grid-template-columns: 208px minmax(0, 640px) 300px;
+    grid-template-areas: "sidebar main rail";
   }
 
   .shell-rail {
     position: sticky;
-    top: calc(var(--header-height) + 24px);
+    top: 20px;
     max-width: none;
   }
 }
@@ -334,7 +369,7 @@ button {
 .viewer-menu {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  left: 0;
   z-index: 40;
   min-width: 176px;
   padding: 5px;
@@ -367,6 +402,23 @@ button {
   background: var(--surface-hover);
   color: var(--ink);
   text-decoration: none;
+}
+
+/* In the top bar the chip is at the right edge and the menu hangs below it;
+   in the sidebar it sits at the bottom, so the menu has to open upward or it
+   falls off the viewport. */
+@media (max-width: 899px) {
+  .viewer-menu {
+    left: auto;
+    right: 0;
+  }
+}
+
+@media (min-width: 900px) {
+  .viewer-menu {
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
 }
 
 /* ==========================================================================
@@ -466,6 +518,13 @@ button {
   background: var(--surface);
   color: var(--ink);
   box-shadow: var(--shadow-xs);
+}
+
+@media (min-width: 900px) {
+  /* No top bar at this width, so nothing to clear. */
+  .tabs {
+    top: 20px;
+  }
 }
 
 @media (max-width: 899px) {

@@ -1,104 +1,116 @@
 # 1024 广场 · the DSH developer community
 
-A separate Worker and React app on `community.deepseek1024.com`, sharing the main site's D1.
+A second front-end, served from `/community` by the same Worker as the catalog,
+against the same D1.
 
-Text posts, one level of comments, likes, and plugin cards. Sign-in is GitHub, and only GitHub.
+Text posts, one level of comments, likes, and plugin cards. Sign-in is GitHub,
+and only GitHub. Black theme, no dark mode.
 
 ## Local development
 
+Two servers: the site (which owns the whole API) and this front-end.
+
 ```bash
-npm run db:migrate:local                # from the repository root, web migrations first
+npm run db:migrate:local                      # from the repository root
 node apps/community/scripts/seed-local.mjs
-npm run dev:community                   # http://127.0.0.1:5642
+npm run dev                                   # site + API on 5641
+npm run dev:community                         # this app on 5642/community
 ```
 
-The dev server shares its local D1 with `apps/web` (see `persistState` in `vite.config.ts`), so a
-session minted on either port works on both.
+Open **http://127.0.0.1:5642/community/**. The dev server proxies `/api` to 5641,
+and cookies are not isolated by port, so one sign-in covers both.
 
-`.dev.vars` sets `COMMUNITY_DEV_LOGIN=1`, which turns the sign-in button into a local shortcut that
-mints a session without GitHub. That is gated on the flag **and** a loopback hostname, and the flag
-is absent from `wrangler.jsonc`, so no deploy can carry it. To exercise the real chain instead,
-unset it and run the main app on port 5641 — the OAuth App's callback is registered against that
-port.
-
-`.dev.vars` shows up in `dist/dsh_community/` after a build. That is the Vite plugin staging it for
-`vite preview`; it is not in the uploaded assets (`dist/client/`) and not in the deploy manifest
-(`dist/dsh_community/wrangler.json`), and `wrangler deploy` does not read `.dev.vars` at all.
-`apps/community/tests/deploy-config.test.ts` asserts the flag never appears in `wrangler.jsonc`.
+`apps/web/.dev.vars` sets `COMMUNITY_DEV_LOGIN=1`, which turns the sign-in button
+into a local shortcut that mints a session without GitHub. It is gated on that
+flag **and** a loopback hostname, and the flag is absent from `wrangler.jsonc`,
+which `wrangler deploy` is the only thing that reads. To exercise the real chain
+instead, unset it and configure the OAuth secrets — the app's callback is
+registered against port 5641.
 
 ```bash
 npm run test --workspace @dsh-1024store/community
-npm run test:visual --workspace @dsh-1024store/community   # needs the dev server running
+npm run test:visual --workspace @dsh-1024store/community   # needs both servers
 ```
-
-## How sign-in works
-
-The community runs no OAuth exchange. A GitHub OAuth App accepts one callback URL and it belongs
-to the main site, so:
-
-```
-community  →  GET /api/v1/community/sign-in
-           →  deepseek1024.com/api/v1/auth/github/login?returnTo=https://community.deepseek1024.com/…
-           →  GitHub  →  main-site callback
-           →  Set-Cookie: dsh_session=…; Domain=deepseek1024.com
-           →  302 back to the community, which reads the same api_sessions row
-```
-
-The pieces that make it safe — the hardcoded return-host allow-list, and reading every
-`dsh_session` value rather than the first — live in `packages/dsh-core/src/auth.ts` and are
-described in the repository's `AGENTS.md`.
 
 ## Shape of the thing
 
 | Path | What it holds |
 | --- | --- |
-| `worker/app.ts` | The `/api/v1/community/*` routes, rate limits, and CSRF checks |
+| `src/` | The React app. `base`/`basename` is `/community/` in dev and production alike |
+| `worker/app.ts` | `registerCommunityRoutes` — mounted onto the site's Hono app |
+| `worker/serve.ts` | Which requests are the community's, and how its shell is served |
+| `worker/share-metadata.ts` | Per-post `<title>` and share tags |
 | `worker/lib/posts.ts` | Every D1 read and write, and the hot-feed ranking |
 | `worker/lib/post-body.ts` | Body validation and plugin-mention extraction |
 | `worker/lib/contract.ts` | Wire types, imported by both the Worker and the browser |
-| `worker/index.ts` | Assets, cache headers, and per-post share metadata |
-| `src/` | The React app |
-| `migrations/` | `community_*` tables only |
+| `src/theme.css` | The black theme, as overrides on the shared design tokens |
+
+Schema lives in `apps/web/migrations/0007_community.sql` — one database, one
+migration sequence.
 
 ## Decisions worth knowing before you change something
 
-**Posts and comments are one table.** `reply_to_id` distinguishes them. There is one level of
-replies, and body validation, rate limiting, soft delete, and mention extraction are identical for
-both — two tables would mean writing each of those twice, and "can you like a comment?" would need
-a second likes table. The cost is `WHERE reply_to_id IS NULL` on the feed.
+**It is not a separate service.** Its routes are registered onto the site's app
+and its bundle is built into the site's asset directory. That is deliberate: a
+GitHub OAuth App accepts one callback URL, so a second origin would have meant
+either a second OAuth app or a `Domain`-scoped session cookie shared across
+subdomains. Same origin costs nothing and removes both.
 
-**Deletion is soft.** The row survives with `deleted_at` set; the reader gets `body: null` and no
-plugin cards. Hard deletion would cascade away a whole discussion, and other people's replies are
-not the author's to remove.
+**`/community/*` must be carved out before the SPA fallback.** The site's
+`not_found_handling` is `single-page-application`, so any unknown path returns the
+*catalog's* `index.html`. Without the carve-out a community permalink boots the
+wrong app and returns 200 doing it.
 
-**Hot ranking happens in the Worker, not in SQL.** A week's candidates are ranked in memory by
-`hotScore`. The window is small enough that this costs less than the index it would need, and it
-keeps the formula out of the schema — retuning it is an edit to one function rather than a
+**The community build runs after the site build**, into
+`apps/web/dist/client/community`. Reverse the order and the deploy ships without
+a community.
+
+**Posts and comments are one table.** `reply_to_id` distinguishes them. Body
+validation, rate limiting, deletion, and mention extraction are identical for
+both, and one likes table then covers both.
+
+**Deleting keeps the row.** A deleted post disappears from every list; its
+permalink survives as a placeholder so the replies under it — other people's
+writing — stay readable. A deleted reply goes entirely, since nothing hangs off
+it. This is an implementation detail; the rules page does not describe it.
+
+**Hot ranking happens in the Worker, not in SQL.** A week's candidates are ranked
+in memory by `hotScore`. Retuning it is an edit to one function rather than a
 migration.
 
-**The feed pages on `id`, not on `created_at`.** Ids are monotonic, so they are both time order and
-a unique cursor; a timestamp cursor repeats or skips rows when two posts share a millisecond.
+**The feed pages on `id`, not on `created_at`.** Ids are monotonic, so they are
+both time order and a unique cursor; a timestamp cursor repeats or skips rows when
+two posts share a millisecond.
 
-**Plugin mentions are resolved at write time.** `@owner/name` is checked against `catalog_plugins`
-when the post is created, and only a plugin the catalog actually publishes gets a row in
-`community_post_plugins`. A mention of something unknown stays plain text rather than becoming a
-card that leads to a 404. The published predicate appears in two places — `knownPluginIds` in
-`worker/app.ts` and `loadPluginRefs` in `worker/lib/posts.ts` — and they must agree.
+**Plugin mentions are resolved at write time**, against `catalog_plugins`. Only a
+plugin the catalog publishes gets a card; anything else stays plain text rather
+than becoming a card that leads to a 404. The published predicate appears in
+`knownPluginIds` (`worker/app.ts`) and `loadPluginRefs` (`worker/lib/posts.ts`) and
+they must agree.
 
-**Markdown never renders raw HTML.** `react-markdown` is used without `rehype-raw`, deliberately:
-every post is written by an anonymous visitor, so there must be no path from their text to markup.
-Do not add `rehype-raw`. Links get `rel="nofollow ugc noreferrer"`.
+**`loadPluginRefs` chunks its `IN` list at 90.** D1 rejects a query with more than
+100 bound parameters, and the hot feed hydrates up to 300 posts. Tests run against
+`node:sqlite`, whose limit is 32766, so nothing here can catch a regression —
+keep the chunking.
 
-**No dark mode.** Colours come from `@dsh-1024store/core/tokens.css` and there are no literal
-colour values anywhere in `src/`.
+**The share-metadata substitution is a function, not a string.**
+`String.replace` interprets `$&`, `` $` ``, `$'` and `$n` in a string
+replacement, and that replacement carries post text.
+
+**Markdown never renders raw HTML.** `react-markdown` without `rehype-raw`,
+deliberately: every post is written by an anonymous visitor, so there must be no
+path from their text to markup. Links get `rel="nofollow ugc noreferrer"`.
+
+**Colours come from tokens.** `@dsh-1024store/core/tokens.css` defines them and
+`src/theme.css` overrides the brand layer to black. There are no literal colour
+values in `src/`. Delete `theme.css` and its import to go back to the site's blue.
 
 ## Deploying
 
+Nothing community-specific. The site's build includes it and the site's deploy
+ships it:
+
 ```bash
 npm run db:migrate:remote        # from the repository root, after a D1 backup
-npm run deploy:community
+npm run deploy
 ```
-
-`wrangler.jsonc` here binds only `community.deepseek1024.com`. The main site's three hostnames are
-owned by `apps/web/wrangler.jsonc`; the two lists must never overlap, and a deploy that drops an
-entry unbinds that hostname.

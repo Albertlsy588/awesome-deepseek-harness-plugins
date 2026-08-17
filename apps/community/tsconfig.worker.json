@@ -17,5 +17,5 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["@cloudflare/workers-types", "vitest/globals"]
   },
-  "include": ["worker", "tests", "worker-configuration.d.ts", "../../packages/dsh-core/src/testing/node-runtime.d.ts"]
+  "include": ["worker", "tests", "../../packages/dsh-core/src/testing/node-runtime.d.ts"]
 }

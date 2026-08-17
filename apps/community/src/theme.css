@@ -1,0 +1,83 @@
+/* ============================================================================
+   社区主题 —— 黑色
+
+   只覆盖 @dsh-1024store/core/tokens.css 里的**语义**层，不动原始色板。
+   主站继续用品牌蓝，社区用黑；两边共用同一套表面 / 描边 / 文字 / 阴影，
+   所以看起来仍然是同一个产品的两个区域，而不是两个产品。
+
+   这里唯一新增的原始色是一组中性黑阶：品牌蓝是有色相的，直接拿
+   --p-neutral-900 当强调色会偏冷，按钮压上去发灰。
+
+   改回蓝色只要删掉这个文件和 main.tsx 里的那行 import。
+   ========================================================================= */
+
+:root {
+  /* -- 黑阶：真中性，不带色偏。强调色需要纯黑，界面底色不需要 ------------ */
+  --p-ink-500: #1c1c1e;
+  --p-ink-600: #141416;
+  --p-ink-700: #0b0b0c;
+  --p-ink-100: #e6e6e8;
+  --p-ink-50: #f4f4f5;
+  --p-ink-rgb: 20 20 22;
+
+  /* -- 品牌语义全部改指黑阶 ---------------------------------------------- */
+  --brand: var(--p-ink-500);
+  --brand-dark: var(--p-ink-700);
+  --brand-soft: var(--p-ink-50);
+  --brand-border: var(--p-ink-100);
+  --brand-underline: var(--p-neutral-400);
+  --brand-quote: var(--p-neutral-300);
+  /* 行 hover 底。黑色的 4.5% 比蓝色的 4.5% 重得多，压到 2.5% 才等价 */
+  --brand-wash: rgb(var(--p-ink-rgb) / 2.5%);
+
+  /* hero 装饰在社区里没有对应元素，但令牌被 tokens.css 引用着，一并改掉
+     免得留一抹蓝在某个角落 */
+  --hero-ornament: rgb(var(--p-ink-rgb) / 3.5%);
+  --hero-ornament-echo: rgb(var(--p-ink-rgb) / 10%);
+
+  /* -- 焦点环与 hover 阴影：跟着主色走，否则一聚焦就冒出一圈蓝 ------------ */
+  --shadow-hover:
+    0 0 0 1px rgb(var(--p-ink-rgb) / 18%),
+    0 6px 16px rgb(var(--shadow-rgb) / 10%);
+  --shadow-focus: 0 0 0 3px rgb(var(--p-ink-rgb) / 12%);
+
+  --selection-bg: var(--p-ink-100);
+  --selection-ink: var(--p-ink-700);
+
+  /* -- 插件卡片的那道竖条：黑色主题下用墨色渐变，不再是彩虹 --------------
+     它标记「这段内容来自插件目录」，需要的是可辨识，不是鲜艳。 */
+  --gradient-brand: linear-gradient(
+    180deg,
+    var(--p-ink-500),
+    var(--p-neutral-500)
+  );
+}
+
+/* 链接在黑色主题下不能再靠颜色区分——正文也是深色。改成墨色 + 下划线，
+   这是纯文字社区里唯一可靠的链接信号。 */
+a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--p-neutral-400);
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  text-decoration-color: var(--ink);
+}
+
+/* 结构性链接（导航、作者名、卡片整体）不是正文里的链接，不该带下划线 */
+.brand,
+.nav-link,
+.post-author,
+.post-login,
+.post-time,
+.post-action,
+.plugin-card,
+.viewer-menu a,
+.back-link,
+.button-primary,
+.button-secondary,
+.load-more {
+  text-decoration: none;
+}

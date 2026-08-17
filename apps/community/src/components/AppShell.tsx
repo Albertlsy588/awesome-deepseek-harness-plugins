@@ -109,6 +109,26 @@ function StatsRail() {
   )
 }
 
+function Navigation() {
+  const { t } = useI18n()
+  return (
+    <>
+      <NavLink to="/" end className="nav-link">
+        <Flame size={17} aria-hidden="true" />
+        <span>{t('feed')}</span>
+      </NavLink>
+      <NavLink to="/about" className="nav-link">
+        <Info size={17} aria-hidden="true" />
+        <span>{t('guidelines')}</span>
+      </NavLink>
+      <a className="nav-link" href={STORE_URL}>
+        <ExternalLink size={17} aria-hidden="true" />
+        <span>{t('backToStore')}</span>
+      </a>
+    </>
+  )
+}
+
 export function AppShell() {
   const { t } = useI18n()
   const { pathname } = useLocation()
@@ -117,33 +137,37 @@ export function AppShell() {
 
   return (
     <div className="shell">
-      <header className="shell-header">
-        <div className="shell-header-inner">
-          <Link className="brand" to="/">
-            <span className="brand-mark" aria-hidden="true">1024</span>
-            <span className="brand-name">{t('siteName')}</span>
-          </Link>
-          <div className="shell-header-actions">
-            <LanguageSwitch />
-            <ViewerButton />
-          </div>
+      {/* Narrow screens only. A 200px rail is most of a phone, so the brand and
+          the account chip ride a slim bar instead and the navigation moves to
+          the foot of the page. */}
+      <header className="shell-topbar">
+        <Link className="brand" to="/">
+          <span className="brand-mark" aria-hidden="true">1024</span>
+          <span className="brand-name">{t('siteName')}</span>
+        </Link>
+        <div className="shell-topbar-actions">
+          <LanguageSwitch />
+          <ViewerButton />
         </div>
       </header>
 
       <div className="shell-body">
-        <nav className="shell-nav" aria-label={t('siteName')}>
-          <NavLink to="/" end className="nav-link">
-            <Flame size={16} aria-hidden="true" />
-            <span>{t('siteName')}</span>
-          </NavLink>
-          <NavLink to="/about" className="nav-link">
-            <Info size={16} aria-hidden="true" />
-            <span>{t('guidelines')}</span>
-          </NavLink>
-          <a className="nav-link" href={STORE_URL}>
-            <ExternalLink size={16} aria-hidden="true" />
-            <span>{t('backToStore')}</span>
-          </a>
+        <nav className="shell-sidebar" aria-label={t('siteName')}>
+          <Link className="brand sidebar-brand" to="/">
+            <span className="brand-mark" aria-hidden="true">1024</span>
+            <span className="brand-name">{t('siteName')}</span>
+          </Link>
+
+          <div className="sidebar-nav">
+            <Navigation />
+          </div>
+
+          {/* Pinned to the bottom of the rail, the way a desktop app puts the
+              signed-in account out of the way of the content. */}
+          <div className="sidebar-foot">
+            <LanguageSwitch />
+            <ViewerButton />
+          </div>
         </nav>
 
         <main className="shell-main">
@@ -154,6 +178,10 @@ export function AppShell() {
           <StatsRail />
           <p className="rail-note">{t('unofficialNotice')}</p>
         </aside>
+
+        <nav className="shell-footnav" aria-label={t('siteName')}>
+          <Navigation />
+        </nav>
       </div>
     </div>
   )

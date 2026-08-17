@@ -1,6 +1,4 @@
-import { createApp } from './app'
-
-const app = createApp()
+import { COMMUNITY_BASE_PATH } from './app'
 
 const SITE_NAME = 'DSH 1024 广场'
 const DEFAULT_TITLE = `${SITE_NAME} · DeepSeek Harness 开发者社区`
@@ -41,9 +39,10 @@ interface PageMetadata {
  * is invisible to every crawler and every chat unfurler. Only the metadata is
  * rendered here; the body itself still arrives with the app.
  */
-async function metadataFor(url: URL, env: Env): Promise<PageMetadata> {
+export async function communityMetadata(url: URL, env: Env): Promise<PageMetadata> {
   const canonical = `${url.origin}${url.pathname}`
-  const postMatch = /^\/p\/(\d+)$/.exec(url.pathname)
+  const path = url.pathname.slice(COMMUNITY_BASE_PATH.length) || '/'
+  const postMatch = /^\/p\/(\d+)$/.exec(path)
   if (postMatch) {
     const id = Number(postMatch[1])
     const row = Number.isSafeInteger(id)
@@ -63,7 +62,7 @@ async function metadataFor(url: URL, env: Env): Promise<PageMetadata> {
       }
     }
   }
-  const userMatch = /^\/u\/([A-Za-z0-9-]{1,39})$/.exec(url.pathname)
+  const userMatch = /^\/u\/([A-Za-z0-9-]{1,39})$/.exec(path)
   if (userMatch) {
     return {
       title: `@${userMatch[1]} · ${SITE_NAME}`,
@@ -76,8 +75,8 @@ async function metadataFor(url: URL, env: Env): Promise<PageMetadata> {
   return {
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
-    canonical: `${url.origin}/`,
-    robots: url.pathname === '/' ? 'index,follow' : 'noindex,follow',
+    canonical: `${url.origin}${COMMUNITY_BASE_PATH}`,
+    robots: path === '/' ? 'index,follow' : 'noindex,follow',
   }
 }
 
@@ -101,49 +100,23 @@ function renderHead(metadata: PageMetadata): string {
   ].join('\n    ')
 }
 
-async function withMetadata(response: Response, metadata: PageMetadata): Promise<Response> {
+/**
+ * Rewrite the community shell's `<!--seo-head-->` marker with this page's real
+ * title and share tags.
+ *
+ * The replacement is a function, not a string, on purpose. String.replace
+ * interprets `$&`, `$'`, `` $` `` and `$n` inside a string replacement, and this
+ * one carries post text: a post containing `$'` would splice the rest of the
+ * document into its own <head>. Escaping cannot help — escapeHtml has no reason
+ * to touch `$` — so the substitution itself has to be literal.
+ */
+export async function renderCommunityShell(response: Response, url: URL, env: Env): Promise<Response> {
+  const metadata = await communityMetadata(url, env)
   const html = await response.text()
   const headers = new Headers(response.headers)
   headers.set('Cache-Control', 'no-cache')
-  // The replacement is a function, not a string, on purpose. String.replace
-  // interprets `$&`, `$'`, `` $` `` and `$n` inside a string replacement, and
-  // this one carries post text: a post containing `$'` would splice the rest of
-  // the document into its own <head>. Escaping cannot help — escapeHtml has no
-  // reason to touch `$` — so the substitution itself has to be literal.
   return new Response(
     html.replace('<!--seo-head-->', () => renderHead(metadata)),
     { status: response.status, headers },
   )
 }
-
-const worker = {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url)
-    if (url.pathname.startsWith('/api/')) return app.fetch(request, env, ctx)
-
-    if (url.pathname === '/robots.txt') {
-      return new Response(
-        `User-agent: *\nAllow: /\nDisallow: /u/\nSitemap: ${url.origin}/sitemap.xml\n`,
-        { headers: { 'Content-Type': 'text/plain; charset=utf-8' } },
-      )
-    }
-
-    const response = await env.ASSETS.fetch(request)
-    const isHtml = Boolean(response.headers.get('Content-Type')?.includes('text/html'))
-    if (url.pathname.startsWith('/assets/')) {
-      if (response.status === 200 && !isHtml) {
-        const headers = new Headers(response.headers)
-        headers.set('Cache-Control', 'public, max-age=31536000, immutable')
-        return new Response(response.body, { status: response.status, headers })
-      }
-      // A miss under /assets/ is the SPA fallback document, not an asset;
-      // serving HTML at a hashed chunk URL would poison a caching client.
-      return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } })
-    }
-    if (!isHtml) return response
-    return withMetadata(response, await metadataFor(url, env))
-  },
-} satisfies ExportedHandler<Env>
-
-export { createApp } from './app'
-export default worker

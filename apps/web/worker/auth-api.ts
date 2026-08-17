@@ -5,20 +5,18 @@ import {
   buildGitHubAuthorizeUrl,
   createApiKey,
   createSession,
-  deleteSessions,
+  deleteSession,
   exchangeGitHubCode,
   fetchGitHubProfile,
+  getSessionUser,
   GitHubOAuthError,
   listApiKeys,
   MAX_API_KEY_NAME_LENGTH,
   OAUTH_STATE_COOKIE,
   randomHex,
-  readCookieValues,
-  resolveSessionUser,
   revokeApiKey,
   sanitizeReturnTo,
   SESSION_COOKIE,
-  sessionCookieDomain,
   SESSION_TTL_MS,
   timingSafeEqualStrings,
   upsertGitHubUser,
@@ -87,26 +85,17 @@ function crossOriginRejected(context: AuthContext): boolean {
 
 async function sessionUser(context: AuthContext, clock: () => number): Promise<ApiUser | null> {
   if (!context.env?.CATALOG_DB) return null
-  return resolveSessionUser(context.env.CATALOG_DB, context.req.header('Cookie'), clock())
+  const token = getCookie(context, SESSION_COOKIE)
+  if (!token) return null
+  return getSessionUser(context.env.CATALOG_DB, token, clock())
 }
 
-/**
- * The session cookie is Domain-scoped so sibling apps on subdomains see it. A
- * browser that signed in before that change still holds the older host-only
- * cookie of the same name, and would keep sending both; expiring it here means
- * a single sign-in leaves exactly one live session cookie behind.
- */
 function setSessionCookie(context: AuthContext, token: string): void {
-  const domain = sessionCookieDomain(context.req.url)
-  if (domain) {
-    setCookie(context, SESSION_COOKIE, '', { path: '/', maxAge: 0 })
-  }
   setCookie(context, SESSION_COOKIE, token, {
     httpOnly: true,
     secure: true,
     sameSite: 'Lax',
     path: '/',
-    domain,
     maxAge: Math.floor(SESSION_TTL_MS / 1000),
   })
 }
@@ -118,7 +107,7 @@ export function registerAuthRoutes(app: AuthApp, dependencies: AuthDependencies)
       return context.json({ error: 'GitHub login is not configured.', code: 'SERVICE_UNAVAILABLE' }, 503)
     }
 
-    const returnTo = sanitizeReturnTo(context.req.query('returnTo'), context.req.url)
+    const returnTo = sanitizeReturnTo(context.req.query('returnTo'))
     const state = randomHex(16)
     setCookie(context, OAUTH_STATE_COOKIE, `${state}:${encodeURIComponent(returnTo)}`, {
       httpOnly: true,
@@ -149,7 +138,7 @@ export function registerAuthRoutes(app: AuthApp, dependencies: AuthDependencies)
         storedReturnTo = undefined
       }
     }
-    const returnTo = sanitizeReturnTo(storedReturnTo, context.req.url)
+    const returnTo = sanitizeReturnTo(storedReturnTo)
     const presentedState = context.req.query('state') ?? ''
     const code = context.req.query('code') ?? ''
     if (!expectedState || !code || !timingSafeEqualStrings(expectedState, presentedState)) {
@@ -200,17 +189,11 @@ export function registerAuthRoutes(app: AuthApp, dependencies: AuthDependencies)
     if (crossOriginRejected(context)) {
       return context.json({ error: 'Cross-origin request rejected.', code: 'FORBIDDEN' }, 403)
     }
-    // Revoke every presented session and expire the cookie at both scopes: a
-    // browser mid-migration holds a host-only cookie and a Domain-scoped one,
-    // and clearing only the one that happened to be read first would leave the
-    // user signed in behind a signed-out page.
-    const tokens = readCookieValues(context.req.header('Cookie'), SESSION_COOKIE)
-    if (tokens.length > 0 && context.env?.CATALOG_DB) {
-      await deleteSessions(context.env.CATALOG_DB, tokens)
+    const token = getCookie(context, SESSION_COOKIE)
+    if (token && context.env?.CATALOG_DB) {
+      await deleteSession(context.env.CATALOG_DB, token)
     }
     deleteCookie(context, SESSION_COOKIE, { path: '/' })
-    const domain = sessionCookieDomain(context.req.url)
-    if (domain) deleteCookie(context, SESSION_COOKIE, { path: '/', domain })
     return context.json({ ok: true })
   })
 

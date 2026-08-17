@@ -1,18 +1,30 @@
-import { cloudflare } from '@cloudflare/vite-plugin'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+/**
+ * The community is its own app but not its own service: it is built into the
+ * site Worker's asset directory and served from `/community`. `base` is set
+ * unconditionally so the dev server mounts at the same path production does —
+ * a dev server rooted at `/` would hide every path bug until deploy.
+ */
 export default defineConfig({
-  plugins: [
-    cloudflare({
-      // 和主站共用一份本地 D1 状态。会话行写在 api_sessions 里,主站在 5641
-      // 登录后社区必须能读到同一行,否则本地根本走不通登录。
-      persistState: { path: '../web/.wrangler/state' },
-    }),
-    react(),
-  ],
+  base: '/community/',
+  plugins: [react()],
+  build: {
+    outDir: '../web/dist/client/community',
+    emptyOutDir: true,
+  },
   server: {
     host: '127.0.0.1',
     port: 5642,
+    proxy: {
+      // The API belongs to the site Worker, which `npm run dev` serves on 5641.
+      // Cookies are not isolated by port, so a session minted there is already
+      // valid here.
+      '/api': {
+        target: 'http://127.0.0.1:5641',
+        changeOrigin: false,
+      },
+    },
   },
 })

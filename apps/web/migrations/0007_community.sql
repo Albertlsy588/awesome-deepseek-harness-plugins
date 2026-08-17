@@ -1,10 +1,8 @@
 -- 社区：帖子 / 评论 / 点赞 / 插件引用
 --
--- 这些表和 apps/web 共用同一个 D1（作者外键指向 api_users），但迁移文件
--- 单独放在 apps/community/migrations。wrangler 用 d1_migrations 表按**文件名**
--- 记录已应用的迁移，两个目录的文件名互不重叠，所以各自 apply 各自的即可。
--- 唯一的顺序要求：本文件引用 api_users，必须在 web 的 0004_api_accounts.sql
--- 之后应用。根目录的 db:migrate:local 脚本按这个顺序跑。
+-- 社区的 UI 代码在 apps/community，但它和主站跑在同一个 Worker、同一个 D1 上，
+-- 所以迁移和其他表一样排在这里：一个数据库只有一条迁移序列。
+-- 本文件引用 api_users，由 0004_api_accounts.sql 建立。
 --
 -- 帖子和评论是同一张表，reply_to_id 非空即评论。v1 只有一层评论，而正文校验、
 -- 限流、软删、插件引用解析这四套逻辑对两者完全相同——分两张表就要写两遍，

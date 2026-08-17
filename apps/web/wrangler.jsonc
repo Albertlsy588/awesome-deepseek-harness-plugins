@@ -27,6 +27,11 @@
       "GITHUB_OAUTH_CLIENT_SECRET"
     ]
   },
+  "vars": {
+    // 逗号分隔的 GitHub login，可以删社区里任何人的内容。留空表示只有作者
+    // 能删自己的。COMMUNITY_DEV_LOGIN 故意不在这里 —— 见 apps/community/README.md。
+    "COMMUNITY_ADMIN_LOGINS": ""
+  },
   "ai": {
     "binding": "AI"
   },

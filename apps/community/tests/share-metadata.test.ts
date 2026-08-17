@@ -1,11 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
-import { createSession, readCookieValues, upsertGitHubUser, MAX_SESSION_COOKIE_VALUES } from '@dsh-1024store/core/auth'
-import worker from '../worker/index'
+import { upsertGitHubUser } from '@dsh-1024store/core/auth'
+import { renderCommunityShell } from '../worker/share-metadata'
 import { communityDatabase, sqliteD1 } from './fixtures'
 
 const NOW = Date.parse('2026-08-17T08:00:00Z')
-const ORIGIN = 'https://community.deepseek1024.com'
+const ORIGIN = 'https://deepseek1024.com'
 
 const SHELL = `<!doctype html>
 <html><head>
@@ -14,16 +14,8 @@ const SHELL = `<!doctype html>
 </head><body><div id="root"></div>SENTINEL-DOCUMENT-TAIL</body></html>`
 
 function workerEnv(database: DatabaseSync): Env {
-  return {
-    CATALOG_DB: sqliteD1(database),
-    COMMUNITY_ADMIN_LOGINS: '',
-    ASSETS: {
-      fetch: async () => new Response(SHELL, { headers: { 'Content-Type': 'text/html; charset=utf-8' } }),
-    },
-  } as unknown as Env
+  return { CATALOG_DB: sqliteD1(database), COMMUNITY_ADMIN_LOGINS: '' } as unknown as Env
 }
-
-const context = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext
 
 async function seedPost(database: DatabaseSync, body: string): Promise<number> {
   const db = sqliteD1(database)
@@ -35,9 +27,11 @@ async function seedPost(database: DatabaseSync, body: string): Promise<number> {
   return Number(row!.id)
 }
 
+/** What the site Worker serves for a community URL: the shell plus its metadata. */
 async function fetchPage(database: DatabaseSync, path: string): Promise<string> {
-  const response = await worker.fetch(new Request(`${ORIGIN}${path}`), workerEnv(database), context)
-  return response.text()
+  const shell = new Response(SHELL, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+  const rendered = await renderCommunityShell(shell, new URL(`${ORIGIN}${path}`), workerEnv(database))
+  return rendered.text()
 }
 
 describe('share metadata', () => {
@@ -48,7 +42,7 @@ describe('share metadata', () => {
     // document into its own <head>.
     const database = communityDatabase()
     const id = await seedPost(database, "pwned $' and $& and $` and $1")
-    const html = await fetchPage(database, `/p/${id}`)
+    const html = await fetchPage(database, `/community/p/${id}`)
 
     // The invariant: the document tail appears exactly once, in the body, where
     // it belongs. With a string replacement each of the six title/description
@@ -64,7 +58,7 @@ describe('share metadata', () => {
   it('lets no angle bracket or quote out of a title into the markup', async () => {
     const database = communityDatabase()
     const id = await seedPost(database, '</title><script>alert(1)</script> and a " quote')
-    const html = await fetchPage(database, `/p/${id}`)
+    const html = await fetchPage(database, `/community/p/${id}`)
 
     // Nothing from the body can open a tag or close an attribute. summarise
     // strips `>` and `()` as Markdown punctuation before escapeHtml runs, so
@@ -81,7 +75,7 @@ describe('share metadata', () => {
   it('puts the real title before the fallback so the first one wins', async () => {
     const database = communityDatabase()
     const id = await seedPost(database, 'a post worth sharing')
-    const html = await fetchPage(database, `/p/${id}`)
+    const html = await fetchPage(database, `/community/p/${id}`)
 
     const generated = html.indexOf('<title>a post worth sharing')
     const fallback = html.indexOf('<title>fallback')
@@ -97,36 +91,15 @@ describe('share metadata', () => {
     database.prepare('UPDATE community_posts SET deleted_at = ? WHERE id = ?')
       .run(new Date(NOW).toISOString(), id)
 
-    const html = await fetchPage(database, `/p/${id}`)
+    const html = await fetchPage(database, `/community/p/${id}`)
     expect(html).not.toContain('regrettable')
     database.close()
   })
 
   it('keeps profiles out of the index', async () => {
     const database = communityDatabase()
-    const html = await fetchPage(database, '/u/octocat')
+    const html = await fetchPage(database, '/community/u/octocat')
     expect(html).toContain('content="noindex,follow"')
-    database.close()
-  })
-})
-
-describe('session cookie fan-out', () => {
-  it('caps how many values one request can make it validate', () => {
-    // Each value costs a database round trip, and the Cookie header is
-    // attacker-controlled on unauthenticated endpoints. A real browser holds at
-    // most two: one host-only, one Domain-scoped.
-    const header = Array.from({ length: 50 }, (_, index) => `dsh_session=v${index}`).join('; ')
-    expect(readCookieValues(header, 'dsh_session')).toHaveLength(MAX_SESSION_COOKIE_VALUES)
-  })
-
-  it('still finds a valid session behind a stale one', async () => {
-    const database = communityDatabase()
-    const db = sqliteD1(database)
-    const user = await upsertGitHubUser(
-      db, { id: 7, login: 'octocat', name: null, avatarUrl: null }, new Date(NOW).toISOString())
-    const session = await createSession(db, user.id, NOW)
-    const values = readCookieValues(`dsh_session=stale; dsh_session=${session.token}`, 'dsh_session')
-    expect(values).toEqual(['stale', session.token])
     database.close()
   })
 })

@@ -11,7 +11,7 @@
  */
 import { chromium } from 'playwright'
 
-const baseUrl = process.env.BASE_URL ?? 'http://127.0.0.1:5642'
+const baseUrl = process.env.BASE_URL ?? 'http://127.0.0.1:5642/community'
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const desktop = await browser.newContext({ locale: 'zh-CN' })
 const touch = await browser.newContext({
@@ -87,8 +87,10 @@ async function assertNoIosZoomOnFocus(page, label) {
 
 async function assertNothingUnderTheHeader(page, label) {
   const hidden = await page.evaluate(() => {
-    const header = document.querySelector('.shell-header')
-    if (!header) return null
+    // Only narrow screens have a bar for the tab strip to hide behind; wider
+    // ones put navigation in a sidebar and there is nothing above the content.
+    const header = document.querySelector('.shell-topbar')
+    if (!header || header.getClientRects().length === 0) return null
     const headerBottom = header.getBoundingClientRect().bottom
     const tabs = document.querySelector('.tabs')
     if (!tabs) return null
@@ -138,11 +140,11 @@ try {
 
     // The first post's thread, which is the only page with a reply composer.
     const feed = await open(viewport.size, '/', { mobile: viewport.mobile })
-    const firstThread = await feed.locator('.post-feed a[href^="/p/"]').first().getAttribute('href')
+    const firstThread = await feed.locator('.post-feed a[href^="/community/p/"]').first().getAttribute('href')
     await feed.close()
     if (firstThread) {
       const label = `${viewport.label} ${firstThread}`
-      const page = await open(viewport.size, firstThread, { mobile: viewport.mobile })
+      const page = await open(viewport.size, firstThread.replace('/community', ''), { mobile: viewport.mobile })
       await assertNoHorizontalOverflow(page, label)
       await assertNoIosZoomOnFocus(page, label)
       await assertComposerStartsCompact(page, label)

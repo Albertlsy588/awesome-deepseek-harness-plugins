@@ -32,14 +32,12 @@
     "cf-typegen": "npm run cf-typegen --workspace @dsh-1024store/web",
     "cf-typecheck": "npm run cf-typecheck --workspace @dsh-1024store/web",
     "pack:cli": "npm run pack:check --workspace dsh1024",
-    "db:migrate:local": "npm run db:migrate:local --workspace @dsh-1024store/web && npm run db:migrate:local --workspace @dsh-1024store/community",
-    "db:migrate:remote": "npm run db:migrate:remote --workspace @dsh-1024store/web && npm run db:migrate:remote --workspace @dsh-1024store/community",
+    "db:migrate:local": "npm run db:migrate:local --workspace @dsh-1024store/web",
+    "db:migrate:remote": "npm run db:migrate:remote --workspace @dsh-1024store/web",
     "predeploy": "npm run build",
     "deploy": "npm run deploy:worker --workspace @dsh-1024store/web",
     "test:capture-homepage": "node --test scripts/capture-homepage.test.mjs",
-    "dev:community": "npm run dev --workspace @dsh-1024store/community",
-    "build:community": "npm run build --workspace @dsh-1024store/community",
-    "deploy:community": "npm run build:community && npm run deploy:worker --workspace @dsh-1024store/community"
+    "dev:community": "npm run dev --workspace @dsh-1024store/community"
   },
   "engines": {
     "node": ">=22",

@@ -1,16 +1,14 @@
 import type { Context } from 'hono'
+import { getCookie, setCookie } from 'hono/cookie'
 import {
   createSession,
-  deleteSessions,
-  readCookieValues,
-  resolveSessionUser,
+  deleteSession,
+  getSessionUser,
   SESSION_COOKIE,
-  sessionCookieDomain,
   SESSION_TTL_MS,
   upsertGitHubUser,
   type ApiUser,
 } from '@dsh-1024store/core/auth'
-import { setCookie } from 'hono/cookie'
 
 export type CommunityContext = Context<{ Bindings: Env }>
 
@@ -20,18 +18,15 @@ export interface Signer {
 }
 
 /**
- * The community never runs an OAuth exchange. A GitHub OAuth App accepts one
- * callback URL, which belongs to the main site, so sign-in happens there and
- * hands the session back through a cookie scoped to the registrable domain.
- * Here we only read `api_sessions` — the same rows, the same shared code.
+ * The community runs inside the main Worker, on the main hostname, so a session
+ * is just the site's session: the same cookie, the same `api_sessions` row, no
+ * second sign-in and nothing to hand across an origin.
  */
 export async function currentUser(context: CommunityContext): Promise<Signer | null> {
   if (!context.env?.CATALOG_DB) return null
-  const user = await resolveSessionUser(
-    context.env.CATALOG_DB,
-    context.req.header('Cookie'),
-    Date.now(),
-  )
+  const token = getCookie(context, SESSION_COOKIE)
+  if (!token) return null
+  const user = await getSessionUser(context.env.CATALOG_DB, token, Date.now())
   if (!user) return null
   return { user, admin: isAdmin(context.env.COMMUNITY_ADMIN_LOGINS, user.githubLogin) }
 }
@@ -45,35 +40,12 @@ export function isAdmin(configured: string | undefined, login: string): boolean 
     .includes(login.toLocaleLowerCase('en-US'))
 }
 
-/** Where the community sends a reader who wants to sign in. */
-export function signInUrl(requestUrl: string, returnTo: string): string {
-  const self = new URL(requestUrl)
-  const site = new URL(self)
-  site.search = ''
-  site.hash = ''
-  if (self.hostname === 'community.deepseek1024.com') {
-    site.hostname = 'deepseek1024.com'
-  } else {
-    // Local development: the OAuth callback is registered against the main
-    // app's port, so sign-in has to go there and come back.
-    site.port = '5641'
-  }
-  site.pathname = '/api/v1/auth/github/login'
-  const target = new URL(returnTo, requestUrl)
-  target.search = ''
-  target.hash = ''
-  site.searchParams.set('returnTo', new URL(returnTo, requestUrl).toString())
-  return site.toString()
-}
-
 export async function signOut(context: CommunityContext): Promise<void> {
-  const tokens = readCookieValues(context.req.header('Cookie'), SESSION_COOKIE)
-  if (tokens.length > 0 && context.env?.CATALOG_DB) {
-    await deleteSessions(context.env.CATALOG_DB, tokens)
+  const token = getCookie(context, SESSION_COOKIE)
+  if (token && context.env?.CATALOG_DB) {
+    await deleteSession(context.env.CATALOG_DB, token)
   }
-  const domain = sessionCookieDomain(context.req.url)
   setCookie(context, SESSION_COOKIE, '', { path: '/', maxAge: 0 })
-  if (domain) setCookie(context, SESSION_COOKIE, '', { path: '/', domain, maxAge: 0 })
 }
 
 function isLoopback(hostname: string): boolean {
@@ -87,7 +59,7 @@ function isLoopback(hostname: string): boolean {
  * `COMMUNITY_DEV_LOGIN` is set nowhere but `.dev.vars` (git-ignored, never
  * uploaded, and absent from wrangler.jsonc so no deploy can carry it), and the
  * request must arrive on a loopback host, which no deployed Worker ever sees.
- * It exists because the real OAuth App's callback is registered against a
+ * It exists because the real OAuth App's callback is registered against one
  * specific port, so a machine without those client secrets otherwise cannot
  * exercise a signed-in page at all.
  */

@@ -8,6 +8,7 @@ const STORAGE_KEY = 'dsh-language'
 const messages = {
   zh: {
     siteName: '1024 广场',
+    feed: '广场',
     tagline: 'DeepSeek Harness 开发者的公开广场',
     latest: '最新',
     hot: '热门',
@@ -24,7 +25,7 @@ const messages = {
     share: '复制链接',
     shared: '已复制',
     remove: '删除',
-    removeConfirm: '删除这条内容？删掉之后别人还能看到讨论串，但正文会消失。',
+    removeConfirm: '删除这条内容？删除后无法恢复。',
     deletedBody: '这条内容已被删除。',
     signInToPost: '登录后即可发言。你的身份就是 GitHub 账号，不需要另外注册。',
     signInToReact: '登录后才能点赞和评论。',
@@ -56,6 +57,7 @@ const messages = {
   },
   en: {
     siteName: '1024 Plaza',
+    feed: 'Feed',
     tagline: 'The open square for DeepSeek Harness developers',
     latest: 'Latest',
     hot: 'Hot',
@@ -72,7 +74,7 @@ const messages = {
     share: 'Copy link',
     shared: 'Copied',
     remove: 'Delete',
-    removeConfirm: 'Delete this? The thread stays readable, but the text goes away.',
+    removeConfirm: 'Delete this? It cannot be undone.',
     deletedBody: 'This has been deleted.',
     signInToPost: 'Sign in to post. Your GitHub account is your identity — nothing else to register.',
     signInToReact: 'Sign in to like and comment.',

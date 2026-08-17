@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
+import { registerCommunityRoutes } from '../../community/worker/app'
 import { registerAuthRoutes } from './auth-api'
 import { ANONYMOUS_QUOTA, AUTHENTICATED_QUOTA, consumeQuota } from '@dsh-1024store/core/api-quota'
 import { authenticateApiKey, sha256Hex, timingSafeEqualStrings } from '@dsh-1024store/core/auth'
@@ -664,6 +665,11 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     clock: dependencies.clock,
     oauthFetcher: dependencies.oauthFetcher,
   })
+
+  // The community front-end lives in apps/community, but its API is part of
+  // this Worker on this hostname: same session cookie, same D1, no cross-origin
+  // handoff to arrange. See apps/community/README.md.
+  registerCommunityRoutes(app, { clock: dependencies.clock })
 
   app.notFound((context) => context.json({ error: 'API route not found.' }, 404))
   app.onError((error, context) => {

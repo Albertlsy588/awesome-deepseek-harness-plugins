@@ -12,8 +12,6 @@ import { api, type Session, type Viewer } from './api'
 interface SessionValue {
   viewer: Viewer | null
   loading: boolean
-  /** Absolute URL of the main site's GitHub sign-in, carrying a return address. */
-  signInUrl: string | null
   signOut: () => Promise<void>
 }
 
@@ -27,7 +25,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     api.session()
       .then((next) => { if (!cancelled) setSession(next) })
-      .catch(() => { if (!cancelled) setSession({ viewer: null, signInUrl: null }) })
+      .catch(() => { if (!cancelled) setSession({ viewer: null }) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [])
@@ -36,12 +34,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await api.signOut().catch(() => undefined)
     // Refetch rather than assume: sign-out also has to reflect a session that
     // expired or was revoked from the main site.
-    setSession(await api.session().catch(() => ({ viewer: null, signInUrl: null })))
+    setSession(await api.session().catch(() => ({ viewer: null })))
   }, [])
 
   const value = useMemo<SessionValue>(() => ({
     viewer: session?.viewer ?? null,
-    signInUrl: session?.signInUrl ?? null,
     loading,
     signOut,
   }), [loading, session, signOut])
@@ -58,8 +55,8 @@ export function useSession(): SessionValue {
 /**
  * Send the reader to GitHub, coming back to where they were.
  *
- * The current path is passed to the Worker rather than to the main site
- * directly, so the allow-list of return hosts stays server-side.
+ * The return address is validated on the server (sanitizeReturnTo), not here, so
+ * a crafted link cannot turn this into a redirector.
  */
 export function startSignIn(): void {
   const returnTo = `${window.location.pathname}${window.location.search}`

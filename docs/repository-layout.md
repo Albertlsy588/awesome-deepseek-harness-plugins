@@ -35,7 +35,7 @@ There is no bundled registry, no `catalog/generated/` artifact, and no disaster-
 | `packages/dsh1024/` | The publishable `dsh1024` package: wrapper CLI (official DSH plugin command delegation, local verification, install-event delivery) plus the in-DSH marketplace plugin | Yes |
 | `apps/web/src/` | React interface for the catalog | Yes |
 | `apps/web/worker/` | Hono API for the catalog, plus the GitHub OAuth exchange for the whole family | Yes |
-| `apps/community/` | The developer community on `community.deepseek1024.com`: its own Worker and React app, sharing the same D1 | Yes |
+| `apps/community/` | The developer community at `/community`: its own React app and API routes, built into and mounted onto the site Worker | Yes |
 | `packages/dsh-core/` | Source-only modules both apps need: session handling, rate limiting, plugin identity, design tokens | Yes |
 | `scripts/` | Trusted pull-request review, catalog sync, README generation, and their tests | Yes |
 | `.github/workflows/` | PR review/merge, CI, catalog sync, and deployment automation | Yes |
@@ -55,9 +55,9 @@ The files are an input, not a database: after a submission merges, the catalog-s
 
 ## Runtime data flow
 
-Two Workers have D1 access. The catalog Worker owns every catalog record; the community Worker
-owns only the `community_*` tables and reads `api_users` / `api_sessions` / `catalog_plugins`. It
-never writes catalog data. Two catalog write paths exist:
+The Worker is the only process with D1 access. Within it, the community routes own only the
+`community_*` tables and read `api_users` / `api_sessions` / `catalog_plugins`; they never write
+catalog data. Two catalog write paths exist:
 
 1. **Worker cron topic scan** — discovers and validates repositories carrying the `dsh-plugin` GitHub topic and writes them in process (`github_topic` source).
 2. **GitHub CI catalog sync** — after a merge to `main` (and once daily), the catalog-sync workflow POSTs every `catalog/plugins/*.json` entry to `/api/v1/catalog/sync` with a bearer token (`github_pr` source).
@@ -71,7 +71,7 @@ Install analytics use the same D1 database as star history but separate tables. 
 ## Growth rules
 
 A shared package should only be introduced when at least two applications need the same runtime
-code. `packages/dsh-core` was created when the community became a second Worker: both validate
-sessions against the same `api_sessions` rows, and two copies of that logic would be a security
-bug the moment they drifted. Add to it only when a second app genuinely needs the module;
+code. `packages/dsh-core` was created when the community became a second front-end: both render the
+same brand from the same tokens, and both resolve sessions against the same `api_sessions` rows —
+two copies of that logic would be a security bug the moment they drifted. Add to it only when a second app genuinely needs the module;
 app-specific code stays in the app. D1 owns all published catalog records; source-controlled entries are the reviewed submission form and remain independently auditable through pull requests.
