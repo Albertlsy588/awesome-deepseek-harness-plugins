@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { edgeCacheablePath } from '../worker/lib/edge-cache'
 import {
   buildCatalog,
   deriveCatalogResponse,
@@ -249,5 +250,85 @@ describe('ranking seats', () => {
     const { packages } = buildCatalog(monorepoResult(), query)
 
     expect(packages).toHaveLength(5)
+  })
+})
+
+describe('listing payload', () => {
+  it('leaves installMethods out of packages and rankings', () => {
+    // 334 B of a 1332 B row, 1.9 MB across the catalog, and no listing renders
+    // it — the badges belong to the detail page, which fetches its own plugin.
+    const result = testCatalogResult()
+    const withMethods = {
+      ...result,
+      snapshot: {
+        ...result.snapshot,
+        plugins: result.snapshot.plugins.map((plugin) => ({
+          ...plugin,
+          installMethods: [{
+            kind: 'github' as const,
+            spec: `github:${plugin.id}`,
+            command: `dsh plugin add github:${plugin.id}`,
+            verification: 'verified' as const,
+            code: 'entry_committed' as const,
+            requiresBuildAllowance: false,
+            revision: 'abc1234',
+            checkedAt: '2026-08-18T00:00:00.000Z',
+          }],
+        })),
+      },
+    }
+
+    const catalog = buildCatalog(withMethods, parseCatalogQuery({}))
+
+    expect(catalog.packages.length).toBeGreaterThan(0)
+    expect(catalog.rankings.stars.length).toBeGreaterThan(0)
+    for (const plugin of [...catalog.packages, ...catalog.rankings.stars]) {
+      expect(plugin.installMethods).toBeUndefined()
+    }
+    // The listing still has to survive a round trip as JSON.
+    expect(JSON.parse(JSON.stringify(catalog)).packages[0]).not.toHaveProperty('installMethods')
+  })
+
+  it('keeps the fields the listing actually renders', () => {
+    const catalog = buildCatalog(testCatalogResult(), parseCatalogQuery({}))
+    expect(catalog.packages[0]).toMatchObject({
+      id: expect.any(String),
+      description: expect.objectContaining({ en: expect.any(String), zh: expect.any(String) }),
+    })
+  })
+})
+
+describe('edge cache allowlist', () => {
+  it('never caches a per-caller or streaming route', () => {
+    // A path forgotten here is a user's response handed to the next caller, so
+    // the guard is an allowlist and this test is the list.
+    for (const pathname of [
+      '/api/live',
+      '/api/v1/plugins/search',
+      '/api/v1/auth/me',
+      '/api/v1/auth/github/callback',
+      '/api/v1/api-keys',
+      '/api/v1/community/posts',
+      '/api/v1/self/install-stats',
+      '/api/v1/health',
+      '/api/v1/install-events',
+      '/assets/index-abc123.js',
+    ]) {
+      expect(edgeCacheablePath(pathname), pathname).toBe(false)
+    }
+  })
+
+  it('caches the catalog endpoints and the document routes', () => {
+    for (const pathname of [
+      '/api/v1/plugins',
+      '/api/v1/registry',
+      '/',
+      '/plugins',
+      '/rankings',
+      '/robots.txt',
+      '/sitemap.xml',
+    ]) {
+      expect(edgeCacheablePath(pathname), pathname).toBe(true)
+    }
   })
 })
