@@ -48,3 +48,51 @@ export function tagged(response: Response, state: 'hit' | 'miss'): Response {
   headers.set('X-Edge-Cache', state)
   return new Response(response.body, { status: response.status, headers })
 }
+
+/**
+ * A catalog response is fully identified by the snapshot it was built from and
+ * the query that shaped it, so its validator can be assembled from those rather
+ * than by hashing a megabyte of JSON on every request.
+ *
+ * Weak, because `Content-Encoding` may differ between two responses carrying
+ * the same bytes — a weak validator is exactly what a `304` needs.
+ */
+export function weakEtag(parts: readonly string[]): string {
+  // FNV-1a over the joined parts. Not a security boundary: this only has to
+  // change whenever any part changes.
+  let hash = 0x811c9dc5
+  const joined = parts.join('\u0000')
+  for (let index = 0; index < joined.length; index += 1) {
+    hash ^= joined.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return `W/"${hash.toString(16)}-${joined.length.toString(16)}"`
+}
+
+function matchesEtag(ifNoneMatch: string | null, etag: string): boolean {
+  if (!ifNoneMatch) return false
+  if (ifNoneMatch.trim() === '*') return true
+  const normalize = (value: string) => value.trim().replace(/^W\//, '')
+  const wanted = normalize(etag)
+  return ifNoneMatch.split(',').some((candidate) => normalize(candidate) === wanted)
+}
+
+/**
+ * Answers a conditional request with `304` when the validator still holds.
+ *
+ * A partner polling the catalog otherwise re-downloads about a megabyte to
+ * learn that nothing changed. The snapshot only moves when a cron rebuilds it,
+ * so most of those polls can be a few bytes of headers instead. Runs after the
+ * cache lookup so a cached copy can satisfy the condition too.
+ */
+export function notModifiedFor(request: Request, response: Response): Response | null {
+  const etag = response.headers.get('ETag')
+  if (!etag || !matchesEtag(request.headers.get('If-None-Match'), etag)) return null
+  const headers = new Headers()
+  for (const name of ['ETag', 'Cache-Control', 'X-Catalog-Source', 'X-Robots-Tag', 'Vary']) {
+    const value = response.headers.get(name)
+    if (value) headers.set(name, value)
+  }
+  return new Response(null, { status: 304, headers })
+}
+

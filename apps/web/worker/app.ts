@@ -21,6 +21,7 @@ import {
 } from './lib/plugin-id'
 import { syncCuratedEntries, type CuratedCatalogEntry } from './lib/catalog-db'
 import { loadCatalogSnapshot, refreshCatalogSnapshot } from './lib/catalog-store'
+import { weakEtag } from './lib/edge-cache'
 import { categoryDescriptor, isKnownCategoryId, projectCategories } from './lib/categories'
 import { fetchPackageDetail } from './lib/github'
 import {
@@ -342,8 +343,18 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       context.env,
       executionContext(context),
     )
-    const result = buildCatalog(snapshot, parseCatalogQuery(context.req.query()))
+    const query = parseCatalogQuery(context.req.query())
+    const result = buildCatalog(snapshot, query)
     context.header('Cache-Control', LIST_CACHE_HEADER)
+    // The body is a pure function of these five, so a caller polling for
+    // changes can be answered with 304 instead of another megabyte.
+    context.header('ETag', weakEtag([
+      snapshot.snapshot.generatedAt,
+      snapshot.source,
+      query.q,
+      query.category,
+      query.sort,
+    ]))
     context.header('X-Catalog-Source', snapshot.source)
     // Crawlable so the SPA can be rendered, but the JSON itself must never be
     // indexed as a page in its own right.
@@ -525,6 +536,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     )
     const { snapshot } = result
     context.header('Cache-Control', REGISTRY_CACHE_HEADER)
+    context.header('ETag', weakEtag([snapshot.generatedAt, result.source]))
     context.header('X-Catalog-Source', result.source)
     context.header('X-Robots-Tag', 'noindex')
     const registry: RegistryProjection = {
