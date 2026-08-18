@@ -47,4 +47,49 @@ describe('GitHub catalog metrics', () => {
     expect(fetcher).toHaveBeenCalledTimes(2)
     expect(metrics.get(metricKey(plugin))?.stars).toBe(33)
   })
+
+  it('keeps the repositories that answered when one of them is gone', async () => {
+    // A deleted, renamed or newly private repository comes back as a NOT_FOUND
+    // entry in `errors` while `data` still holds the rest of the batch.
+    // Aborting on any error at all discarded up to eighty live repositories
+    // over one dead one, and their star counts silently went missing.
+    const [alive, ...rest] = TEST_REGISTRY.plugins
+    const fetcher = vi.fn(async () => Response.json({
+      data: {
+        r0: {
+          stargazerCount: 42,
+          forkCount: 7,
+          pushedAt: '2026-08-18T00:00:00Z',
+          updatedAt: '2026-08-18T00:00:00Z',
+          releases: { nodes: [] },
+        },
+        ...Object.fromEntries(rest.map((_plugin, index) => [`r${index + 1}`, null])),
+      },
+      errors: rest.map((plugin) => ({
+        type: 'NOT_FOUND',
+        message: `Could not resolve to a Repository with the name '${plugin.owner}/${plugin.name}'.`,
+      })),
+    })) as unknown as typeof fetch
+
+    const metrics = await fetchGitHubMetrics(TEST_REGISTRY.plugins, 'token', fetcher)
+
+    expect(metrics.get(metricKey(alive))).toMatchObject({ stars: 42, forks: 7 })
+    for (const plugin of rest) {
+      expect(metrics.has(metricKey(plugin))).toBe(false)
+    }
+  })
+
+  it('still gives up when the whole query failed', async () => {
+    // A rate limit or a rejected token answers with no `data` at all — nothing
+    // was returned to salvage, so the sweep aborts rather than writing a
+    // catalog-wide blank over every star count.
+    const fetcher = vi.fn(async () => Response.json({
+      data: null,
+      errors: [{ type: 'RATE_LIMITED', message: 'API rate limit exceeded' }],
+    })) as unknown as typeof fetch
+
+    const metrics = await fetchGitHubMetrics(TEST_REGISTRY.plugins, 'token', fetcher)
+
+    expect(metrics.size).toBe(0)
+  })
 })
