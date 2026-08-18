@@ -3,7 +3,7 @@
   "id": "bowenliang123/dsh-context",
   "name": "dsh-context",
   "repository": "https://github.com/bowenliang123/dsh-context",
-  "category": "memory",
+  "category": "ui",
   "description": {
     "en": "Adds a Context Insight panel to the DeepSeek Harness web UI showing what the model's context window currently holds and how it evolved: composition against window size, per-request history, compaction and injection events, and message-level token counts.",
     "zh": "为 DeepSeek Harness 网页界面添加上下文洞察面板，展示模型上下文窗口当前的构成与演变过程：各部分占比与窗口大小对照、按请求的历史趋势、压缩与注入事件，以及消息级 token 统计。"
