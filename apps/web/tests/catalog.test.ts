@@ -254,9 +254,7 @@ describe('ranking seats', () => {
 })
 
 describe('listing payload', () => {
-  it('leaves installMethods out of packages and rankings', () => {
-    // 334 B of a 1332 B row, 1.9 MB across the catalog, and no listing renders
-    // it — the badges belong to the detail page, which fetches its own plugin.
+  it('keeps install and installMethods in packages and rankings', () => {
     const result = testCatalogResult()
     const withMethods = {
       ...result,
@@ -283,10 +281,13 @@ describe('listing payload', () => {
     expect(catalog.packages.length).toBeGreaterThan(0)
     expect(catalog.rankings.stars.length).toBeGreaterThan(0)
     for (const plugin of [...catalog.packages, ...catalog.rankings.stars]) {
-      expect(plugin.installMethods).toBeUndefined()
+      expect(plugin.install).toEqual(expect.any(String))
+      expect(plugin.installMethods).toHaveLength(1)
     }
-    // The listing still has to survive a round trip as JSON.
-    expect(JSON.parse(JSON.stringify(catalog)).packages[0]).not.toHaveProperty('installMethods')
+    expect(JSON.parse(JSON.stringify(catalog)).packages[0]).toMatchObject({
+      install: expect.any(String),
+      installMethods: expect.any(Array),
+    })
   })
 
   it('keeps the fields the listing actually renders', () => {
@@ -294,6 +295,7 @@ describe('listing payload', () => {
     expect(catalog.packages[0]).toMatchObject({
       id: expect.any(String),
       description: expect.objectContaining({ en: expect.any(String), zh: expect.any(String) }),
+      install: expect.any(String),
     })
   })
 })

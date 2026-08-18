@@ -162,7 +162,7 @@ const RANKING_SIZE = 100
 
 /** A ranking row for a board whose metric already tells siblings apart. */
 function ranked(plugins: CatalogPlugin[]): RankedPlugin[] {
-  return plugins.slice(0, RANKING_SIZE).map((plugin) => listRow({ ...plugin, repositorySiblings: 0 }))
+  return plugins.slice(0, RANKING_SIZE).map((plugin) => ({ ...plugin, repositorySiblings: 0 }))
 }
 
 /**
@@ -188,7 +188,7 @@ function collapseByRepository(plugins: CatalogPlugin[]): RankedPlugin[] {
     const key = `${plugin.owner}/${plugin.repository}`.toLocaleLowerCase('en-US')
     const seat = seats.get(key)
     if (seat === undefined) {
-      seats.set(key, listRow({ ...plugin, repositorySiblings: 0 }))
+      seats.set(key, { ...plugin, repositorySiblings: 0 })
     } else {
       seat.repositorySiblings += 1
     }
@@ -196,22 +196,9 @@ function collapseByRepository(plugins: CatalogPlugin[]): RankedPlugin[] {
   return [...seats.values()].slice(0, RANKING_SIZE)
 }
 
-/**
- * Drops `installMethods` from a listing row.
- *
- * It is the single heaviest field on a plugin — 334 B against a 1332 B row, so
- * 1.9 MB across the catalog — and no listing reads it. The badges it feeds are
- * rendered only by the detail page, which resolves its own plugin through
- * `/api/v1/plugins/:owner/*`. `undefined` rather than a delete: the field is
- * already optional on RegistryPlugin, and JSON.stringify omits it either way.
- */
-function listRow<T extends CatalogPlugin>(plugin: T): T {
-  return plugin.installMethods === undefined ? plugin : { ...plugin, installMethods: undefined }
-}
-
 export function buildCatalog(result: CatalogSnapshotResult, query: CatalogQuery): CatalogResponse {
   const { snapshot, source } = result
-  const filtered = filterCatalogPackages(snapshot.plugins, query).map(listRow)
+  const filtered = filterCatalogPackages(snapshot.plugins, query)
 
   // Growth comes from the repository's star history, so this collapses too.
   const growthRanking = (sort: 'growth24h' | 'growth7d' | 'growth30d') =>
