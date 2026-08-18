@@ -59,7 +59,7 @@ function sqliteD1(database: DatabaseSync): D1Database {
 function catalogDatabase(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
   for (const migration of ['0002_plugin_catalog.sql', '0005_catalog_plugins.sql',
-    '0006_ai_classification.sql', '0007_manifest_sweep.sql']) {
+    '0006_ai_classification.sql', '0009_manifest_sweep.sql']) {
     database.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'))
   }
   return database
