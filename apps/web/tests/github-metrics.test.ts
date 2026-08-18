@@ -92,4 +92,39 @@ describe('GitHub catalog metrics', () => {
 
     expect(metrics.size).toBe(0)
   })
+
+  it('loses only the malformed batch, not the whole sweep', async () => {
+    // A body with neither data nor errors is malformed rather than fatal.
+    // Aborting there would hand the caller an empty map, blanking every
+    // repository over one bad response; skipping costs just that batch.
+    const many = Array.from({ length: 100 }, (_plugin, index) => ({
+      ...TEST_REGISTRY.plugins[0]!,
+      owner: `owner${index}`,
+      name: `repo${index}`,
+      url: `https://github.com/owner${index}/repo${index}`,
+      id: `owner${index}/repo${index}`,
+    }))
+    let call = 0
+    const fetcher = vi.fn(async () => {
+      call += 1
+      // 100 unique repositories span two batches of 80; the first is junk.
+      if (call === 1) return Response.json({ nothing: true })
+      return Response.json({
+        data: {
+          r0: {
+            stargazerCount: 11,
+            forkCount: 0,
+            pushedAt: null,
+            updatedAt: null,
+            releases: { nodes: [] },
+          },
+        },
+      })
+    }) as unknown as typeof fetch
+
+    const metrics = await fetchGitHubMetrics(many, 'token', fetcher)
+
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(metrics.get(metricKey(many[80]!))).toMatchObject({ stars: 11 })
+  })
 })
