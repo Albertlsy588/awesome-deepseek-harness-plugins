@@ -363,7 +363,7 @@ describe('conditional catalog requests', () => {
   })
 
   it('answers a matching validator with an empty 304', async () => {
-    // A partner polling for changes otherwise re-downloads the whole catalog to
+    // A client polling for changes otherwise re-downloads the whole catalog to
     // be told nothing moved.
     const notModified = notModifiedFor(conditional(etag), responseWith(etag))
     expect(notModified?.status).toBe(304)

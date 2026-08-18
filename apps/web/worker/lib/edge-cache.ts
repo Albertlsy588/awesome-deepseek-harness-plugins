@@ -80,7 +80,7 @@ function matchesEtag(ifNoneMatch: string | null, etag: string): boolean {
 /**
  * Answers a conditional request with `304` when the validator still holds.
  *
- * A partner polling the catalog otherwise re-downloads about a megabyte to
+ * A client polling the catalog otherwise re-downloads about a megabyte to
  * learn that nothing changed. The snapshot only moves when a cron rebuilds it,
  * so most of those polls can be a few bytes of headers instead. Runs after the
  * cache lookup so a cached copy can satisfy the condition too.
