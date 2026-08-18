@@ -229,34 +229,49 @@ export async function refreshCatalogSnapshot(
   return { snapshot: emptyCatalogSnapshot(capturedAt), source: 'empty' }
 }
 
+// KV holds nothing servable, so this path has to build one. Shared across every
+// request the isolate is handling, so an empty namespace costs one rebuild
+// instead of one per concurrent request.
+let coldStart: Promise<CatalogSnapshotResult> | null = null
+
+function coldStartSnapshot(env: Env, fetcher: typeof fetch): Promise<CatalogSnapshotResult> {
+  coldStart ??= refreshCatalogSnapshot(env, fetcher).finally(() => {
+    coldStart = null
+  })
+  return coldStart
+}
+
+/**
+ * Read the snapshot. Reading never rebuilds it.
+ *
+ * The cron triggers own the rebuild. A read used to start one too — inline when
+ * the snapshot was missing, via `ctx.waitUntil` when it was merely stale — and
+ * nothing deduplicated those: one per request, each a full catalog read out of
+ * D1, a GitHub GraphQL sweep, then batched writes back. That is affordable at
+ * one request and ruinous at a thousand. Under a traffic spike on 2026-08-18 the
+ * snapshot aged past the TTL, every in-flight request began its own rebuild, D1
+ * answered `D1_ERROR: D1 DB is overloaded. Requests queued for too long.`, and
+ * each rebuild threw before reaching the `CATALOG_CACHE.put` that would have
+ * marked the snapshot fresh. So the snapshot stayed stale, and the next second's
+ * requests rebuilt too. Load did not break the catalog; reading it did.
+ *
+ * Serving a stale snapshot is the degradation. Rebuilding on read is the outage.
+ * `SNAPSHOT_TTL_MS` still separates 'kv' from 'stale' so callers can surface the
+ * age, but neither answer costs a query.
+ */
 export async function loadCatalogSnapshot(
   env: Env,
-  ctx?: BackgroundContext,
+  _ctx?: BackgroundContext,
   fetcher: typeof fetch = fetch,
 ): Promise<CatalogSnapshotResult> {
-  const stored = await readStoredSnapshot(env)
-  const cached = stored
-
+  const cached = await readStoredSnapshot(env)
   if (cached) {
     const age = Date.now() - new Date(cached.generatedAt).getTime()
-    if (Number.isFinite(age) && age <= SNAPSHOT_TTL_MS) {
-      return { snapshot: cached, source: 'kv' }
-    }
-
-    if (ctx) {
-      ctx.waitUntil(refreshCatalogSnapshot(env, fetcher).then(() => undefined).catch(logRefreshError))
-      return { snapshot: cached, source: 'stale' }
-    }
-
-    try {
-      return await refreshCatalogSnapshot(env, fetcher)
-    } catch (error) {
-      logRefreshError(error)
-      return { snapshot: cached, source: 'stale' }
-    }
+    const fresh = Number.isFinite(age) && age <= SNAPSHOT_TTL_MS
+    return { snapshot: cached, source: fresh ? 'kv' : 'stale' }
   }
 
-  return refreshCatalogSnapshot(env, fetcher)
+  return coldStartSnapshot(env, fetcher)
 }
 
 export async function runScheduledCatalogRefresh(
