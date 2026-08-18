@@ -804,12 +804,27 @@ export async function saveRepositoryInspections(
         // something to inspect. Once the sweep has spoken it is either a real
         // root plugin (upserted above, so package_name is set) or bookkeeping
         // that would otherwise sit in the catalog as a rejected phantom.
+        //
+        // The sibling requirement is load-bearing, not tidiness. A repository
+        // that declares no bundle anywhere ends the sweep with this row as its
+        // ONLY row, carrying the verdict. Delete it and the repository has no
+        // plugin rows at all, so the next discovery pass satisfies the
+        // `NOT EXISTS` guard and seeds a fresh pending placeholder — which puts
+        // the repository straight back in the queue. That is the phantom-row
+        // churn this whole change exists to end, and thousands of topic-tagged
+        // repositories declare no bundle, so it would be the common case rather
+        // than the corner one.
         db.prepare(
           `DELETE FROM catalog_plugins
             WHERE repository_id = (SELECT id FROM catalog_repositories WHERE github_id = ?)
               AND plugin_path = ''
               AND from_pr = 0
-              AND package_name IS NULL`,
+              AND package_name IS NULL
+              AND EXISTS (
+                SELECT 1 FROM catalog_plugins sibling
+                 WHERE sibling.repository_id = catalog_plugins.repository_id
+                   AND sibling.plugin_path <> ''
+              )`,
         ).bind(inspection.githubId),
       )
     }

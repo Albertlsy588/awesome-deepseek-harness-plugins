@@ -913,3 +913,38 @@ describe('re-inspection floor', () => {
     database.close()
   })
 })
+
+describe('a repository that declares no bundle at all', () => {
+  it('is inspected once and then leaves the queue for good', async () => {
+    const database = catalogDatabase()
+    const db = sqliteD1(database)
+    const rejected = inspection({
+      status: 'rejected',
+      code: 'missing_bundle',
+      reason: 'No package declares dsh.bundle',
+    })
+
+    const queueLengths: number[] = []
+    // After the fixture's pushed_at, or the push-driven clause re-queues the
+    // repository for a legitimate reason and hides the one under test.
+    for (const [index, run] of ['run-1', 'run-2', 'run-3'].entries()) {
+      const at = `2026-08-1${index + 5}T00:00:00.000Z`
+      await upsertDiscoveredRepositories(db, [repository()], run, at)
+      const queued = await loadPendingValidationRepositories(db, 20, null)
+      queueLengths.push(queued.length)
+      if (queued.length > 0) await saveRepositoryInspections(db, [rejected], at)
+    }
+
+    // The placeholder must survive as the repository's verdict. Deleting it
+    // would leave the repository with no plugin rows, so the next discovery
+    // pass would seed a fresh pending one and queue it again — for every
+    // bundle-less repository, on every run, forever.
+    expect(queueLengths).toEqual([1, 0, 0])
+    expect(database.prepare(
+      `SELECT plugin_path, validation_status, validation_code FROM catalog_plugins`,
+    ).all()).toEqual([
+      { plugin_path: '', validation_status: 'rejected', validation_code: 'missing_bundle' },
+    ])
+    database.close()
+  })
+})
