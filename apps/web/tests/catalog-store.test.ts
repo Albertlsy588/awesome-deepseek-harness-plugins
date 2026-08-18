@@ -181,6 +181,56 @@ describe('catalog snapshot storage', () => {
     expect(put).not.toHaveBeenCalled()
   })
 
+  it('serves a stale snapshot without touching D1 or GitHub', async () => {
+    // The rebuild a read used to schedule was per request and undeduplicated, so
+    // a traffic spike arriving on a stale snapshot turned every request into a
+    // full catalog rebuild until D1 reported itself overloaded. A read answers
+    // from KV now; the cron triggers own the rebuild.
+    const stale = {
+      ...testCatalogResult().snapshot,
+      generatedAt: '2026-08-14T00:00:00.000Z',
+    }
+    const put = vi.fn(async () => undefined)
+    const prepare = vi.fn()
+    const env = {
+      CATALOG_CACHE: { get: vi.fn(async () => stale), put },
+      CATALOG_DB: { prepare, batch: vi.fn() },
+      GITHUB_TOKEN: 'test-token',
+    } as unknown as Env
+    const fetcher = vi.fn() as unknown as typeof fetch
+    const waitUntil = vi.fn()
+
+    const loaded = await loadCatalogSnapshot(env, { waitUntil }, fetcher)
+
+    expect(loaded.source).toBe('stale')
+    expect(loaded.snapshot).toEqual(stale)
+    expect(prepare).not.toHaveBeenCalled()
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(waitUntil).not.toHaveBeenCalled()
+    expect(put).not.toHaveBeenCalled()
+  })
+
+  it('rebuilds once for concurrent readers when KV holds no snapshot', async () => {
+    const put = vi.fn(async () => undefined)
+    const env = {
+      CATALOG_CACHE: { get: vi.fn(async () => null), put },
+      CATALOG_DB: snapshotDb([catalogRow()]),
+      GITHUB_TOKEN: '',
+    } as unknown as Env
+    const fetcher = vi.fn(async () => Response.json({ items: [] })) as unknown as typeof fetch
+
+    const [first, second, third] = await Promise.all([
+      loadCatalogSnapshot(env, undefined, fetcher),
+      loadCatalogSnapshot(env, undefined, fetcher),
+      loadCatalogSnapshot(env, undefined, fetcher),
+    ])
+
+    expect(first.source).toBe('d1')
+    expect(second).toBe(first)
+    expect(third).toBe(first)
+    expect(put).toHaveBeenCalledOnce()
+  })
+
   it('serves an explicitly empty snapshot when both D1 and KV are unavailable', async () => {
     const put = vi.fn(async () => undefined)
     const env = {
