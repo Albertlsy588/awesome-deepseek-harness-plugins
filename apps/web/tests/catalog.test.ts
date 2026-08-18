@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { edgeCacheablePath } from '../worker/lib/edge-cache'
+import { edgeCacheablePath, notModifiedFor, weakEtag } from '../worker/lib/edge-cache'
 import {
   buildCatalog,
   deriveCatalogResponse,
@@ -330,5 +330,59 @@ describe('edge cache allowlist', () => {
     ]) {
       expect(edgeCacheablePath(pathname), pathname).toBe(true)
     }
+  })
+})
+
+describe('conditional catalog requests', () => {
+  const etag = weakEtag(['2026-08-18T15:00:00.000Z', 'kv', '', '', 'stars'])
+
+  function responseWith(tag: string | null): Response {
+    const headers = new Headers({ 'Cache-Control': 'public, max-age=300', 'X-Catalog-Source': 'kv' })
+    if (tag) headers.set('ETag', tag)
+    return new Response('{"packages":[]}', { headers })
+  }
+
+  function conditional(ifNoneMatch: string | null): Request {
+    return new Request('https://deepseek1024.com/api/v1/plugins', {
+      headers: ifNoneMatch ? { 'If-None-Match': ifNoneMatch } : {},
+    })
+  }
+
+  it('moves whenever any part of the identity moves', () => {
+    const base = ['2026-08-18T15:00:00.000Z', 'kv', '', '', 'stars']
+    expect(weakEtag(base)).toBe(weakEtag([...base]))
+    for (const changed of [
+      ['2026-08-18T15:15:00.000Z', 'kv', '', '', 'stars'],
+      ['2026-08-18T15:00:00.000Z', 'stale', '', '', 'stars'],
+      ['2026-08-18T15:00:00.000Z', 'kv', 'terminal', '', 'stars'],
+      ['2026-08-18T15:00:00.000Z', 'kv', '', 'ui', 'stars'],
+      ['2026-08-18T15:00:00.000Z', 'kv', '', '', 'newest'],
+    ]) {
+      expect(weakEtag(changed), changed.join('|')).not.toBe(weakEtag(base))
+    }
+  })
+
+  it('answers a matching validator with an empty 304', async () => {
+    // A partner polling for changes otherwise re-downloads the whole catalog to
+    // be told nothing moved.
+    const notModified = notModifiedFor(conditional(etag), responseWith(etag))
+    expect(notModified?.status).toBe(304)
+    expect(await notModified?.text()).toBe('')
+    expect(notModified?.headers.get('ETag')).toBe(etag)
+    // A 304 has to carry forward the freshness information, or the caller has
+    // nothing left to decide with.
+    expect(notModified?.headers.get('Cache-Control')).toBe('public, max-age=300')
+  })
+
+  it('tolerates the forms a client may send the validator in', () => {
+    expect(notModifiedFor(conditional(etag.replace('W/', '')), responseWith(etag))).not.toBeNull()
+    expect(notModifiedFor(conditional(`"stale", ${etag}`), responseWith(etag))).not.toBeNull()
+    expect(notModifiedFor(conditional('*'), responseWith(etag))).not.toBeNull()
+  })
+
+  it('serves the body when the validator is stale, absent, or unmatchable', () => {
+    expect(notModifiedFor(conditional(weakEtag(['other'])), responseWith(etag))).toBeNull()
+    expect(notModifiedFor(conditional(null), responseWith(etag))).toBeNull()
+    expect(notModifiedFor(conditional(etag), responseWith(null))).toBeNull()
   })
 })

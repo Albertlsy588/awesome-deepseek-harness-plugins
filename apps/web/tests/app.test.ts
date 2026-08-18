@@ -799,4 +799,28 @@ describe('collection query classification', () => {
     expect(kind('https://deepseek1024.com/?fbclid=abc')).toBe('tagged')
     expect(kind('https://deepseek1024.com/plugins/acme/widget?utm_source=x')).toBe('clean')
   })
+
+})
+
+describe('catalog listing validator', () => {
+  it('lets a poller be answered with 304 instead of another megabyte', async () => {
+    const app = testApp()
+    const first = await app.request('https://deepseek1024.com/api/v1/plugins')
+    const etag = first.headers.get('ETag')
+    expect(etag).toMatch(/^W\/"/)
+
+    // The same snapshot and the same query have to produce the same validator,
+    // or every poll looks like a change and the 304 never fires.
+    const second = await app.request('https://deepseek1024.com/api/v1/plugins')
+    expect(second.headers.get('ETag')).toBe(etag)
+
+    // A different query is a different body and must not reuse it.
+    const filtered = await app.request('https://deepseek1024.com/api/v1/plugins?sort=newest')
+    expect(filtered.headers.get('ETag')).not.toBe(etag)
+  })
+
+  it('gives the registry projection its own validator', async () => {
+    const registry = await testApp().request('https://deepseek1024.com/api/v1/registry')
+    expect(registry.headers.get('ETag')).toMatch(/^W\/"/)
+  })
 })

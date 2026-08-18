@@ -1,5 +1,5 @@
 import { createApp } from './app'
-import { edgeCacheKey, isStorable, tagged } from './lib/edge-cache'
+import { edgeCacheKey, isStorable, notModifiedFor, tagged } from './lib/edge-cache'
 import { communityPostMetadata } from './community/metadata'
 import { cleanupExpiredAuthRows } from './lib/auth'
 import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
@@ -125,11 +125,13 @@ const worker = {
     if (!cacheKey) return route(request, env, ctx)
 
     const hit = await caches.default.match(cacheKey)
-    if (hit) return tagged(hit, 'hit')
+    if (hit) return notModifiedFor(request, hit) ?? tagged(hit, 'hit')
 
     const response = await route(request, env, ctx)
     if (isStorable(response)) ctx.waitUntil(caches.default.put(cacheKey, response.clone()))
-    return tagged(response, 'miss')
+    // Checked after the store so the cache always holds the full response, not
+    // the 304 this particular caller happens to be entitled to.
+    return notModifiedFor(request, response) ?? tagged(response, 'miss')
   },
   scheduled(controller, env, ctx) {
     if (controller.cron === FULL_DISCOVERY_CRON) {
