@@ -88,15 +88,16 @@ async function fetchGraphMetrics(
     // a NOT_FOUND entry in `errors` while `data` still carries every other
     // repository in the batch. Throwing on any error at all threw away the
     // eighty repositories that answered along with the one that did not, so a
-    // single dead repository blanked the star counts of a whole batch. A failure
-    // that leaves no data — a rate limit, a bad token — has no `data` object,
-    // and that is the one worth aborting the sweep for.
+    // single dead repository blanked the star counts of a whole batch.
+    //
+    // No `data` at all means nothing came back to salvage. With errors attached
+    // that is a rate limit or a rejected token, and the batches queued behind it
+    // would fare no better, so the sweep stops. Without them the response is
+    // merely malformed, and skipping the batch costs eighty repositories rather
+    // than every one of them — the caller turns a throw into an empty result.
     if (!isObject(payload.data)) {
-      throw new Error(
-        errors.length > 0
-          ? 'GitHub GraphQL returned query errors'
-          : 'GitHub GraphQL returned no data',
-      )
+      if (errors.length > 0) throw new Error('GitHub GraphQL returned query errors')
+      continue
     }
     if (errors.length > 0) {
       console.warn(
