@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "bobostudio/dsh-session-lens",
+  "name": "dsh-session-lens",
+  "repository": "https://github.com/bobostudio/dsh-session-lens",
+  "category": "session",
+  "description": {
+    "en": "Session insights and shareable single-file HTML replay for DeepSeek Harness: five-part token breakdown, per-turn timeline, tool statistics, with privacy-first redaction and a zero-JavaScript offline export.",
+    "zh": "DeepSeek Harness 会话洞察与分享插件：token 五段分解、按 Turn 时间线、工具统计；导出零 JavaScript 的自包含单文件 HTML 回放，隐私优先脱敏。"
+  },
+  "added": "2026-08-18"
+}
