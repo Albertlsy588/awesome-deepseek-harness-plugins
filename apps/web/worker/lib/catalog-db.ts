@@ -562,7 +562,7 @@ export interface PendingRepository {
  * A curated repository the topic scan had never seen was excluded outright by
  * `from_topic = 1`, so it published with no install facts at all. And nothing
  * ever put an inspected repository *back* into the queue — re-inspection only
- * happened by accident, because the phantom root row 0007 deletes was
+ * happened by accident, because the phantom root row 0009 deletes was
  * permanently pending. With that row gone the queue has to say plainly when a
  * repository is due: it was pushed since the last scan, or a sweep is still
  * mid-flight. Neither has to disturb `validation_status`, so plugins stay
