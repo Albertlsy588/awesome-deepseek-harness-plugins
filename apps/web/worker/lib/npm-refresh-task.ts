@@ -45,6 +45,10 @@ export interface NpmRefreshResult {
   absent: number
   notModified: number
   errors: number
+  // Probes whose result repeats the stored status (absent→absent, error→error)
+  // and so were not written — the sweep's steady-state majority for packages
+  // that 404 (they have no ETag to earn a 304 with).
+  skippedUnchanged: number
   wrapped: boolean
 }
 
@@ -82,7 +86,7 @@ export async function runNpmRefreshTask(
   }
 
   const result: NpmRefreshResult = {
-    probed: 0, found: 0, absent: 0, notModified: 0, errors: 0, wrapped: false,
+    probed: 0, found: 0, absent: 0, notModified: 0, errors: 0, skippedUnchanged: 0, wrapped: false,
   }
   const writes: NpmProbeRecord[] = []
 
@@ -96,6 +100,13 @@ export async function runNpmRefreshTask(
       // 304: nothing published since last ETag — record nothing.
       if (probe.status === 'not_modified') {
         result.notModified += 1
+        continue
+      }
+      // A repeated absent/error has no ETag to earn a 304, but nothing changed
+      // either — writing it would churn the row every sweep (thousands of 404s
+      // rewritten each cycle for no reason). Only a *transition* is persisted.
+      if (probe.status === candidate.currentStatus && (probe.status === 'absent' || probe.status === 'error')) {
+        result.skippedUnchanged += 1
         continue
       }
       if (probe.status === 'found') result.found += 1

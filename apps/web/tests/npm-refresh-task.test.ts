@@ -127,6 +127,18 @@ function found(version: string, etag: string): NpmProbeResult {
   }
 }
 
+function absent(): NpmProbeResult {
+  return {
+    status: 'absent', httpStatus: 404, version: null, repositoryUrl: null, repositoryDirectory: null,
+    bundleDeclared: false, entryPoint: null, tarballUrl: null, integrity: null, binding: 'absent', etag: null,
+  }
+}
+
+function checkedAt(database: DatabaseSync, path: string): string | null {
+  return (database.prepare('SELECT npm_checked_at FROM catalog_plugins WHERE plugin_path = ?')
+    .get(path) as { npm_checked_at: string | null }).npm_checked_at
+}
+
 function envFor(database: DatabaseSync): Env {
   return { CATALOG_DB: sqliteD1(database) } as unknown as Env
 }
@@ -203,6 +215,34 @@ describe('npm refresh task', () => {
     // 'a' was before the cursor, so it was left as it was.
     expect(pluginRow(database, 'a')).toMatchObject({ npm_version: '1.0.0' })
     expect(pluginRow(database, 'c')).toMatchObject({ npm_version: '9.9.9' })
+    database.close()
+  })
+
+  it('skips writing an absent package that is still absent (no churn)', async () => {
+    const database = catalogDatabase()
+    seedPlugin(database, 'gone', { npmStatus: 'absent', npmVersion: null, npmEtag: null })
+    probeNpmPackage.mockImplementation(async () => absent())
+
+    const result = await runNpmRefreshTask(envFor(database), SCHEDULED_AT)
+
+    expect(result).toMatchObject({ probed: 1, absent: 0, skippedUnchanged: 1 })
+    // npm_checked_at was NULL on seed and stays NULL — nothing was written.
+    expect(checkedAt(database, 'gone')).toBeNull()
+    expect(refreshCatalogSnapshot).not.toHaveBeenCalled()
+    database.close()
+  })
+
+  it('writes when a found package becomes absent (a real transition, not churn)', async () => {
+    const database = catalogDatabase()
+    seedPlugin(database, 'x', { npmStatus: 'found', npmVersion: '1.0.0', npmEtag: '"x1"' })
+    probeNpmPackage.mockImplementation(async () => absent())
+
+    const result = await runNpmRefreshTask(envFor(database), SCHEDULED_AT)
+
+    expect(result).toMatchObject({ absent: 1, skippedUnchanged: 0 })
+    // The package was unpublished: status flips and the version clears.
+    expect(pluginRow(database, 'x')).toMatchObject({ npm_status: 'absent', npm_version: null, npm_etag: null })
+    expect(refreshCatalogSnapshot).toHaveBeenCalledTimes(1)
     database.close()
   })
 

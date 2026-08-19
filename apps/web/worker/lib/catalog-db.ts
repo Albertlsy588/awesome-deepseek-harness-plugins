@@ -1023,6 +1023,10 @@ export interface NpmProbeCandidate {
   etag: string | null
   // Stable unique key the refresh sweep uses as its cursor.
   normalizedId: string
+  // The stored status, so the caller can skip re-writing an unchanged result
+  // (an `absent` package that is still absent has no ETag to answer 304, so it
+  // would otherwise be rewritten every sweep).
+  currentStatus: string
 }
 
 // A package is probed only when it is published here AND its own manifest named
@@ -1030,14 +1034,21 @@ export interface NpmProbeCandidate {
 const NPM_PROBE_ELIGIBLE = `p.package_name IS NOT NULL
         AND (p.from_pr = 1 OR (r.from_topic = 1 AND p.validation_status = 'accepted'))`
 
-function toNpmProbeCandidate(
-  row: { plugin_id: string; package_name: string; npm_etag: string | null; normalized_plugin_id: string },
-): NpmProbeCandidate {
+interface NpmProbeCandidateRow {
+  plugin_id: string
+  package_name: string
+  npm_etag: string | null
+  npm_status: string
+  normalized_plugin_id: string
+}
+
+function toNpmProbeCandidate(row: NpmProbeCandidateRow): NpmProbeCandidate {
   return {
     pluginId: row.plugin_id,
     packageName: row.package_name,
     etag: row.npm_etag ?? null,
     normalizedId: row.normalized_plugin_id,
+    currentStatus: row.npm_status,
   }
 }
 
@@ -1052,14 +1063,14 @@ export async function loadNpmPendingProbes(
   limit = 200,
 ): Promise<NpmProbeCandidate[]> {
   const result = await db.prepare(
-    `SELECT p.plugin_id, p.package_name, p.npm_etag, p.normalized_plugin_id
+    `SELECT p.plugin_id, p.package_name, p.npm_etag, p.npm_status, p.normalized_plugin_id
        FROM catalog_plugins p
        JOIN catalog_repositories r ON r.id = p.repository_id
       WHERE ${NPM_PROBE_ELIGIBLE}
         AND p.npm_status = 'pending'
       ORDER BY p.normalized_plugin_id
       LIMIT ?`,
-  ).bind(limit).all<{ plugin_id: string; package_name: string; npm_etag: string | null; normalized_plugin_id: string }>()
+  ).bind(limit).all<NpmProbeCandidateRow>()
   return result.results.map(toNpmProbeCandidate)
 }
 
@@ -1080,14 +1091,14 @@ export async function loadNpmSweepBatch(
   cursor = '',
 ): Promise<NpmProbeCandidate[]> {
   const result = await db.prepare(
-    `SELECT p.plugin_id, p.package_name, p.npm_etag, p.normalized_plugin_id
+    `SELECT p.plugin_id, p.package_name, p.npm_etag, p.npm_status, p.normalized_plugin_id
        FROM catalog_plugins p
        JOIN catalog_repositories r ON r.id = p.repository_id
       WHERE ${NPM_PROBE_ELIGIBLE}
         AND p.normalized_plugin_id > ?
       ORDER BY p.normalized_plugin_id
       LIMIT ?`,
-  ).bind(cursor, limit).all<{ plugin_id: string; package_name: string; npm_etag: string | null; normalized_plugin_id: string }>()
+  ).bind(cursor, limit).all<NpmProbeCandidateRow>()
   return result.results.map(toNpmProbeCandidate)
 }
 
