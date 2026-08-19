@@ -20,7 +20,9 @@ shims.
 Query parameters: `q` (search), `category`, `sort`.
 
 Returns the catalog listing used by the website: `packages`, `rankings`, `categories`, and
-`meta`. The response structure matches the previous catalog payload; only the path changed.
+`meta`. For compatibility, the response structure remains unchanged, but `packages` contains
+at most the first 300 entries after filtering and sorting. `meta.total` still reports the full
+number of matching plugins and `meta.catalogTotal` reports the full unfiltered catalog size.
 
 ## GET /api/v1/plugins/search
 

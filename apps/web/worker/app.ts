@@ -69,6 +69,7 @@ const REGISTRY_CACHE_HEADER = 'public, max-age=60, s-maxage=300, stale-while-rev
 // robots.txt is static, but the catalog-derived crawler documents below are
 // not: without revalidation they can sit a whole day behind the catalog.
 const CRAWLER_CACHE_HEADER = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400'
+const V1_PLUGIN_LIMIT = 300
 const DEFAULT_SEARCH_LIMIT = 20
 const MAX_SEARCH_LIMIT = 100
 const MAX_SEARCH_PAGE = 1_000_000
@@ -347,7 +348,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       executionContext(context),
     )
     const query = parseCatalogQuery(context.req.query())
-    const payload = JSON.stringify(buildCatalog(snapshot, query))
+    const catalog = buildCatalog(snapshot, query)
+    // v1 remains available for compatibility, but no longer sends the entire
+    // catalog in one response. Keep the full match counts so consumers can
+    // detect truncation without changing the established response shape.
+    const payload = JSON.stringify({
+      ...catalog,
+      packages: catalog.packages.slice(0, V1_PLUGIN_LIMIT),
+    })
     context.header('Cache-Control', LIST_CACHE_HEADER)
     // Validator over the actual bytes, so a caller polling for changes is told
     // 304 only when the body it holds is genuinely the body we would send — a

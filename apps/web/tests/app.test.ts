@@ -279,6 +279,40 @@ describe('market API', () => {
     expect(body.meta).toMatchObject({ total: 1, catalogTotal: TEST_PLUGINS.length })
   })
 
+  it('caps the compatibility catalog listing at 300 plugins while retaining full totals', async () => {
+    const result = testCatalogResult()
+    const plugins = Array.from({ length: 305 }, (_, index) => {
+      const suffix = String(index).padStart(3, '0')
+      return {
+        ...TEST_PLUGINS[0]!,
+        id: `partner/plugin-${suffix}`,
+        name: `plugin-${suffix}`,
+        owner: 'partner',
+        repository: `plugin-${suffix}`,
+        url: `https://github.com/partner/plugin-${suffix}`,
+        install: `dsh plugin --profile web add github:partner/plugin-${suffix}`,
+      }
+    })
+    const app = createApp({
+      catalogLoader: vi.fn(async () => ({
+        ...result,
+        snapshot: { ...result.snapshot, plugins },
+      })),
+    })
+
+    const response = await app.request('/api/v1/plugins?sort=name')
+    const body = await response.json() as {
+      packages: Array<{ name: string }>
+      meta: { total: number; catalogTotal: number }
+    }
+
+    expect(response.status).toBe(200)
+    expect(body.packages).toHaveLength(300)
+    expect(body.packages[0]?.name).toBe('plugin-000')
+    expect(body.packages.at(-1)?.name).toBe('plugin-299')
+    expect(body.meta).toMatchObject({ total: 305, catalogTotal: 305 })
+  })
+
   it('serves package details with the resolved category and rejects invalid identifiers', async () => {
     const app = testApp()
     const detail = await app.request('/api/v1/plugins/openma-ai/deepseek-harness-tui')
