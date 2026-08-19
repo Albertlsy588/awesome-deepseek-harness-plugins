@@ -14,6 +14,13 @@ const CACHEABLE_API_PATHS: Record<string, readonly string[]> = {
   '/api/v2/rankings': [],
 }
 
+// Deploys cannot purge Cache API entries already stored at every POP. Bump a
+// path here when a response-only compatibility projection changes, so callers
+// do not wait out the previous entry's s-maxage before seeing the fix.
+const CACHE_KEY_REVISIONS: Readonly<Record<string, string>> = {
+  '/api/v1/plugins': '2',
+}
+
 export function edgeCacheablePath(pathname: string): boolean {
   if (pathname.startsWith('/api/')) return Object.prototype.hasOwnProperty.call(CACHEABLE_API_PATHS, pathname)
   // Hashed bundles are already immutable to the browser, and a miss here is the
@@ -54,6 +61,8 @@ export function edgeCacheKey(url: URL): Request | null {
     const value = url.searchParams.get(name)
     if (value !== null && value !== '') canonical.searchParams.set(name, value)
   }
+  const revision = CACHE_KEY_REVISIONS[pathname]
+  if (revision) canonical.searchParams.set('__edge_v', revision)
   return new Request(canonical.toString(), { method: 'GET' })
 }
 
@@ -127,4 +136,3 @@ export function notModifiedFor(request: Request, response: Response): Response |
   }
   return new Response(null, { status: 304, headers })
 }
-

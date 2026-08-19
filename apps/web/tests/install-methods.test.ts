@@ -4,6 +4,7 @@ import {
   deriveInstallMethods,
   gitVerification,
   NO_ENTRY_DECLARED_VERIFICATION,
+  withLegacyNpmCodeAliases,
   type GitInstallCode,
 } from '../worker/lib/install-methods'
 
@@ -92,6 +93,29 @@ describe('install method verdicts', () => {
       expect(methods.map((method) => method.kind), binding).toEqual(['github'])
     }
     expect(deriveInstallMethods('owner/repo', git, GITHUB_ONLY).map((m) => m.kind)).toEqual(['github'])
+  })
+
+  it('projects both npm verdict codes for old v1 consumers without duplicating targets', () => {
+    const methods = deriveInstallMethods(
+      'owner/repo',
+      { code: 'entry_committed', hasPrepare: false },
+      { packageName: '@scope/plugin', binding: 'strict', bundleDeclared: true, version: '1.2.3' },
+    )
+
+    const projected = withLegacyNpmCodeAliases(methods)!
+    expect(projected.slice(0, 2).map((method) => method.code)).toEqual([
+      'published_package',
+      'repository_backlink',
+    ])
+    expect(projected[1]).toMatchObject({
+      kind: 'npm',
+      spec: '@scope/plugin',
+      revision: '1.2.3',
+      verification: 'verified',
+      requiresBuildAllowance: false,
+    })
+    expect(withLegacyNpmCodeAliases(projected)).toEqual(projected)
+    expect(methods.map((method) => method.code)).toEqual(['published_package', 'entry_committed'])
   })
 
   it('regresses the scoped monorepo package that production previously hid', () => {

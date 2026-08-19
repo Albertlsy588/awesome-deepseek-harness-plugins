@@ -35,6 +35,7 @@ import {
   parseInstallationEvent,
   recordInstallationEvent,
 } from './lib/install-metrics'
+import { withLegacyNpmCodeAliases } from './lib/install-methods'
 import { buildLlmsFullTxt, buildRobotsTxt, buildSitemap, seoCatalog } from './seo'
 import type {
   BackgroundContext,
@@ -81,6 +82,11 @@ const SLUG_PART = /^[A-Za-z0-9_.-]+$/
 const ENTRY_ID = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)*$/
 const ENTRY_DATE = /^\d{4}-\d{2}-\d{2}$/
 const ENTRY_KEYS = new Set(['id', 'name', 'repository', 'category', 'description', 'added'])
+
+function projectV1InstallCodeAliases<T extends RegistryPlugin>(plugin: T): T {
+  const installMethods = withLegacyNpmCodeAliases(plugin.installMethods)
+  return installMethods === plugin.installMethods ? plugin : { ...plugin, installMethods }
+}
 
 async function readBoundedBody(request: Request, maximumBytes: number): Promise<string | null> {
   if (!request.body) return ''
@@ -354,7 +360,9 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     // detect truncation without changing the established response shape.
     const payload = JSON.stringify({
       ...catalog,
-      packages: catalog.packages.slice(0, V1_PLUGIN_LIMIT),
+      packages: catalog.packages
+        .slice(0, V1_PLUGIN_LIMIT)
+        .map(projectV1InstallCodeAliases),
     })
     context.header('Cache-Control', LIST_CACHE_HEADER)
     // Validator over the actual bytes, so a caller polling for changes is told

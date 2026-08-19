@@ -36,7 +36,7 @@ export type GitInstallCode =
   | 'repository_unreachable'
   | 'not_checked'
 
-export type NpmInstallCode = 'published_package'
+export type NpmInstallCode = 'published_package' | 'repository_backlink'
 
 /** Diagnostic comparison between npm repository metadata and catalog source. */
 export type NpmBinding = 'strict' | 'name_only' | 'mismatch' | 'no_bundle' | 'absent' | 'unknown'
@@ -60,6 +60,45 @@ export interface PluginInstallMethod {
   /** npm version, or the short default-branch sha the git facts came from. */
   revision: string | null
   checkedAt: string | null
+}
+
+/**
+ * Keeps the frozen v1 response readable by consumers from both npm-verdict
+ * generations. `repository_backlink` used to be the only verified npm code;
+ * `published_package` is the current verdict. They describe the same target in
+ * v1, so expose both aliases without changing the catalog snapshot or the v2
+ * response used by our own UI.
+ */
+export function withLegacyNpmCodeAliases(
+  methods: PluginInstallMethod[] | undefined,
+): PluginInstallMethod[] | undefined {
+  if (methods === undefined) return undefined
+
+  let changed = false
+  const projected = methods.flatMap((method) => {
+    if (
+      method.kind !== 'npm' ||
+      (method.code !== 'published_package' && method.code !== 'repository_backlink')
+    ) return [method]
+
+    const aliasCode: NpmInstallCode = method.code === 'repository_backlink'
+      ? 'published_package'
+      : 'repository_backlink'
+    const alreadyPresent = methods.some((candidate) =>
+      candidate.kind === 'npm' &&
+      candidate.code === aliasCode &&
+      candidate.spec === method.spec &&
+      candidate.revision === method.revision,
+    )
+    if (alreadyPresent) return [method]
+
+    changed = true
+    const alias = { ...method, code: aliasCode }
+    // The current verdict stays preferred when projecting an old snapshot.
+    return method.code === 'repository_backlink' ? [alias, method] : [method, alias]
+  })
+
+  return changed ? projected : methods
 }
 
 /**

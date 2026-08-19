@@ -361,6 +361,13 @@ describe('edge cache key normalization', () => {
     expect(bare).toBe('https://deepseek1024.com/api/v2/rankings')
   })
 
+  it('versions the v1 listing cache independently of its public query shape', () => {
+    expect(key('https://deepseek1024.com/api/v1/plugins'))
+      .toBe('https://deepseek1024.com/api/v1/plugins?__edge_v=2')
+    expect(key('https://deepseek1024.com/api/v1/plugins?sort=name&bust=old'))
+      .toBe('https://deepseek1024.com/api/v1/plugins?sort=name&__edge_v=2')
+  })
+
   it('leaves HTML routes keyed by their whole URL', () => {
     // A filtered permutation carries different SEO metadata than the bare page,
     // so its query must stay in the key.

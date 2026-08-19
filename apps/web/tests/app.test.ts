@@ -313,6 +313,66 @@ describe('market API', () => {
     expect(body.meta).toMatchObject({ total: 305, catalogTotal: 305 })
   })
 
+  it('keeps published_package and repository_backlink together for old v1 installers', async () => {
+    const result = testCatalogResult()
+    const plugins = [...result.snapshot.plugins]
+    plugins[0] = {
+      ...result.snapshot.plugins[0]!,
+      install: 'dsh plugin --profile web add @scope/published-plugin',
+      installMethods: [{
+        kind: 'npm',
+        spec: '@scope/published-plugin',
+        command: 'dsh plugin --profile web add @scope/published-plugin',
+        verification: 'verified',
+        code: 'published_package',
+        requiresBuildAllowance: false,
+        buildPackage: null,
+        revision: '1.2.3',
+        checkedAt: '2026-08-20T00:00:00.000Z',
+      }],
+    }
+    result.snapshot = { ...result.snapshot, plugins }
+    const app = createApp({ catalogLoader: vi.fn(async () => result) })
+
+    const response = await app.request('/api/v1/plugins')
+    const body = await response.json() as {
+      packages: Array<{
+        id: string
+        installMethods?: Array<{
+          kind: string
+          spec: string
+          revision: string | null
+          verification: string
+          code: string
+          requiresBuildAllowance: boolean
+        }>
+      }>
+    }
+    const plugin = body.packages.find((candidate) => candidate.id === result.snapshot.plugins[0]!.id)!
+    expect(plugin.installMethods?.map((method) => method.code)).toEqual([
+      'published_package',
+      'repository_backlink',
+    ])
+
+    // Mirrors the partner's old adapter: it ignores the new code and accepts
+    // one exact, verified repository_backlink target.
+    const partnerTargets = new Set(
+      plugin.installMethods
+        ?.filter((method) =>
+          method.kind === 'npm' &&
+          method.code === 'repository_backlink' &&
+          method.verification === 'verified' &&
+          method.requiresBuildAllowance === false &&
+          /^\d+\.\d+\.\d+$/.test(method.revision ?? ''),
+        )
+        .map((method) => `${method.spec}@${method.revision}`),
+    )
+    expect([...partnerTargets]).toEqual(['@scope/published-plugin@1.2.3'])
+
+    expect(result.snapshot.plugins[0]?.installMethods?.map((method) => method.code))
+      .toEqual(['published_package'])
+  })
+
   it('serves package details with the resolved category and rejects invalid identifiers', async () => {
     const app = testApp()
     const detail = await app.request('/api/v1/plugins/openma-ai/deepseek-harness-tui')

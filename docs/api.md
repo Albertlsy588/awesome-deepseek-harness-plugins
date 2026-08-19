@@ -23,6 +23,10 @@ Returns the catalog listing used by the website: `packages`, `rankings`, `catego
 `meta`. For compatibility, the response structure remains unchanged, but `packages` contains
 at most the first 300 entries after filtering and sorting. `meta.total` still reports the full
 number of matching plugins and `meta.catalogTotal` reports the full unfiltered catalog size.
+For npm install methods, this frozen v1 projection emits both the current
+`published_package` code and its deprecated `repository_backlink` alias for the same
+`spec`/`revision`. Existing consumers may continue matching the old code; new integrations
+should use `published_package`. The v2 API and website expose only the current code.
 
 ## GET /api/v1/plugins/search
 
