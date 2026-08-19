@@ -79,6 +79,30 @@ export function tagged(response: Response, state: 'hit' | 'miss'): Response {
   return new Response(response.body, { status: response.status, headers })
 }
 
+const BROWSER_REVALIDATE = 'public, max-age=0, must-revalidate'
+
+/**
+ * Keeps the POP cache fast without letting a browser serve an hour-old shell
+ * or catalog response from its private cache.
+ *
+ * The response is passed to `caches.default.put()` before this projection is
+ * applied, so the stored copy retains its route-specific `s-maxage`. Hashed
+ * assets never pass through the edge cache and keep their immutable policy.
+ */
+export function browserRevalidated(response: Response): Response {
+  const cacheControl = response.headers.get('Cache-Control')
+  const directives = cacheControl?.split(',').map((directive) => directive.trim()) ?? []
+  if (!directives.includes('public') || directives.includes('immutable')) return response
+
+  const headers = new Headers(response.headers)
+  headers.set('Cache-Control', BROWSER_REVALIDATE)
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 /**
  * A catalog response is fully identified by the snapshot it was built from and
  * the query that shaped it, so its validator can be assembled from those rather

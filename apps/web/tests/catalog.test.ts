@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { contentEtag, edgeCacheKey, edgeCacheablePath, notModifiedFor } from '../worker/lib/edge-cache'
+import {
+  browserRevalidated,
+  contentEtag,
+  edgeCacheKey,
+  edgeCacheablePath,
+  notModifiedFor,
+} from '../worker/lib/edge-cache'
 import {
   buildCatalog,
   buildPluginsPage,
@@ -436,6 +442,35 @@ describe('conditional catalog requests', () => {
     expect(notModifiedFor(conditional(contentEtag('{"x":1}')), responseWith(etag))).toBeNull()
     expect(notModifiedFor(conditional(null), responseWith(etag))).toBeNull()
     expect(notModifiedFor(conditional(etag), responseWith(null))).toBeNull()
+  })
+})
+
+describe('browser cache projection', () => {
+  it('requires browser revalidation while preserving validators and edge metadata', async () => {
+    const response = browserRevalidated(new Response('{"ok":true}', {
+      headers: {
+        'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600',
+        ETag: 'W/"catalog"',
+        'X-Edge-Cache': 'hit',
+      },
+    }))
+
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=0, must-revalidate')
+    expect(response.headers.get('ETag')).toBe('W/"catalog"')
+    expect(response.headers.get('X-Edge-Cache')).toBe('hit')
+    expect(await response.text()).toBe('{"ok":true}')
+  })
+
+  it('does not alter no-store, immutable, or headerless responses', () => {
+    const noStore = new Response('private', { headers: { 'Cache-Control': 'no-store' } })
+    const immutable = new Response('bundle', {
+      headers: { 'Cache-Control': 'public, max-age=31536000, immutable' },
+    })
+    const headerless = new Response('redirect', { status: 301 })
+
+    expect(browserRevalidated(noStore)).toBe(noStore)
+    expect(browserRevalidated(immutable)).toBe(immutable)
+    expect(browserRevalidated(headerless)).toBe(headerless)
   })
 })
 

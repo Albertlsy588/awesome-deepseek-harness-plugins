@@ -1,5 +1,5 @@
 import { createApp } from './app'
-import { edgeCacheKey, isStorable, notModifiedFor, tagged } from './lib/edge-cache'
+import { browserRevalidated, edgeCacheKey, isStorable, notModifiedFor, tagged } from './lib/edge-cache'
 import { communityPostMetadata } from './community/metadata'
 import { cleanupExpiredAuthRows } from './lib/auth'
 import { loadCatalogSnapshot, runScheduledCatalogRefresh } from './lib/catalog-store'
@@ -124,16 +124,16 @@ const worker = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
     const cacheKey = request.method === 'GET' ? edgeCacheKey(url) : null
-    if (!cacheKey) return route(request, env, ctx)
+    if (!cacheKey) return browserRevalidated(await route(request, env, ctx))
 
     const hit = await caches.default.match(cacheKey)
-    if (hit) return notModifiedFor(request, hit) ?? tagged(hit, 'hit')
+    if (hit) return browserRevalidated(notModifiedFor(request, hit) ?? tagged(hit, 'hit'))
 
     const response = await route(request, env, ctx)
     if (isStorable(response)) ctx.waitUntil(caches.default.put(cacheKey, response.clone()))
     // Checked after the store so the cache always holds the full response, not
     // the 304 this particular caller happens to be entitled to.
-    return notModifiedFor(request, response) ?? tagged(response, 'miss')
+    return browserRevalidated(notModifiedFor(request, response) ?? tagged(response, 'miss'))
   },
   scheduled(controller, env, ctx) {
     if (controller.cron === FULL_DISCOVERY_CRON) {
