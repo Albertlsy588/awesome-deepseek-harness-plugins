@@ -186,6 +186,10 @@ export interface RegistryProjectionPlugin {
   category: string
   description: LocalizedText
   install: string
+  /** Validated package spec consumed by the in-DSH installer. */
+  target: string
+  /** pnpm build grant for a git prepare script. */
+  allowBuild: string | null
   added: string
   stars: number | null
 }

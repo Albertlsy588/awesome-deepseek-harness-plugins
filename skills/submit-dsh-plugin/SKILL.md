@@ -41,11 +41,12 @@ ID 各段仅限 `A-Za-z0-9_.-` 字符，路径段不得是 `.` 或 `..`，总长
 4. 确认其中声明了非空字符串 `dsh.bundle.patch`。
 5. 相对于声明该字段的 `package.json` 解析补丁路径；拒绝绝对路径、反斜杠以及跳出仓库的路径。
 6. 确认 manifest 和引用的补丁都存在于 GitHub 默认分支，而不只是尚未推送的本地提交。
-7. 确认该插件能**从 GitHub 安装**，而不只是能从 npm 安装：git 安装会执行 `prepare`，除此之外只包含已提交的文件。
+7. 确认该插件能**从 GitHub 安装**，作为 npm 之外的源码安装方式：git 安装会执行 `prepare`，除此之外只包含已提交的文件。
    因此要么 `exports["."]` / `main` 指向的入口文件已提交，要么有一个自包含的 `prepare` 脚本在安装时构建它。
    若入口是发布 npm 时才构建的产物，安装会成功但 `dsh` 启动时报 module-not-found。
    **这不影响收录**：插件照常收录，但网站会把该安装方式标为 UNVERIFIED，PR 评论里也会给出修法
-   （提交构建产物、加自包含的 `prepare` 脚本，或发布到 npm 并让 `repository.url` 与 `repository.directory` 指回本插件）。
+   （提交构建产物、加自包含的 `prepare` 脚本，或把声明 `dsh.bundle` 的包发布到 npm）。如果源码包有 `prepare`，网站生成的命令必须带 `--allow-build=<package-name>`，让 pnpm 在首次安装时直接授权并执行构建，而不是先失败再让用户手改 YAML。
+   网站会单独探测 manifest 中声明的 npm 包名；只要 npm 上的 latest manifest 声明 `dsh.bundle`，npm 方式即为 VERIFIED 并优先推荐。`repository` 回链缺失或不一致不影响 npm 验证结果。
 8. 记录作者实际执行的兼容性测试。如果尚未测试，应停止并要求作者先测试；目录自动审查不会执行第三方代码。
 
 使用 GitHub 或 `gh` 获取远程默认分支证据。不得用仅存在于本地的文件作为证明。

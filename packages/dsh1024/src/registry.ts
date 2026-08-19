@@ -14,6 +14,10 @@ export interface RegistryPlugin {
   category: string
   description: Record<string, string>
   install: string
+  /** Server-derived preferred package spec; absent on older registry responses. */
+  target?: string
+  /** Package allowed to run a source-install build script. */
+  allowBuild?: string | null
   added: string
   stars?: number | null
 }
@@ -56,7 +60,7 @@ function isCategory(value: unknown): value is RegistryCategory {
 function isPlugin(value: unknown, categoryIds: Set<string>): value is RegistryPlugin {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
   const plugin = value as Record<string, unknown>
-  return typeof plugin.id === 'string'
+  if (!(typeof plugin.id === 'string'
     && typeof plugin.name === 'string'
     && typeof plugin.owner === 'string'
     && typeof plugin.url === 'string'
@@ -66,7 +70,14 @@ function isPlugin(value: unknown, categoryIds: Set<string>): value is RegistryPl
     && isStringMap(plugin.description)
     && typeof plugin.install === 'string'
     && typeof plugin.added === 'string'
-    && (plugin.stars === undefined || plugin.stars === null || typeof plugin.stars === 'number')
+    && (plugin.stars === undefined || plugin.stars === null || typeof plugin.stars === 'number'))) return false
+  try {
+    validatedInstallTarget(plugin as unknown as RegistryPlugin)
+    installExtraArgs(plugin as unknown as RegistryPlugin)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -107,6 +118,7 @@ export function parseGitHubSource(url: string): string | null {
 }
 
 const ID_SEGMENT = /^[A-Za-z0-9_.-]+$/
+const PACKAGE_NAME = /^(?:@[a-z0-9._-]+\/)?[A-Za-z0-9._-]+$/
 
 /**
  * The plugin's in-repo directory, taken from its id and cross-checked against
@@ -129,16 +141,45 @@ export function pluginSubPath(id: string, repository: string): string {
   return rest.join('/')
 }
 
-/**
- * Derive a pnpm package spec without trusting the registry's display command.
- * @param plugin - validated curated plugin.
- * @returns an immutable GitHub package spec.
- */
-export function installTarget(plugin: RegistryPlugin): string {
+/** Derive the immutable GitHub fallback without trusting display copy. */
+function githubInstallTarget(plugin: RegistryPlugin): string {
   const repository = parseGitHubSource(plugin.url)
   if (repository === null) throw new Error('unsupported plugin repository URL')
   const subPath = pluginSubPath(plugin.id, repository)
   return subPath === '' ? `github:${repository}` : `github:${repository}#path:${subPath}`
+}
+
+function validatedInstallTarget(plugin: RegistryPlugin): string {
+  const github = githubInstallTarget(plugin)
+  if (plugin.target !== undefined && typeof plugin.target !== 'string') {
+    throw new Error('install target must be a string')
+  }
+  const target = plugin.target ?? github
+  if (target.startsWith('github:')) {
+    const [targetRepository, targetPath = ''] = target.slice('github:'.length).split('#path:')
+    const [githubRepository, githubPath = ''] = github.slice('github:'.length).split('#path:')
+    if (targetRepository?.toLowerCase() !== githubRepository?.toLowerCase() || targetPath !== githubPath) {
+      throw new Error('install target does not match plugin source')
+    }
+    return target
+  }
+  if (!PACKAGE_NAME.test(target)) throw new Error('unsupported npm install target')
+  return target
+}
+
+/** Return the server-derived preferred target after constraining its grammar. */
+export function installTarget(plugin: RegistryPlugin): string {
+  return validatedInstallTarget(plugin)
+}
+
+/** Extra official CLI arguments needed by the preferred install method. */
+export function installExtraArgs(plugin: RegistryPlugin): string[] {
+  const allowance = plugin.allowBuild
+  if (allowance === undefined || allowance === null) return []
+  if (typeof allowance !== 'string') throw new Error('build allowance must be a string')
+  if (!PACKAGE_NAME.test(allowance)) throw new Error('unsupported build allowance')
+  if (!installTarget(plugin).startsWith('github:')) throw new Error('npm installs cannot request a source build allowance')
+  return [`--allow-build=${allowance}`]
 }
 
 /** Clear process-local registry state for deterministic tests. */

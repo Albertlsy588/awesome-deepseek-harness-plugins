@@ -369,9 +369,9 @@ function declaredEntryPoint(manifest: Record<string, unknown>): string | undefin
 /**
  * pnpm runs `prepare` after a git install and otherwise ships only committed
  * files, so a plugin whose entry point is a build artifact produced at
- * npm-publish time installs cleanly and then fails at startup. The better
- * outcome wins: a committed entry needs no build allowance from the user,
- * while `prepare` makes the first `dsh plugin add` fail until they grant one.
+ * npm-publish time installs cleanly and then fails at startup. A committed
+ * entry wins the loadability verdict; independently, any `prepare` script adds
+ * pnpm's `--allow-build=<package-name>` option to the generated install command.
  */
 function classifyGitInstall(
   manifest: Record<string, unknown>,

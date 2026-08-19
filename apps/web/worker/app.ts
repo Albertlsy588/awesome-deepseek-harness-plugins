@@ -19,7 +19,7 @@ import { contentEtag } from './lib/edge-cache'
 import {
   isPluginId,
   normalizePluginId,
-  pluginInstallCommand,
+  pluginInstallSpec,
   pluginRepositoryFullName,
   PLUGIN_ID_MAX_LENGTH,
 } from './lib/plugin-id'
@@ -539,17 +539,22 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       updated: snapshot.generatedAt,
       count: snapshot.plugins.length,
       categories: projectCategories(snapshot.categories),
-      plugins: snapshot.plugins.map((plugin) => ({
-        id: plugin.id,
-        name: plugin.name,
-        owner: plugin.owner,
-        url: plugin.url,
-        category: plugin.category,
-        description: plugin.description,
-        install: pluginInstallCommand(plugin.id),
-        added: plugin.added,
-        stars: plugin.stars,
-      })),
+      plugins: snapshot.plugins.map((plugin) => {
+        const preferred = plugin.installMethods?.[0]
+        return {
+          id: plugin.id,
+          name: plugin.name,
+          owner: plugin.owner,
+          url: plugin.url,
+          category: plugin.category,
+          description: plugin.description,
+          install: plugin.install,
+          target: preferred?.spec ?? pluginInstallSpec(plugin.id),
+          allowBuild: preferred?.buildPackage ?? null,
+          added: plugin.added,
+          stars: plugin.stars,
+        }
+      }),
     }
     const payload = JSON.stringify(registry)
     context.header('Cache-Control', REGISTRY_CACHE_HEADER)

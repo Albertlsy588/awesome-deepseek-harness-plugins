@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { installTarget, loadRegistry } from './registry.js';
+import { installExtraArgs, installTarget, loadRegistry } from './registry.js';
 import { runPluginCommand } from './shared/install-runner.js';
 import { reportInstallEvent } from './telemetry.js';
 import { checkForUpdate } from './update.js';
@@ -53,7 +53,7 @@ function pluginEventId(plugin) {
     return plugin.id.toLowerCase();
 }
 /** Run one plugin mutation through the shared async runner, tracking progress. */
-async function runTrackedPluginCommand(profile, action, target, progress) {
+async function runTrackedPluginCommand(profile, action, target, progress, extraArgs = []) {
     progress.active = true;
     progress.action = action;
     progress.target = target;
@@ -65,6 +65,7 @@ async function runTrackedPluginCommand(profile, action, target, progress) {
             action: action === 'install' ? 'add' : 'remove',
             profile,
             target,
+            extraArgs,
             stdio: 'capture',
             timeoutMs: COMMAND_TIMEOUT_MS,
             env: { ...process.env, CI: 'true' },
@@ -81,9 +82,9 @@ async function runTrackedPluginCommand(profile, action, target, progress) {
     }
 }
 /** Run one plugin mutation and report its outcome anonymously (fire-and-forget). */
-async function runReportedPluginCommand(profile, plugin, action, target, progress) {
+async function runReportedPluginCommand(profile, plugin, action, target, progress, extraArgs = []) {
     const startedAt = new Date();
-    const result = await runTrackedPluginCommand(profile, action, target, progress);
+    const result = await runTrackedPluginCommand(profile, action, target, progress, extraArgs);
     const completedAt = new Date();
     const succeeded = result.exitCode === 0 && !result.timedOut;
     void reportInstallEvent({
@@ -236,7 +237,7 @@ export function mountMarketRoutes(webServer, config) {
                     const target = installTarget(plugin);
                     mutating = true;
                     try {
-                        const result = await runReportedPluginCommand(config.profile, plugin, 'install', target, progress);
+                        const result = await runReportedPluginCommand(config.profile, plugin, 'install', target, progress, installExtraArgs(plugin));
                         const ok = result.exitCode === 0 && !result.timedOut;
                         sendJson(response, ok ? 200 : 502, {
                             ok,

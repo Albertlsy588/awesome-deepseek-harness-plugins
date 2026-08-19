@@ -120,6 +120,8 @@ Compact full-catalog registry for the `dsh1024` in-DSH marketplace plugin, the R
     "category": "tools",
     "description": { "en": "…", "zh": "…" },
     "install": "dsh plugin --profile web add github:owner/repository",
+    "target": "github:owner/repository",
+    "allowBuild": null,
     "added": "2026-08-15",
     "stars": 12
   }, {
@@ -130,6 +132,8 @@ Compact full-catalog registry for the `dsh1024` in-DSH marketplace plugin, the R
     "category": "tools",
     "description": { "en": "…", "zh": "…" },
     "install": "dsh plugin --profile web add github:owner/repository#path:packages/foo",
+    "target": "github:owner/repository#path:packages/foo",
+    "allowBuild": null,
     "added": "2026-08-16",
     "stars": 12
   }]
@@ -138,13 +142,18 @@ Compact full-catalog registry for the `dsh1024` in-DSH marketplace plugin, the R
 
 `stars` is `null` when unknown. A monorepo subpackage plugin's `id` carries the in-repo
 path, its `url` stays the repository-root URL, its `name` conventionally is the last id
-segment, and its `install` spec gains `#path:<sub/dir>`; repository-level GitHub metrics
+segment, and its GitHub source spec gains `#path:<sub/dir>`; repository-level GitHub metrics
 such as `stars` are shared by all plugins of the same repository. The registry is projected
-from the same KV snapshot as the other read endpoints. The `install` field always carries
-the official DeepSeek Harness CLI command in its bare form. The website derives the tracked
-wrapper command at the presentation layer and never stores it here; that command is the
-same official command under a different name
+from the same KV snapshot as the other read endpoints. The `install` field carries the
+preferred official DeepSeek Harness CLI command: a published npm package declaring
+`dsh.bundle` wins, otherwise it carries the GitHub source command. A source package with a
+`prepare` script includes `--allow-build=<package-name>` so its first install can build
+successfully. The website derives the tracked wrapper command at the presentation layer and
+never stores it here; that command is the same official command under a different name
 (`dsh1024 plugin --profile web add <spec>`, after a one-off `npm install -g dsh1024`).
+`target` and `allowBuild` are the separately validated structured values consumed by the
+in-DSH installer; it never executes the display command as shell text. Older registry clients
+that do not understand these fields continue to derive the GitHub fallback from `id` + `url`.
 
 ## POST /api/v1/install-events
 

@@ -432,6 +432,33 @@ describe('catalog snapshot', () => {
     })
     database.close()
   })
+
+  it('publishes npm as preferred and makes prepare source installs first-run safe', async () => {
+    const database = catalogDatabase()
+    seedRepository(database, { github_id: 13 })
+    seedPlugin(database, 'scan/repo', { validation_status: 'accepted' })
+    database.prepare(`
+      UPDATE catalog_plugins
+         SET package_name = '@scope/source-plugin',
+             git_code = 'prepare_builds_entry', git_has_prepare = 1,
+             npm_package_name = '@scope/published-plugin',
+             npm_bundle_declared = 1, npm_binding = 'mismatch', npm_version = '2.0.0'
+       WHERE normalized_plugin_id = 'scan/repo'
+    `).run()
+
+    const plugin = (await loadCatalogSnapshotFromD1(sqliteD1(database), NOW))?.plugins[0]
+
+    expect(plugin?.install).toBe('dsh plugin --profile web add @scope/published-plugin')
+    expect(plugin?.installMethods?.map((method) => method.kind)).toEqual(['npm', 'github'])
+    expect(plugin?.installMethods?.[0]).toMatchObject({
+      verification: 'verified',
+      code: 'published_package',
+    })
+    expect(plugin?.installMethods?.[1]?.command).toBe(
+      'dsh plugin --profile web add --allow-build=@scope/source-plugin github:Scan/Repo',
+    )
+    database.close()
+  })
 })
 
 describe('curated repository hydration', () => {

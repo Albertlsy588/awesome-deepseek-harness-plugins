@@ -30,14 +30,18 @@ describe('install method verdicts', () => {
 
   it('separates the build allowance from the verdict', () => {
     // A committed entry is verified whether or not a prepare script exists, but
-    // the allowance flag follows the prepare script alone: pnpm refuses to run
-    // it until the user allowlists the package, so the first add fails.
+    // the allowance flag follows the prepare script alone. The command supplies
+    // pnpm's build grant so the first add can run it successfully.
     const [committed] = deriveInstallMethods(
       'owner/repo',
-      { code: 'entry_committed', hasPrepare: true },
+      { code: 'entry_committed', hasPrepare: true, packageName: '@scope/plugin' },
       null,
     )
-    expect(committed).toMatchObject({ verification: 'verified', requiresBuildAllowance: true })
+    expect(committed).toMatchObject({
+      verification: 'verified',
+      requiresBuildAllowance: true,
+      command: 'dsh plugin --profile web add --allow-build=@scope/plugin github:owner/repo',
+    })
 
     const [plain] = deriveInstallMethods('owner/repo', { code: 'entry_committed', hasPrepare: false }, null)
     expect(plain).toMatchObject({ verification: 'verified', requiresBuildAllowance: false })
@@ -58,46 +62,76 @@ describe('install method verdicts', () => {
     })
   })
 
-  it('offers npm only when the package is tied to this plugin', () => {
+  it('recommends every published DSH npm package before the GitHub source', () => {
     const git = { code: 'entry_missing_no_prepare', hasPrepare: false } as const
 
-    const strict = deriveInstallMethods('owner/repo', git, {
-      packageName: '@scope/plugin', binding: 'strict', bundleDeclared: true, version: '1.2.3',
-    })
-    expect(strict).toHaveLength(2)
-    expect(strict[1]).toMatchObject({
-      kind: 'npm',
-      spec: '@scope/plugin',
-      command: 'dsh plugin --profile web add @scope/plugin',
-      verification: 'verified',
-      code: 'repository_backlink',
-      requiresBuildAllowance: false,
-      revision: '1.2.3',
-    })
-
-    // A name that exists on npm but does not point back here is shown, clearly
-    // unverified, so the author knows what to fix.
-    const nameOnly = deriveInstallMethods('owner/repo', git, {
-      packageName: 'plugin', binding: 'name_only', bundleDeclared: true,
-    })
-    expect(nameOnly[1]).toMatchObject({ verification: 'unverified', code: 'unlinked_package' })
-
-    // A package pointing at a different repository — or a different directory
-    // of the same monorepo — is somebody else's code. Withhold it entirely:
-    // printing that command would tell the user to install the wrong package.
-    for (const binding of ['mismatch', 'no_bundle', 'absent', 'unknown'] as const) {
+    // repository metadata is informational only. Registry presence plus a DSH
+    // bundle is enough whether the backlink matches, is missing, or disagrees.
+    for (const binding of ['strict', 'name_only', 'mismatch'] as const) {
       const methods = deriveInstallMethods('owner/repo', git, {
-        packageName: 'plugin', binding, bundleDeclared: binding !== 'no_bundle',
+        packageName: '@scope/plugin', binding, bundleDeclared: true, version: '1.2.3',
       })
-      expect(methods.map((m) => m.kind), binding).toEqual(['github'])
+      expect(methods.map((method) => method.kind), binding).toEqual(['npm', 'github'])
+      expect(methods[0]).toMatchObject({
+        kind: 'npm',
+        spec: '@scope/plugin',
+        command: 'dsh plugin --profile web add @scope/plugin',
+        verification: 'verified',
+        code: 'published_package',
+        requiresBuildAllowance: false,
+        revision: '1.2.3',
+      })
     }
 
-    // Declaring no DSH bundle is the same story: same name, not this plugin.
-    const noBundle = deriveInstallMethods('owner/repo', git, {
-      packageName: 'plugin', binding: 'strict', bundleDeclared: false,
-    })
-    expect(noBundle.map((m) => m.kind)).toEqual(['github'])
+    // A registry miss or a package without a DSH bundle is not an npm install
+    // method, regardless of its repository metadata.
+    for (const binding of ['no_bundle', 'absent', 'unknown'] as const) {
+      const methods = deriveInstallMethods('owner/repo', git, {
+        packageName: 'plugin', binding, bundleDeclared: false,
+      })
+      expect(methods.map((method) => method.kind), binding).toEqual(['github'])
+    }
     expect(deriveInstallMethods('owner/repo', git, GITHUB_ONLY).map((m) => m.kind)).toEqual(['github'])
+  })
+
+  it('regresses the scoped monorepo package that production previously hid', () => {
+    const id = 'zhu1090093659/dsh-web-ui/packages/dsh-community-plugins'
+    const published = {
+      repository: { url: 'https://github.com/zhu1090093659/dsh-web-ui.git' },
+      dsh: { bundle: { patch: './cordis.patch.yml' } },
+    }
+    const npmFacts = classifyNpmBinding(id, published)
+
+    // The package does not publish repository.directory, so the diagnostic
+    // backlink remains a mismatch. That must not hide a real DSH npm bundle.
+    expect(npmFacts).toEqual({ binding: 'mismatch', bundleDeclared: true })
+    const methods = deriveInstallMethods(
+      id,
+      {
+        code: 'prepare_builds_entry',
+        hasPrepare: true,
+        packageName: '@linxin666/dsh-client-ui-community-plugins',
+      },
+      {
+        packageName: '@linxin666/dsh-client-ui-community-plugins',
+        ...npmFacts,
+        version: '0.2.3',
+      },
+    )
+
+    expect(methods).toMatchObject([
+      {
+        kind: 'npm',
+        spec: '@linxin666/dsh-client-ui-community-plugins',
+        command: 'dsh plugin --profile web add @linxin666/dsh-client-ui-community-plugins',
+        verification: 'verified',
+      },
+      {
+        kind: 'github',
+        spec: 'github:zhu1090093659/dsh-web-ui#path:packages/dsh-community-plugins',
+        command: 'dsh plugin --profile web add --allow-build=@linxin666/dsh-client-ui-community-plugins github:zhu1090093659/dsh-web-ui#path:packages/dsh-community-plugins',
+      },
+    ])
   })
 })
 

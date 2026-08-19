@@ -30,7 +30,8 @@ export function InstallMethods({ methods, pluginId }: {
 
   return (
     <div className="install-methods">
-      {methods.map((method) => {
+      {methods.map((method, index) => {
+        const preferred = index === 0
         const label = method.verification === 'verified'
           ? t('installVerified')
           : method.verification === 'unverified'
@@ -58,14 +59,16 @@ export function InstallMethods({ methods, pluginId }: {
               )}
             </div>
             <div className="install-options">
-              <div className="install-option install-option-recommended">
-                <span className="install-option-badge">{t('recommendedInstall')}</span>
+              <div className={`install-option${preferred ? ' install-option-recommended' : ''}`}>
+                {preferred
+                  ? <span className="install-option-badge">{t('recommendedInstall')}</span>
+                  : <span className="install-option-label">{t('trackedCliCommand')}</span>}
                 <InstallCommand
-                  command={isSelf ? SELF_TRACKED_COMMAND : `dsh1024 plugin --profile web add ${method.spec}`}
-                  prominent
+                  command={isSelf ? SELF_TRACKED_COMMAND : method.command.replace(/^dsh\b/, 'dsh1024')}
+                  prominent={preferred}
                 />
-                <p className="install-benefits">{t('installBenefitsLine')}</p>
-                <p className="install-first-run">{t('installFirstRunHint')}</p>
+                {preferred && <p className="install-benefits">{t('installBenefitsLine')}</p>}
+                {preferred && <p className="install-first-run">{t('installFirstRunHint')}</p>}
               </div>
               <div className="install-option install-option-official">
                 <span className="install-option-label">{t('officialCliCommand')}</span>

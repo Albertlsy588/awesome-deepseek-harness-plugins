@@ -301,14 +301,16 @@ export function installSpec(plugin: Pick<RegistryPlugin, 'id'>): string {
   return pluginInstallSpec(plugin.id)
 }
 
-export function trackedInstallCommand(plugin: Pick<RegistryPlugin, 'id'>): string {
+type InstallCommandPlugin = Pick<RegistryPlugin, 'id'> & Partial<Pick<RegistryPlugin, 'install'>>
+
+export function trackedInstallCommand(plugin: InstallCommandPlugin): string {
   if (isSelfPlugin(plugin)) return SELF_TRACKED_COMMAND
-  return `dsh1024 plugin --profile web add ${installSpec(plugin)}`
+  return officialInstallCommand(plugin).replace(/^dsh\b/, 'dsh1024')
 }
 
-export function officialInstallCommand(plugin: Pick<RegistryPlugin, 'id'>): string {
+export function officialInstallCommand(plugin: InstallCommandPlugin): string {
   if (isSelfPlugin(plugin)) return SELF_OFFICIAL_COMMAND
-  return `dsh plugin --profile web add ${installSpec(plugin)}`
+  return plugin.install ?? `dsh plugin --profile web add ${installSpec(plugin)}`
 }
 
 

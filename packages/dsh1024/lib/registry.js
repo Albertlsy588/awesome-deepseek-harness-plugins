@@ -26,7 +26,7 @@ function isPlugin(value, categoryIds) {
     if (value === null || typeof value !== 'object' || Array.isArray(value))
         return false;
     const plugin = value;
-    return typeof plugin.id === 'string'
+    if (!(typeof plugin.id === 'string'
         && typeof plugin.name === 'string'
         && typeof plugin.owner === 'string'
         && typeof plugin.url === 'string'
@@ -36,7 +36,16 @@ function isPlugin(value, categoryIds) {
         && isStringMap(plugin.description)
         && typeof plugin.install === 'string'
         && typeof plugin.added === 'string'
-        && (plugin.stars === undefined || plugin.stars === null || typeof plugin.stars === 'number');
+        && (plugin.stars === undefined || plugin.stars === null || typeof plugin.stars === 'number')))
+        return false;
+    try {
+        validatedInstallTarget(plugin);
+        installExtraArgs(plugin);
+        return true;
+    }
+    catch {
+        return false;
+    }
 }
 /**
  * Validate untrusted registry JSON before it can become an installation allowlist.
@@ -75,6 +84,7 @@ export function parseGitHubSource(url) {
     return match?.[1] ?? null;
 }
 const ID_SEGMENT = /^[A-Za-z0-9_.-]+$/;
+const PACKAGE_NAME = /^(?:@[a-z0-9._-]+\/)?[A-Za-z0-9._-]+$/;
 /**
  * The plugin's in-repo directory, taken from its id and cross-checked against
  * the repository URL. A monorepo subpackage's id extends its repository with
@@ -96,17 +106,48 @@ export function pluginSubPath(id, repository) {
     }
     return rest.join('/');
 }
-/**
- * Derive a pnpm package spec without trusting the registry's display command.
- * @param plugin - validated curated plugin.
- * @returns an immutable GitHub package spec.
- */
-export function installTarget(plugin) {
+/** Derive the immutable GitHub fallback without trusting display copy. */
+function githubInstallTarget(plugin) {
     const repository = parseGitHubSource(plugin.url);
     if (repository === null)
         throw new Error('unsupported plugin repository URL');
     const subPath = pluginSubPath(plugin.id, repository);
     return subPath === '' ? `github:${repository}` : `github:${repository}#path:${subPath}`;
+}
+function validatedInstallTarget(plugin) {
+    const github = githubInstallTarget(plugin);
+    if (plugin.target !== undefined && typeof plugin.target !== 'string') {
+        throw new Error('install target must be a string');
+    }
+    const target = plugin.target ?? github;
+    if (target.startsWith('github:')) {
+        const [targetRepository, targetPath = ''] = target.slice('github:'.length).split('#path:');
+        const [githubRepository, githubPath = ''] = github.slice('github:'.length).split('#path:');
+        if (targetRepository?.toLowerCase() !== githubRepository?.toLowerCase() || targetPath !== githubPath) {
+            throw new Error('install target does not match plugin source');
+        }
+        return target;
+    }
+    if (!PACKAGE_NAME.test(target))
+        throw new Error('unsupported npm install target');
+    return target;
+}
+/** Return the server-derived preferred target after constraining its grammar. */
+export function installTarget(plugin) {
+    return validatedInstallTarget(plugin);
+}
+/** Extra official CLI arguments needed by the preferred install method. */
+export function installExtraArgs(plugin) {
+    const allowance = plugin.allowBuild;
+    if (allowance === undefined || allowance === null)
+        return [];
+    if (typeof allowance !== 'string')
+        throw new Error('build allowance must be a string');
+    if (!PACKAGE_NAME.test(allowance))
+        throw new Error('unsupported build allowance');
+    if (!installTarget(plugin).startsWith('github:'))
+        throw new Error('npm installs cannot request a source build allowance');
+    return [`--allow-build=${allowance}`];
 }
 /** Clear process-local registry state for deterministic tests. */
 export function clearRegistryCache() {

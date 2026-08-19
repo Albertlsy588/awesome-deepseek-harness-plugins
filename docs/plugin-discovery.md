@@ -34,6 +34,28 @@ Topic-only repositories are published after static validation and use the `uncla
 category until curated metadata is added. PR-only repositories remain published, so losing a
 topic never silently removes a maintainer-approved entry.
 
+## Install method inference
+
+Install methods are derived from facts collected by the scheduled discovery pipeline; the
+Worker does not install or execute third-party plugins. GitHub inspection records whether the
+declared entry point is committed and whether `prepare` exists. npm inspection fetches the
+latest manifest for the exact package name declared by the repository and records whether it
+declares `dsh.bundle`.
+
+- A published npm package whose latest manifest declares `dsh.bundle` is a verified method and
+  is recommended before GitHub source installation. Its `repository` field is diagnostic only:
+  a missing, stale, or different backlink does not change npm verification.
+- GitHub is always retained as the source method. A committed entry, a carrier package with no
+  declared entry, or an entry produced by `prepare` is statically considered loadable. Missing
+  build output without `prepare` is unverified; incomplete or failed inspection is unknown.
+- When `prepare` exists, the generated GitHub command includes pnpm's
+  `--allow-build=<package-name>` option. pnpm therefore grants and persists the permission while
+  completing the first install, instead of requiring a known-failing attempt followed by a
+  manual `pnpm-workspace.yaml` edit.
+
+“Verified” means the static evidence supports a loadable installation path. It is not a runtime
+test, compatibility guarantee, quality rating, or security review.
+
 ## Schedules and failure behavior
 
 - `7 * * * *` and `37 * * * *`: Cron Triggers dispatch incremental GitHub discovery every

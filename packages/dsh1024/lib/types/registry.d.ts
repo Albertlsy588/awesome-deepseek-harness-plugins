@@ -12,6 +12,10 @@ export interface RegistryPlugin {
     category: string;
     description: Record<string, string>;
     install: string;
+    /** Server-derived preferred package spec; absent on older registry responses. */
+    target?: string;
+    /** Package allowed to run a source-install build script. */
+    allowBuild?: string | null;
     added: string;
     stars?: number | null;
 }
@@ -45,12 +49,10 @@ export declare function parseGitHubSource(url: string): string | null;
  * @returns the subdirectory, or `''` for a repository-level plugin.
  */
 export declare function pluginSubPath(id: string, repository: string): string;
-/**
- * Derive a pnpm package spec without trusting the registry's display command.
- * @param plugin - validated curated plugin.
- * @returns an immutable GitHub package spec.
- */
+/** Return the server-derived preferred target after constraining its grammar. */
 export declare function installTarget(plugin: RegistryPlugin): string;
+/** Extra official CLI arguments needed by the preferred install method. */
+export declare function installExtraArgs(plugin: RegistryPlugin): string[];
 /** Clear process-local registry state for deterministic tests. */
 export declare function clearRegistryCache(): void;
 export interface LoadRegistryOptions {

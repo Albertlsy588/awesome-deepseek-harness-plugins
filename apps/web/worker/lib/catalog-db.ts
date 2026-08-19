@@ -61,6 +61,7 @@ interface CatalogRow {
   git_has_prepare: number
   git_head_sha: string | null
   git_checked_at: string | null
+  package_name: string | null
   npm_package_name: string | null
   npm_binding: string
   npm_bundle_declared: number
@@ -933,6 +934,7 @@ export async function loadCatalogSnapshotFromD1(
             p.curated_description_en, p.curated_description_zh, p.curated_added,
             p.ai_category, p.ai_description_en, p.ai_description_zh,
             p.git_code, p.git_has_prepare, p.git_head_sha, p.git_checked_at,
+            p.package_name,
             p.npm_package_name, p.npm_binding, p.npm_bundle_declared,
             p.npm_version, p.npm_checked_at
        FROM catalog_plugins p
@@ -957,6 +959,23 @@ export async function loadCatalogSnapshotFromD1(
     // manifest's directory, so a nested monorepo bundle yields the `#path:`
     // install spec pnpm needs instead of a broken repository-root one.
     const id = row.plugin_id
+    const installMethods = deriveInstallMethods(
+      id,
+      {
+        code: (row.git_code as GitInstallCode | null) ?? 'not_checked',
+        hasPrepare: row.git_has_prepare === 1,
+        packageName: row.package_name,
+        headSha: row.git_head_sha,
+        checkedAt: row.git_checked_at,
+      },
+      row.npm_package_name === null ? null : {
+        packageName: row.npm_package_name,
+        binding: row.npm_binding as NpmBinding,
+        bundleDeclared: row.npm_bundle_declared === 1,
+        version: row.npm_version,
+        checkedAt: row.npm_checked_at,
+      },
+    )
     return {
       ...emptyInstallMetrics(),
       id,
@@ -975,25 +994,10 @@ export async function loadCatalogSnapshotFromD1(
         en: row.curated_description_en ?? row.ai_description_en ?? description,
         zh: row.curated_description_zh ?? row.ai_description_zh ?? description,
       },
-      install: pluginInstallCommand(id),
+      install: installMethods[0]?.command ?? pluginInstallCommand(id),
       // Facts in, verdicts out: the badge is derived here rather than stored,
       // so changing how a fact is judged is a deploy, not a re-crawl.
-      installMethods: deriveInstallMethods(
-        id,
-        {
-          code: (row.git_code as GitInstallCode | null) ?? 'not_checked',
-          hasPrepare: row.git_has_prepare === 1,
-          headSha: row.git_head_sha,
-          checkedAt: row.git_checked_at,
-        },
-        row.npm_package_name === null ? null : {
-          packageName: row.npm_package_name,
-          binding: row.npm_binding as NpmBinding,
-          bundleDeclared: row.npm_bundle_declared === 1,
-          version: row.npm_version,
-          checkedAt: row.npm_checked_at,
-        },
-      ),
+      installMethods,
       added: row.curated_added ?? (row.github_updated_at ?? now).slice(0, 10),
       stars: row.stars,
       forks: row.forks,
