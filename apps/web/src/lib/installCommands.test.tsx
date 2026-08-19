@@ -27,6 +27,15 @@ describe('install command generation', () => {
     expect(trackedInstallCommand(plugin)).toBe('dsh1024 plugin --profile web add github:owner/plugin')
   })
 
+  it('uses the catalog preferred command when npm is available', () => {
+    const plugin = {
+      id: 'owner/plugin',
+      install: 'dsh plugin --profile web add @scope/plugin',
+    }
+    expect(officialInstallCommand(plugin)).toBe('dsh plugin --profile web add @scope/plugin')
+    expect(trackedInstallCommand(plugin)).toBe('dsh1024 plugin --profile web add @scope/plugin')
+  })
+
   it('gives sibling plugins distinct commands', () => {
     expect(installSpec({ id: 'owner/mono/packages/foo' }))
       .not.toBe(installSpec({ id: 'owner/mono/packages/bar' }))

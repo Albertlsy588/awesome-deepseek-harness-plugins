@@ -453,6 +453,18 @@ test('prefers a committed entry over a prepare script', () => {
   assert.equal(classifyGitInstall('package.json', {}, new Map()).code, 'no_entry_declared')
 })
 
+test('prepare advisory gives a first-run install command with build permission', () => {
+  const advisory = gitInstallAdvisory(
+    'prepare_builds_entry',
+    'lib/index.js',
+    true,
+    '@scope/plugin',
+  )
+  assert.match(advisory, /--allow-build=@scope\/plugin/)
+  assert.match(advisory, /first successful install/)
+  assert.doesNotMatch(advisory, /first .*fails/)
+})
+
 test('classifies a subdirectory bundle against its own directory', async () => {
   const tree = [
     { path: 'packages/foo/package.json', type: 'blob', sha: 'foo' },

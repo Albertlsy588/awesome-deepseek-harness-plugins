@@ -1,11 +1,10 @@
 /**
  * npm side of install verification.
  *
- * The catalog only recommends an npm package when it can be tied back to the
- * plugin's own source. A name that merely exists on the registry is not
- * evidence — anyone can publish `dsh-foo` — so the binding is checked against
- * the package's own `repository` field, which is the only claim the publisher
- * makes about where the code came from.
+ * A package found on npm is a verified install method when its latest manifest
+ * declares `dsh.bundle`. Repository metadata is collected for diagnostics but
+ * is not a verification rule: it may be absent or stale without changing the
+ * package name users actually install.
  */
 
 import { classifyNpmBinding, type NpmBinding } from './install-methods'
@@ -63,10 +62,9 @@ function text(value: unknown): string | null {
  * `304` and every poll pays for the full body. The root carries an ETag, so
  * passing the previous one as `If-None-Match` means npm returns `304` with an
  * empty body whenever nothing has published — which is almost always. The
- * abbreviated media type would be smaller still, but it drops `repository` from
- * each version, and `repository` is the whole basis of the binding check, so we
- * take the full packument and pay its (rare) 200 body. Scoped names must keep
- * their slash encoded.
+ * abbreviated media type would be smaller still, but it drops manifest fields
+ * used by catalog diagnostics, so we take the full packument and pay its (rare)
+ * 200 body. Scoped names must keep their slash encoded.
  *
  * @param id - the plugin id the package claims to belong to.
  * @param packageName - the name declared by the plugin's own manifest.

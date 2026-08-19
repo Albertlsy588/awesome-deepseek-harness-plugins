@@ -56,6 +56,35 @@ describe('probeNpmPackage', () => {
     expect((captured.init.headers as Record<string, string>)['If-None-Match']).toBeUndefined()
   })
 
+  it('keeps the slash encoded when probing a scoped package', async () => {
+    let capturedUrl = ''
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      capturedUrl = String(input)
+      return new Response(JSON.stringify(packument(
+        '0.2.3',
+        'https://github.com/zhu1090093659/dsh-web-ui.git',
+      )))
+    }) as unknown as typeof fetch
+
+    const result = await probeNpmPackage(
+      'zhu1090093659/dsh-web-ui/packages/dsh-community-plugins',
+      '@linxin666/dsh-client-ui-community-plugins',
+      null,
+      fetcher,
+    )
+
+    expect(capturedUrl).toBe(
+      'https://registry.npmjs.org/@linxin666%2fdsh-client-ui-community-plugins',
+    )
+    expect(result).toMatchObject({
+      status: 'found',
+      bundleDeclared: true,
+      // Missing repository.directory remains diagnostic only; the install
+      // verdict is exercised by install-methods.test.ts.
+      binding: 'mismatch',
+    })
+  })
+
   it('returns not_modified with no version on a 304', async () => {
     const fetcher = vi.fn(async () => new Response(null, { status: 304, headers: { etag: '"v210"' } })) as unknown as typeof fetch
 

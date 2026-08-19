@@ -32,7 +32,7 @@ export function runPluginCommand(options) {
     }
     return runOfficialCommand({
         ...options,
-        args: ['plugin', '--profile', profile, action, target, ...extraArgs],
+        args: ['plugin', '--profile', profile, action, ...extraArgs, target],
     });
 }
 /**

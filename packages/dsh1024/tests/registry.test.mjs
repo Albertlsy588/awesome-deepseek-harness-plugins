@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   clearRegistryCache,
+  installExtraArgs,
   installTarget,
   loadRegistry,
   parseGitHubSource,
@@ -21,6 +22,8 @@ const registry = {
     category: 'tools',
     description: { en: 'Plugin', zh: '插件' },
     install: 'dsh plugin --profile web add github:owner/repo',
+    target: 'github:owner/repo',
+    allowBuild: null,
     added: '2026-08-15',
     stars: 42,
   }],
@@ -92,8 +95,26 @@ test('install targets are derived from validated GitHub URLs', () => {
   assert.equal(installTarget(registry.plugins[0]), 'github:owner/repo')
 })
 
+test('a structured npm target is preferred without requiring a repository backlink', () => {
+  const plugin = {
+    ...registry.plugins[0],
+    install: 'dsh plugin --profile web add @scope/published-plugin',
+    target: '@scope/published-plugin',
+  }
+  assert.equal(installTarget(plugin), '@scope/published-plugin')
+  assert.deepEqual(installExtraArgs(plugin), [])
+})
+
+test('a source build grant is passed as a separate safe CLI argument', () => {
+  const plugin = { ...registry.plugins[0], allowBuild: '@scope/source-plugin' }
+  assert.equal(installTarget(plugin), 'github:owner/repo')
+  assert.deepEqual(installExtraArgs(plugin), ['--allow-build=@scope/source-plugin'])
+})
+
 test('a monorepo subpackage installs its own directory, not the repository root', () => {
-  const base = registry.plugins[0]
+  // Simulate an older compact response with no structured target: the client
+  // must still derive the path-aware GitHub fallback from id + URL.
+  const { target: _target, ...base } = registry.plugins[0]
   assert.equal(
     installTarget({ ...base, id: 'owner/repo/packages/foo' }),
     'github:owner/repo#path:packages/foo',
@@ -109,6 +130,20 @@ test('a monorepo subpackage installs its own directory, not the repository root'
 })
 
 test('invalid API data cannot extend the installation allowlist', () => {
+  assert.throws(
+    () => validateRegistry({
+      ...registry,
+      plugins: [{ ...registry.plugins[0], target: 'github:attacker/other' }],
+    }),
+    /invalid plugin/,
+  )
+  assert.throws(
+    () => validateRegistry({
+      ...registry,
+      plugins: [{ ...registry.plugins[0], allowBuild: 'plugin;unsafe' }],
+    }),
+    /invalid plugin/,
+  )
   assert.throws(
     () => validateRegistry({
       ...registry,

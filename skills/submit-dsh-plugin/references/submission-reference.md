@@ -29,6 +29,8 @@
 - `name` 默认取 `id` 的最后一段（两段 ID 即仓库名，子目录 ID 即子包目录名）。
 - 根据完整 `id` 生成文件名：每个 `/` 分隔的段转为全小写、把连续的非字母数字字符替换成 `-`，再用 `--` 连接。示例：`owner/repository` → `<owner>--<repository>.json`；`owner/repository/packages/foo` → `owner--repository--packages--foo.json`。文件平铺在 `catalog/plugins/` 下。
 - 目录由 `id` 推导安装规格：两段 ID 安装为 `github:owner/repository`，子目录 ID 安装为 `github:owner/repository#path:sub/dir`，因此子目录 ID 的路径必须恰好指向声明 `dsh.bundle.patch` 的 `package.json` 所在目录。
+- 网站会探测该 manifest 声明的 npm 包名。latest npm manifest 存在且声明 `dsh.bundle` 时，npm 安装方式标为“已验证”并排在 GitHub 源码安装之前；npm manifest 的 `repository` 字段缺失或与目录仓库不一致均不影响验证。
+- GitHub 源码包声明 `prepare` 时，展示命令必须包含 `--allow-build=<package-name>`，由 pnpm 在首次安装时授权、执行构建并持久化授权，不能展示一个已知会先失败的普通 `add` 命令。
 - 保持 `description.en` 和 `description.zh` 客观、中性且具体。
 - 避免最高级、号召性语言、排名、Star 数量以及仓库证据无法支持的宣传。
 - `added` 使用提交日期。

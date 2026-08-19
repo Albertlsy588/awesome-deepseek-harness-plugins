@@ -4,8 +4,8 @@
  * A plugin may be installable from GitHub, from npm, or both. Verification is a
  * LABEL, never an admission test: every plugin stays in the catalog regardless
  * of what this module concludes. The catalog stores observed *facts* (is the
- * entry point committed, does a prepare script exist, does npm point back at
- * this repository) and this module derives the *verdicts* from them, so a
+ * entry point committed, does a prepare script exist, was a DSH bundle found
+ * on npm) and this module derives the *verdicts* from them, so a
  * change of judgement costs a deploy rather than a re-crawl of every plugin.
  *
  * Must stay aligned with the classifier in scripts/review-plugin-submission.mjs,
@@ -36,9 +36,9 @@ export type GitInstallCode =
   | 'repository_unreachable'
   | 'not_checked'
 
-export type NpmInstallCode = 'repository_backlink' | 'unlinked_package'
+export type NpmInstallCode = 'published_package'
 
-/** How firmly a published npm package is tied back to the plugin's source. */
+/** Diagnostic comparison between npm repository metadata and catalog source. */
 export type NpmBinding = 'strict' | 'name_only' | 'mismatch' | 'no_bundle' | 'absent' | 'unknown'
 
 export interface PluginInstallMethod {
@@ -50,12 +50,13 @@ export interface PluginInstallMethod {
   verification: InstallVerification
   code: GitInstallCode | NpmInstallCode
   /**
-   * pnpm >= 10 refuses to run a git dependency's `prepare` until the user
-   * allowlists it, so the first `add` fails. Driven by the presence of a
-   * prepare script alone — a package can have both a committed entry point and
-   * a prepare script.
+   * pnpm >= 10 refuses to run a git dependency's `prepare` unless the package
+   * is allowlisted. The generated command includes pnpm's `--allow-build`
+   * option, so installation succeeds on the first run and persists the grant.
    */
   requiresBuildAllowance: boolean
+  /** Package name passed to pnpm's `--allow-build`, when needed. */
+  buildPackage?: string | null
   /** npm version, or the short default-branch sha the git facts came from. */
   revision: string | null
   checkedAt: string | null
@@ -98,6 +99,8 @@ export function gitVerification(code: GitInstallCode): InstallVerification {
 export interface GitInstallFacts {
   code: GitInstallCode
   hasPrepare: boolean
+  /** Package name pnpm uses as the `allowBuilds` key. */
+  packageName?: string | null
   headSha?: string | null
   checkedAt?: string | null
 }
@@ -111,19 +114,26 @@ export interface NpmInstallFacts {
   checkedAt?: string | null
 }
 
-function command(spec: string): string {
-  return `dsh plugin --profile web add ${spec}`
+function shellWord(value: string): string {
+  return /^[A-Za-z0-9@/._-]+$/.test(value)
+    ? value
+    : `'${value.replace(/'/g, `'"'"'`)}'`
+}
+
+function command(spec: string, buildPackage?: string | null): string {
+  const allowance = buildPackage ? ` --allow-build=${shellWord(buildPackage)}` : ''
+  return `dsh plugin --profile web add${allowance} ${spec}`
 }
 
 /**
  * Derives the install methods shown for a plugin. Pure: no I/O, so the rules
  * can be exercised exhaustively in tests and changed without a re-crawl.
  *
- * An npm method is emitted only when the published package declares a DSH
- * bundle AND its name is at least tied to this plugin. A package whose
- * `repository` points somewhere else — or at a different directory of the same
- * monorepo — is somebody else's code that merely shares a name, so it is
- * withheld entirely rather than shown as unverified.
+ * An npm method is emitted when the registry's latest package declares a DSH
+ * bundle. Its repository metadata is retained as a diagnostic fact but is not
+ * an installability rule: npm package names are the installation identity.
+ * Published npm is preferred because it is prebuilt and avoids git lifecycle
+ * builds; GitHub remains the source-install fallback.
  */
 export function deriveInstallMethods(
   id: string,
@@ -132,31 +142,32 @@ export function deriveInstallMethods(
 ): PluginInstallMethod[] {
   const methods: PluginInstallMethod[] = []
 
-  const gitSpec = pluginInstallSpec(id)
-  methods.push({
-    kind: 'github',
-    spec: gitSpec,
-    command: command(gitSpec),
-    verification: gitVerification(git.code),
-    code: git.code,
-    requiresBuildAllowance: git.hasPrepare,
-    revision: git.headSha ?? null,
-    checkedAt: git.checkedAt ?? null,
-  })
-
-  if (npm?.packageName && npm.bundleDeclared && (npm.binding === 'strict' || npm.binding === 'name_only')) {
-    const strict = npm.binding === 'strict'
+  if (npm?.packageName && npm.bundleDeclared) {
     methods.push({
       kind: 'npm',
       spec: npm.packageName,
       command: command(npm.packageName),
-      verification: strict ? 'verified' : 'unverified',
-      code: strict ? 'repository_backlink' : 'unlinked_package',
+      verification: 'verified',
+      code: 'published_package',
       requiresBuildAllowance: false,
+      buildPackage: null,
       revision: npm.version ?? null,
       checkedAt: npm.checkedAt ?? null,
     })
   }
+
+  const gitSpec = pluginInstallSpec(id)
+  methods.push({
+    kind: 'github',
+    spec: gitSpec,
+    command: command(gitSpec, git.hasPrepare ? git.packageName : null),
+    verification: gitVerification(git.code),
+    code: git.code,
+    requiresBuildAllowance: git.hasPrepare,
+    buildPackage: git.hasPrepare ? git.packageName ?? null : null,
+    revision: git.headSha ?? null,
+    checkedAt: git.checkedAt ?? null,
+  })
 
   return methods
 }
@@ -168,12 +179,13 @@ function normalizeGitHubUrl(url: string | null | undefined): string | null {
 }
 
 /**
- * How firmly an npm package is bound to this plugin's source.
+ * How closely an npm package's metadata points back to this plugin's source.
  *
  * `repository.directory` is npm's own field for "this package lives in that
- * subdirectory of that repository", so for a monorepo subpackage it must match
- * the plugin's path exactly — git paths are case-sensitive. Anything weaker is
- * a name that happens to be taken, which is not evidence of anything.
+ * subdirectory of that repository". This is retained for catalog diagnostics.
+ * It no longer controls npm method
+ * visibility or verification: a published package with `dsh.bundle` is a
+ * verified npm install method even when repository metadata is absent or stale.
  */
 export function classifyNpmBinding(
   id: string,

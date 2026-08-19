@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { installTarget, loadRegistry, parseGitHubSource } from './registry.ts'
+import { installExtraArgs, installTarget, loadRegistry, parseGitHubSource } from './registry.ts'
 import type { RegistryPlugin } from './registry.ts'
 import { runPluginCommand } from './shared/install-runner.ts'
 import type { InstallInvocation } from './shared/install-runner.ts'
@@ -101,6 +101,7 @@ async function runTrackedPluginCommand(
   action: 'install' | 'uninstall',
   target: string,
   progress: Progress,
+  extraArgs: string[] = [],
 ): Promise<CommandResult> {
   progress.active = true
   progress.action = action
@@ -113,6 +114,7 @@ async function runTrackedPluginCommand(
       action: action === 'install' ? 'add' : 'remove',
       profile,
       target,
+      extraArgs,
       stdio: 'capture',
       timeoutMs: COMMAND_TIMEOUT_MS,
       env: { ...process.env, CI: 'true' },
@@ -135,9 +137,10 @@ async function runReportedPluginCommand(
   action: 'install' | 'uninstall',
   target: string,
   progress: Progress,
+  extraArgs: string[] = [],
 ): Promise<CommandResult> {
   const startedAt = new Date()
-  const result = await runTrackedPluginCommand(profile, action, target, progress)
+  const result = await runTrackedPluginCommand(profile, action, target, progress, extraArgs)
   const completedAt = new Date()
   const succeeded = result.exitCode === 0 && !result.timedOut
   void reportInstallEvent({
@@ -282,7 +285,14 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
           const target = installTarget(plugin)
           mutating = true
           try {
-            const result = await runReportedPluginCommand(config.profile, plugin, 'install', target, progress)
+            const result = await runReportedPluginCommand(
+              config.profile,
+              plugin,
+              'install',
+              target,
+              progress,
+              installExtraArgs(plugin),
+            )
             const ok = result.exitCode === 0 && !result.timedOut
             sendJson(response, ok ? 200 : 502, {
               ok,

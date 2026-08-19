@@ -462,8 +462,39 @@ describe('market API', () => {
       category: 'ui',
       description: TEST_PLUGINS[0]!.description,
       install: 'dsh plugin --profile web add github:openma-ai/deepseek-harness-tui',
+      target: 'github:openma-ai/deepseek-harness-tui',
+      allowBuild: null,
       added: '2026-08-14',
       stars: 42,
+    })
+  })
+
+  it('projects a structured npm preference for the in-app installer', async () => {
+    const result = testCatalogResult()
+    result.snapshot.plugins[0] = {
+      ...result.snapshot.plugins[0]!,
+      install: 'dsh plugin --profile web add @scope/published-plugin',
+      installMethods: [{
+        kind: 'npm',
+        spec: '@scope/published-plugin',
+        command: 'dsh plugin --profile web add @scope/published-plugin',
+        verification: 'verified',
+        code: 'published_package',
+        requiresBuildAllowance: false,
+        buildPackage: null,
+        revision: '1.0.0',
+        checkedAt: null,
+      }],
+    }
+    const app = createApp({ catalogLoader: vi.fn(async () => result) })
+
+    const response = await app.request('/api/v1/registry')
+    const body = (await response.json()) as { plugins: Array<Record<string, unknown>> }
+
+    expect(body.plugins[0]).toMatchObject({
+      install: 'dsh plugin --profile web add @scope/published-plugin',
+      target: '@scope/published-plugin',
+      allowBuild: null,
     })
   })
 

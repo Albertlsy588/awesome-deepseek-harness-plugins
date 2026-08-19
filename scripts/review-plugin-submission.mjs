@@ -76,8 +76,9 @@ export function declaredEntryPoint(manifest) {
  * its own crawl (apps/web/worker/lib/install-methods.ts); the two must agree,
  * or the pull-request advisory contradicts the published badge.
  *
- * The better outcome wins: a committed entry beats a prepare script, because a
- * committed entry needs no build allowance from the user.
+ * A committed entry wins the loadability verdict, while the presence of a
+ * prepare script independently determines whether the install command needs
+ * pnpm's `--allow-build` option.
  *
  * @returns `{ code, entryPoint, requiresBuildAllowance }`; never throws.
  */
@@ -105,15 +106,14 @@ export function classifyGitInstall(packagePath, manifest, files) {
 }
 
 /** The author-facing advisory for a classification, or undefined when clean. */
-export function gitInstallAdvisory(code, entryPoint, requiresBuildAllowance) {
+export function gitInstallAdvisory(code, entryPoint, requiresBuildAllowance, packageName) {
   const lines = []
   if (code === 'entry_missing_no_prepare') {
     lines.push(
       `The GitHub install method will be published as UNVERIFIED: the entry point ${entryPoint} is not committed `
       + 'and the package has no prepare script, so `dsh plugin add github:…` installs cleanly and then fails at '
       + 'startup with ERR_MODULE_NOT_FOUND. Your plugin is catalogued either way. To clear the label, commit the '
-      + 'built entry point, add a self-contained prepare script, or publish to npm with repository.url and '
-      + 'repository.directory pointing back here.',
+      + 'built entry point, add a self-contained prepare script, or publish a package with `dsh.bundle` to npm.',
     )
   }
   if (code === 'entry_outside_repository') {
@@ -124,9 +124,9 @@ export function gitInstallAdvisory(code, entryPoint, requiresBuildAllowance) {
   }
   if (requiresBuildAllowance) {
     lines.push(
-      'This package builds on install, so the first `dsh plugin add` fails until the user allowlists it — pnpm '
-      + 'prints the exact key to copy into the profile\'s pnpm-workspace.yaml. Publishing prebuilt code to npm '
-      + 'avoids asking users for that permission.',
+      packageName
+        ? `This package builds on source install. Use \`dsh plugin --profile web add --allow-build=${packageName} github:…\`; pnpm grants and persists the build permission during that first successful install. Publishing prebuilt code to npm avoids the source build.`
+        : 'This package builds on source install. The install command must pass pnpm’s `--allow-build=<package-name>` option so the first install can run the build script successfully.',
     )
   }
   return lines.length === 0 ? undefined : lines.join('\n\n')
@@ -450,7 +450,7 @@ async function main() {
         `PASS ${entry.id}: ${result.packagePath} -> ${result.patchPath}`
         + ` [git-install: ${code}${requiresBuildAllowance ? ', requires build allowance' : ''}]`,
       )
-      const advisory = gitInstallAdvisory(code, entryPoint, requiresBuildAllowance)
+      const advisory = gitInstallAdvisory(code, entryPoint, requiresBuildAllowance, result.packageName)
       if (advisory !== undefined) advisories.push(`**${entry.id}** — ${advisory}`)
     }
     for (const target of submission.deletions) {
