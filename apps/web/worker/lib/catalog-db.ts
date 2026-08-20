@@ -980,11 +980,16 @@ export async function loadCatalogSnapshotFromD1(
         checkedAt: row.npm_checked_at,
       },
     )
+    // Download counts belong to the published npm package, not to every fork
+    // or vendored copy that happens to declare the same package name. A
+    // repository mismatch remains useful for install diagnostics, but it must
+    // never turn the original package's popularity into the fork's metric.
+    const ownsNpmDownloads = row.npm_binding !== 'mismatch'
     return {
       ...emptyInstallMetrics(),
-      npmDownloads7d: row.npm_downloads_7d,
-      npmDownloadsStart: row.npm_downloads_start,
-      npmDownloadsEnd: row.npm_downloads_end,
+      npmDownloads7d: ownsNpmDownloads ? row.npm_downloads_7d : null,
+      npmDownloadsStart: ownsNpmDownloads ? row.npm_downloads_start : null,
+      npmDownloadsEnd: ownsNpmDownloads ? row.npm_downloads_end : null,
       id,
       // A monorepo's packages share one repository name, so falling back to it
       // published a dozen identically-named plugins whose only difference was
@@ -1039,6 +1044,7 @@ export interface NpmProbeCandidate {
   // would otherwise be rewritten every sweep).
   currentStatus: string
   npmPackageName: string | null
+  npmBinding: NpmBinding
   bundleDeclared: boolean
   downloadsCheckedAt: string | null
 }
@@ -1046,12 +1052,13 @@ export interface NpmProbeCandidate {
 export type NpmDownloadRecord =
   | {
       pluginId: string
+      packageName: string
       status: 'found'
       downloads: number
       start: string
       end: string
     }
-  | { pluginId: string; status: 'error' }
+  | { pluginId: string; packageName: string; status: 'error' }
 
 /** Stores successes and timestamps failures without erasing the last good count. */
 export async function saveNpmDownloadResults(
@@ -1066,16 +1073,22 @@ export async function saveNpmDownloadResults(
         `UPDATE catalog_plugins
             SET npm_downloads_7d = ?, npm_downloads_start = ?, npm_downloads_end = ?,
                 npm_downloads_status = 'found', npm_downloads_checked_at = ?, updated_at = ?
-          WHERE normalized_plugin_id = ?`,
+          WHERE normalized_plugin_id = ?
+            AND npm_package_name = ?
+            AND npm_bundle_declared = 1
+            AND npm_binding <> 'mismatch'`,
       ).bind(
         record.downloads, record.start, record.end,
-        checkedAt, checkedAt, normalizePluginId(record.pluginId),
+        checkedAt, checkedAt, normalizePluginId(record.pluginId), record.packageName,
       )
       : db.prepare(
         `UPDATE catalog_plugins
             SET npm_downloads_status = 'error', npm_downloads_checked_at = ?, updated_at = ?
-          WHERE normalized_plugin_id = ?`,
-      ).bind(checkedAt, checkedAt, normalizePluginId(record.pluginId))))
+          WHERE normalized_plugin_id = ?
+            AND npm_package_name = ?
+            AND npm_bundle_declared = 1
+            AND npm_binding <> 'mismatch'`,
+      ).bind(checkedAt, checkedAt, normalizePluginId(record.pluginId), record.packageName)))
   }
 }
 
@@ -1091,6 +1104,7 @@ interface NpmProbeCandidateRow {
   npm_status: string
   normalized_plugin_id: string
   npm_package_name: string | null
+  npm_binding: NpmBinding
   npm_bundle_declared: number
   npm_downloads_checked_at: string | null
 }
@@ -1103,6 +1117,7 @@ function toNpmProbeCandidate(row: NpmProbeCandidateRow): NpmProbeCandidate {
     normalizedId: row.normalized_plugin_id,
     currentStatus: row.npm_status,
     npmPackageName: row.npm_package_name,
+    npmBinding: row.npm_binding,
     bundleDeclared: row.npm_bundle_declared === 1,
     downloadsCheckedAt: row.npm_downloads_checked_at,
   }
@@ -1119,7 +1134,7 @@ export async function loadNpmPendingProbes(
   limit = 200,
 ): Promise<NpmProbeCandidate[]> {
   const result = await db.prepare(
-    `SELECT p.plugin_id, p.package_name, p.npm_package_name, p.npm_etag, p.npm_status, p.normalized_plugin_id,
+    `SELECT p.plugin_id, p.package_name, p.npm_package_name, p.npm_binding, p.npm_etag, p.npm_status, p.normalized_plugin_id,
             p.npm_bundle_declared, p.npm_downloads_checked_at
        FROM catalog_plugins p
        JOIN catalog_repositories r ON r.id = p.repository_id
@@ -1148,7 +1163,7 @@ export async function loadNpmSweepBatch(
   cursor = '',
 ): Promise<NpmProbeCandidate[]> {
   const result = await db.prepare(
-    `SELECT p.plugin_id, p.package_name, p.npm_package_name, p.npm_etag, p.npm_status, p.normalized_plugin_id,
+    `SELECT p.plugin_id, p.package_name, p.npm_package_name, p.npm_binding, p.npm_etag, p.npm_status, p.normalized_plugin_id,
             p.npm_bundle_declared, p.npm_downloads_checked_at
        FROM catalog_plugins p
        JOIN catalog_repositories r ON r.id = p.repository_id
@@ -1216,23 +1231,28 @@ export async function saveNpmProbes(
           now, now, normalizePluginId(probe.pluginId),
         )
       }
+      const downloadsEligible = probe.bundleDeclared && probe.binding !== 'mismatch' ? 1 : 0
       return db.prepare(
         `UPDATE catalog_plugins
             SET npm_package_name = ?, npm_status = ?, npm_http_status = ?,
                 npm_version = ?, npm_repository_url = ?, npm_repository_directory = ?,
                 npm_bundle_declared = ?, npm_binding = ?, npm_etag = ?,
-                npm_downloads_7d = CASE WHEN npm_package_name = ? THEN npm_downloads_7d ELSE NULL END,
-                npm_downloads_start = CASE WHEN npm_package_name = ? THEN npm_downloads_start ELSE NULL END,
-                npm_downloads_end = CASE WHEN npm_package_name = ? THEN npm_downloads_end ELSE NULL END,
-                npm_downloads_status = CASE WHEN npm_package_name = ? THEN npm_downloads_status ELSE 'pending' END,
-                npm_downloads_checked_at = CASE WHEN npm_package_name = ? THEN npm_downloads_checked_at ELSE NULL END,
+                npm_downloads_7d = CASE WHEN npm_package_name = ? AND ? = 1 THEN npm_downloads_7d ELSE NULL END,
+                npm_downloads_start = CASE WHEN npm_package_name = ? AND ? = 1 THEN npm_downloads_start ELSE NULL END,
+                npm_downloads_end = CASE WHEN npm_package_name = ? AND ? = 1 THEN npm_downloads_end ELSE NULL END,
+                npm_downloads_status = CASE WHEN npm_package_name = ? AND ? = 1 THEN npm_downloads_status ELSE 'pending' END,
+                npm_downloads_checked_at = CASE WHEN npm_package_name = ? AND ? = 1 THEN npm_downloads_checked_at ELSE NULL END,
                 npm_checked_at = ?, updated_at = ?
           WHERE normalized_plugin_id = ?`,
       ).bind(
         probe.packageName, probe.status, probe.httpStatus,
         probe.version, probe.repositoryUrl, probe.repositoryDirectory,
         probe.bundleDeclared ? 1 : 0, probe.binding, probe.etag,
-        probe.packageName, probe.packageName, probe.packageName, probe.packageName, probe.packageName,
+        probe.packageName, downloadsEligible,
+        probe.packageName, downloadsEligible,
+        probe.packageName, downloadsEligible,
+        probe.packageName, downloadsEligible,
+        probe.packageName, downloadsEligible,
         now, now, normalizePluginId(probe.pluginId),
       )
     }))

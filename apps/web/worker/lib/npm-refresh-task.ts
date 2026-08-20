@@ -118,9 +118,14 @@ export async function runNpmRefreshTask(
         : probe.status === 'not_modified'
           ? candidate.bundleDeclared
           : false
+      const binding = probe.status === 'found'
+        ? probe.binding
+        : probe.status === 'not_modified'
+          ? candidate.npmBinding
+          : 'unknown'
       const stale = candidate.npmPackageName !== candidate.packageName ||
         candidate.downloadsCheckedAt === null || candidate.downloadsCheckedAt < downloadsStaleBefore
-      if (!bundleDeclared || !stale) return false
+      if (!bundleDeclared || binding === 'mismatch' || !stale) return false
       downloadsRemaining -= 1
       return true
     })
@@ -137,6 +142,7 @@ export async function runNpmRefreshTask(
           result.downloadsUpdated += 1
           downloadWrites.push({
             pluginId: candidate.pluginId,
+            packageName: candidate.packageName,
             status: 'found',
             downloads: download.downloads,
             start: download.start,
@@ -144,7 +150,11 @@ export async function runNpmRefreshTask(
           })
         } else {
           result.downloadErrors += 1
-          downloadWrites.push({ pluginId: candidate.pluginId, status: 'error' })
+          downloadWrites.push({
+            pluginId: candidate.pluginId,
+            packageName: candidate.packageName,
+            status: 'error',
+          })
         }
       }
       // 304: nothing published since last ETag — record nothing.

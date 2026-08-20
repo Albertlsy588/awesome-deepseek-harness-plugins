@@ -368,10 +368,21 @@ export function buildRankingsResponse(result: CatalogSnapshotResult): RankingsRe
  */
 export function buildRankingsV3Response(result: CatalogSnapshotResult): RankingsResponseV3 {
   const response = buildRankingsResponse(result)
+  const seenPackages = new Set<string>()
   const npmDownloads7d = ranked(
     [...result.snapshot.plugins]
       .filter((plugin) => (plugin.npmDownloads7d ?? 0) > 0)
-      .sort(comparePlugins('npmDownloads7d')),
+      .sort(comparePlugins('npmDownloads7d'))
+      .filter((plugin) => {
+        const npmMethod = plugin.installMethods?.find((method) => (
+          method.kind === 'npm' && method.verification === 'verified'
+        ))
+        if (!npmMethod) return false
+        const packageKey = npmMethod.spec.trim().toLocaleLowerCase('en-US')
+        if (!packageKey || seenPackages.has(packageKey)) return false
+        seenPackages.add(packageKey)
+        return true
+      }),
   ).map(withoutInstallMethods)
 
   return {
