@@ -295,13 +295,6 @@ export function PackagePage() {
         </div>
       </section>
 
-      {githubLoading && (
-        <div className="github-detail-status" role="status">
-          <RefreshCw size={15} aria-hidden="true" />
-          {t('githubDetailsLoading')}
-        </div>
-      )}
-
       {githubUnavailable && (
         <div className="notice github-detail-notice" role="status" title={githubError ?? undefined}>
           <AlertTriangle size={20} aria-hidden="true" />

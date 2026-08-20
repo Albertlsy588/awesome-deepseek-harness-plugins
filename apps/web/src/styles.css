@@ -2149,30 +2149,6 @@ main {
   line-height: 1.65;
 }
 
-.github-detail-status {
-  display: flex;
-  min-height: 38px;
-  align-items: center;
-  gap: 8px;
-  margin: -12px 0 18px 88px;
-  color: var(--subtle);
-  font-size: 12px;
-}
-
-.github-detail-status svg {
-  animation: github-detail-spin 1.5s linear infinite;
-}
-
-@keyframes github-detail-spin {
-  to { transform: rotate(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .github-detail-status svg {
-    animation: none;
-  }
-}
-
 .github-detail-notice {
   align-items: center;
   margin: -8px 0 18px;
@@ -2881,14 +2857,12 @@ main {
   }
 
   .category-filter {
-    flex-wrap: nowrap;
-    gap: 6px;
-    margin-right: -12px;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    padding: 2px 12px 7px 0;
-    scrollbar-width: none;
-    touch-action: pan-x;
+    flex-wrap: wrap;
+    gap: 8px 6px;
+    margin-right: 0;
+    overflow-x: visible;
+    padding: 2px 0;
+    touch-action: auto;
   }
 
   .category-filter::-webkit-scrollbar,
@@ -2941,6 +2915,24 @@ main {
     overscroll-behavior-inline: contain;
     scrollbar-width: none;
     touch-action: pan-x;
+  }
+
+  /* Directory filters are primary mobile controls, so keep every option in
+     view instead of hiding the tail behind a horizontal gesture. */
+  .sort-segments {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 2px;
+    overflow-x: visible;
+    border-radius: 14px;
+    scrollbar-width: auto;
+    touch-action: auto;
+  }
+
+  .sort-segments button {
+    min-width: 0;
+    flex: 1 1 calc(33.333% - 2px);
   }
 
   .segmented-control button {
@@ -3117,12 +3109,6 @@ main {
 
   .detail-description {
     font-size: 15px;
-  }
-
-  .github-detail-status {
-    min-height: 44px;
-    margin: -10px 0 14px;
-    font-size: 13px;
   }
 
   .github-detail-notice {

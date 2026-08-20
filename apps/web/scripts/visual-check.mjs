@@ -217,6 +217,28 @@ async function assertHorizontalTouchScroller(page, label, selector, { requireOve
   }
 }
 
+async function assertWrappedControls(page, label, selector) {
+  const result = await page.locator(selector).evaluate((node) => {
+    const rows = new Set(
+      [...node.querySelectorAll('button')]
+        .filter((button) => button.getClientRects().length > 0)
+        .map((button) => Math.round(button.getBoundingClientRect().top)),
+    )
+    return {
+      rows: rows.size,
+      clientWidth: node.clientWidth,
+      scrollWidth: node.scrollWidth,
+      flexWrap: getComputedStyle(node).flexWrap,
+    }
+  })
+  if (result.flexWrap !== 'wrap' || result.rows < 2) {
+    throw new Error(`${label} does not wrap onto multiple rows: ${JSON.stringify(result)}`)
+  }
+  if (result.scrollWidth > result.clientWidth + 1) {
+    throw new Error(`${label} still requires horizontal scrolling: ${JSON.stringify(result)}`)
+  }
+}
+
 // Install commands must stay fully readable: they wrap onto a second line
 // instead of hiding their tail behind an inner horizontal scrollbar.
 async function assertInstallCommandsReadable(page, label, scope) {
@@ -718,15 +740,8 @@ try {
   await assertMinFontSize(mobile, 'mobile package metrics', '.row-metrics > span', 11)
   await assertMinFontSize(mobile, 'mobile hero description', '.hero-heading > p:last-child', 14)
   await assertMinFontSize(mobile, 'mobile hero tally label', '.hero-tally-label', 11)
-  await assertHorizontalTouchScroller(mobile, 'mobile category filters', '.category-filter')
-  await assertHorizontalTouchScroller(
-    mobile,
-    'mobile directory sort modes',
-    '.sort-segments',
-    // The shorter npm榜 label lets all five modes fit at 390px; narrower
-    // phones still use this same one-line scroller instead of wrapping.
-    { requireOverflow: false },
-  )
+  await assertWrappedControls(mobile, 'mobile category filters', '.category-filter')
+  await assertWrappedControls(mobile, 'mobile directory sort modes', '.sort-segments')
 
   await mobile.locator('.category-filter button').nth(1).click()
   await mobile.waitForURL((url) => url.searchParams.has('category'))
@@ -948,11 +963,7 @@ try {
 
   const compactDirectory = await openPage({ width: 320, height: 568 }, '/plugins', { touch: true })
   await compactDirectory.locator('.directory-section .package-list').waitFor()
-  await assertHorizontalTouchScroller(
-    compactDirectory,
-    'compact directory sort modes',
-    '.sort-segments',
-  )
+  await assertWrappedControls(compactDirectory, 'compact directory sort modes', '.sort-segments')
   await assertNoHorizontalOverflow(compactDirectory, 'compact mobile directory')
   await compactDirectory.close()
 
