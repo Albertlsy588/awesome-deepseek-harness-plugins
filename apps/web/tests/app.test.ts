@@ -980,3 +980,17 @@ describe('v2 endpoints', () => {
     expect(body.siblingsByRepository).toBeTypeOf('object')
   })
 })
+
+describe('v3 endpoints', () => {
+  it('serves npm downloads separately from the compatible v2 boards', async () => {
+    const app = testApp()
+    const v2 = await app.request('https://deepseek1024.com/api/v2/rankings')
+    const v3 = await app.request('https://deepseek1024.com/api/v3/rankings')
+    const v2Body = await v2.json() as { rankings: Record<string, unknown[]> }
+    const v3Body = await v3.json() as { rankings: Record<string, unknown[]> }
+
+    expect(v2Body.rankings).not.toHaveProperty('npmDownloads7d')
+    expect(v3.status).toBe(200)
+    expect(v3Body.rankings).toHaveProperty('npmDownloads7d')
+  })
+})

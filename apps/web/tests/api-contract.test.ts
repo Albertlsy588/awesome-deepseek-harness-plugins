@@ -248,4 +248,12 @@ describe('historical response contracts', () => {
       source: body.source,
     }).toEqual(json('fixtures/v2/rankings-default.golden.json'))
   })
+
+  it('publishes npm downloads only on the v3 ranking contract', async () => {
+    const response = await contractApp().request('/api/v3/rankings')
+    const body = await response.json() as Record<string, any>
+    expectSchema('schemas/v3/rankings.response.schema.json', body)
+    expect(body.rankings).toHaveProperty('npmDownloads7d')
+    expect(Object.keys(body.rankings)).toHaveLength(11)
+  })
 })

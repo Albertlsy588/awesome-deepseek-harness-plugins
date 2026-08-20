@@ -12,6 +12,16 @@ const CACHEABLE_API_PATHS: Record<string, readonly string[]> = {
   '/api/v1/registry': [],
   '/api/v2/plugins': ['q', 'category', 'sort', 'page', 'limit'],
   '/api/v2/rankings': [],
+  '/api/v3/rankings': [],
+}
+
+function cacheableApiParams(pathname: string): readonly string[] | undefined {
+  const exact = CACHEABLE_API_PATHS[pathname]
+  if (exact !== undefined) return exact
+  // A detail has at least owner/repository after the prefix. Search remains
+  // outside the cache because it is a separate, no-store endpoint.
+  if (/^\/api\/v1\/plugins\/[^/]+\/[^/]+(?:\/.*)?$/.test(pathname)) return []
+  return undefined
 }
 
 // Deploys cannot purge Cache API entries already stored at every POP. Bump a
@@ -22,7 +32,7 @@ const CACHE_KEY_REVISIONS: Readonly<Record<string, string>> = {
 }
 
 export function edgeCacheablePath(pathname: string): boolean {
-  if (pathname.startsWith('/api/')) return Object.prototype.hasOwnProperty.call(CACHEABLE_API_PATHS, pathname)
+  if (pathname.startsWith('/api/')) return cacheableApiParams(pathname) !== undefined
   // Hashed bundles are already immutable to the browser, and a miss here is the
   // SPA fallback document rather than an asset.
   if (pathname.startsWith('/assets/')) return false
@@ -48,8 +58,8 @@ export function edgeCacheablePath(pathname: string): boolean {
 export function edgeCacheKey(url: URL): Request | null {
   const pathname = isPublicApiHost(url) ? rewritePublicApiUrl(url)?.pathname : url.pathname
   if (pathname === undefined || !edgeCacheablePath(pathname)) return null
-  const significant = pathname.startsWith('/api/') ? CACHEABLE_API_PATHS[pathname] : undefined
-  if (!significant) {
+  const significant = pathname.startsWith('/api/') ? cacheableApiParams(pathname) : undefined
+  if (significant === undefined) {
     // HTML routes: the whole URL matters — a filtered permutation carries
     // different SEO metadata (noindex, canonical) than the bare page.
     return new Request(url.toString(), { method: 'GET' })

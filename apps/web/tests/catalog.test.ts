@@ -10,6 +10,7 @@ import {
   buildCatalog,
   buildPluginsPage,
   buildRankingsResponse,
+  buildRankingsV3Response,
   clampLimit,
   deriveCatalogResponse,
   findPlugin,
@@ -28,6 +29,7 @@ describe('catalog queries', () => {
     })
     expect(parseCatalogQuery({ sort: 'growth7d' }).sort).toBe('growth7d')
     expect(parseCatalogQuery({ sort: 'installs24h' }).sort).toBe('installs24h')
+    expect(parseCatalogQuery({ sort: 'npmDownloads7d' }).sort).toBe('npmDownloads7d')
   })
 
   it('searches localized descriptions, filters categories, and does not paginate', () => {
@@ -335,6 +337,8 @@ describe('edge cache allowlist', () => {
       '/api/v1/registry',
       '/api/v2/plugins',
       '/api/v2/rankings',
+      '/api/v3/rankings',
+      '/api/v1/plugins/owner/repository',
       '/',
       '/plugins',
       '/rankings',
@@ -365,6 +369,12 @@ describe('edge cache key normalization', () => {
     const bare = key('https://deepseek1024.com/api/v2/rankings')
     expect(key('https://deepseek1024.com/api/v2/rankings?bust=123')).toBe(bare)
     expect(bare).toBe('https://deepseek1024.com/api/v2/rankings')
+  })
+
+  it('canonicalizes detail requests without caching plugin search', () => {
+    expect(key('https://deepseek1024.com/api/v1/plugins/owner/repo?bust=1'))
+      .toBe('https://deepseek1024.com/api/v1/plugins/owner/repo')
+    expect(key('https://deepseek1024.com/api/v1/plugins/search?q=repo')).toBeNull()
   })
 
   it('versions the v1 listing cache independently of its public query shape', () => {
@@ -557,5 +567,20 @@ describe('v2 rankings', () => {
     // The stars board seats the monorepo once and records the sibling it hid.
     const seat = response.rankings.stars.find((row) => row.owner === 'mono')
     expect(seat?.repositorySiblings).toBe(1)
+  })
+})
+
+describe('v3 rankings', () => {
+  it('adds an uncollapsed npm download board without changing v2', () => {
+    const base = testCatalogResult()
+    const plugins = base.snapshot.plugins.map((plugin, index) => ({
+      ...plugin,
+      npmDownloads7d: index === 0 ? 12 : index === 1 ? 42 : null,
+    }))
+    const result = { snapshot: { ...base.snapshot, plugins }, source: base.source }
+
+    expect(buildRankingsResponse(result).rankings).not.toHaveProperty('npmDownloads7d')
+    expect(buildRankingsV3Response(result).rankings.npmDownloads7d.map((plugin) => plugin.npmDownloads7d))
+      .toEqual([42, 12])
   })
 })

@@ -79,7 +79,10 @@
         "installs24h": { "type": "integer", "minimum": 0 },
         "installs7d": { "type": "integer", "minimum": 0 },
         "installs30d": { "type": "integer", "minimum": 0 },
-        "latestInstallAt": { "type": ["string", "null"] }
+        "latestInstallAt": { "type": ["string", "null"] },
+        "npmDownloads7d": { "type": ["integer", "null"], "minimum": 0 },
+        "npmDownloadsStart": { "type": ["string", "null"] },
+        "npmDownloadsEnd": { "type": ["string", "null"] }
       },
       "additionalProperties": true
     },

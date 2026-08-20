@@ -6,11 +6,10 @@ import {
   Layers,
   Star,
   TrendingUp,
-  Users,
 } from 'lucide-react'
 import { memo, useId, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
+import type { CatalogPlugin, CatalogSort, CategoryResult, RankingMode } from '../lib/api'
 import { packagePath, pluginListIdentity, repositoryInstallTarget } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
@@ -24,6 +23,7 @@ interface PackageRowProps {
   category?: CategoryResult
   index: number
   ranking?: RankingMode
+  directorySort?: CatalogSort
   /** Rendered inside a repository's expanded panel rather than on the board. */
   child?: boolean
   /** The repository blurb, so a child can tell whether it has copy of its own. */
@@ -46,6 +46,7 @@ export const PackageRow = memo(function PackageRow({
   category,
   index,
   ranking,
+  directorySort,
   child,
   repositoryDescription,
   categories,
@@ -68,6 +69,8 @@ export const PackageRow = memo(function PackageRow({
     ranking === 'installs24h' ||
     ranking === 'installs7d' ||
     ranking === 'installs30d'
+  const isNpmRanking = ranking === 'npmDownloads7d'
+  const showsNpmDownloads = isNpmRanking || (!ranking && directorySort === 'npmDownloads7d')
   const periodInstalls = ranking === 'installs24h'
     ? plugin.installs24h ?? 0
     : ranking === 'installs7d'
@@ -179,7 +182,12 @@ export const PackageRow = memo(function PackageRow({
       {isRepository ? <span /> : <CategoryTag category={category} />}
 
       <div className="row-metrics">
-        {isInstallRanking ? (
+        {showsNpmDownloads ? (
+          <span className="install-metric" title={t('npmDownloads7d')}>
+            <Download size={14} aria-hidden="true" />
+            {formatNumber(plugin.npmDownloads7d ?? 0, language)}
+          </span>
+        ) : isInstallRanking ? (
           <span className="install-metric" title={t(
             ranking === 'installs24h'
               ? 'installs24h'
@@ -226,12 +234,6 @@ export const PackageRow = memo(function PackageRow({
             {formatNumber(plugin.installCount ?? 0, language)}
           </span>
         )}
-        {isInstallRanking && (
-          <span className="installer-metric" title={t('anonymousInstallers')}>
-            <Users size={14} aria-hidden="true" />
-            {formatNumber(plugin.installerCount ?? 0, language)}
-          </span>
-        )}
         {/* Stars and the last push are repository facts, printed once on the
             repository row. Repeating them down the panel filled two columns with
             the same number and read as if each plugin had earned it. */}
@@ -241,7 +243,7 @@ export const PackageRow = memo(function PackageRow({
             {plugin.stars === null ? '--' : formatNumber(plugin.stars, language)}
           </span>
         )}
-        {!isGrowthRanking && !isInstallRanking && !child && (
+        {!isGrowthRanking && !isInstallRanking && !showsNpmDownloads && !child && (
           <span
             className="date-metric"
             title={ranking === 'newest' ? t('latestRelease') : t('lastPush')}

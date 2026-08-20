@@ -192,6 +192,6 @@ function logDiscovery(result: Awaited<ReturnType<typeof runPluginDiscoveryTask>>
 
 function logNpmRefresh(result: Awaited<ReturnType<typeof runNpmRefreshTask>>): void {
   // A tick that only saw 304s changed nothing; keep the log for the ones that did.
-  if (result.found + result.absent + result.errors === 0) return
+  if (result.found + result.absent + result.errors + result.downloadsChecked === 0) return
   console.log(JSON.stringify({ message: 'npm_refresh', ...result }))
 }
