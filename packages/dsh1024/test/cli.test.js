@@ -1047,6 +1047,7 @@ test('an omitted profile is forwarded as written and never counted', async () =>
     io: ioCapture().io,
     now: clock(),
     uuid: uuidSequence(),
+    platform: 'linux',
     canExecute: () => false,
     spawn(command, args, options) {
       invocation = { command, args, options }
