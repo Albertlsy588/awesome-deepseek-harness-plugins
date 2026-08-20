@@ -164,6 +164,8 @@ function command(spec: string, buildPackage?: string | null): string {
   return `dsh plugin --profile web add${allowance} ${spec}`
 }
 
+const SELF_PACKAGE_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024'
+
 /**
  * Derives the install methods shown for a plugin. Pure: no I/O, so the rules
  * can be exercised exhaustively in tests and changed without a re-crawl.
@@ -182,10 +184,13 @@ export function deriveInstallMethods(
   const methods: PluginInstallMethod[] = []
 
   if (npm?.packageName && npm.bundleDeclared) {
+    const installTarget = id.toLocaleLowerCase('en-US') === SELF_PACKAGE_PLUGIN_ID
+      ? `${npm.packageName}@latest`
+      : npm.packageName
     methods.push({
       kind: 'npm',
       spec: npm.packageName,
-      command: command(npm.packageName),
+      command: command(installTarget),
       verification: 'verified',
       code: 'published_package',
       requiresBuildAllowance: false,

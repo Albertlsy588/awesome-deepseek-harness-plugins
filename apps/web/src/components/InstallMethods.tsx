@@ -1,6 +1,5 @@
 import type { PluginInstallMethod } from '../../worker/lib/install-methods'
-import { normalizePluginId } from '../../worker/lib/plugin-id'
-import { SELF_OFFICIAL_COMMAND, SELF_PLUGIN_ID, SELF_TRACKED_COMMAND } from '../lib/api'
+import { isSelfPlugin, SELF_OFFICIAL_COMMAND, SELF_TRACKED_COMMAND } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { InstallCommand } from './InstallCommand'
 import { BridgeInstallButton } from './BridgeInstallButton'
@@ -29,7 +28,7 @@ export function InstallMethods({ methods, pluginId }: {
   if (methods.length === 0) return null
   // The store's own entry installs from its published package, not from a spec
   // pointing at this catalog repository.
-  const isSelf = normalizePluginId(pluginId) === SELF_PLUGIN_ID
+  const selfPlugin = isSelfPlugin({ id: pluginId })
 
   if (connected) {
     const preferred = methods[0]!
@@ -82,7 +81,7 @@ export function InstallMethods({ methods, pluginId }: {
                   ? <span className="install-option-badge">{t('recommendedInstall')}</span>
                   : <span className="install-option-label">{t('trackedCliCommand')}</span>}
                 <InstallCommand
-                  command={isSelf ? SELF_TRACKED_COMMAND : method.command.replace(/^dsh\b/, 'dsh1024')}
+                  command={selfPlugin ? SELF_TRACKED_COMMAND : method.command.replace(/^dsh\b/, 'dsh1024')}
                   prominent={preferred}
                 />
                 {preferred && <p className="install-benefits">{t('installBenefitsLine')}</p>}
@@ -90,7 +89,7 @@ export function InstallMethods({ methods, pluginId }: {
               </div>
               <div className="install-option install-option-official">
                 <span className="install-option-label">{t('officialCliCommand')}</span>
-                <InstallCommand command={isSelf ? SELF_OFFICIAL_COMMAND : method.command} />
+                <InstallCommand command={selfPlugin ? SELF_OFFICIAL_COMMAND : method.command} />
               </div>
             </div>
           </div>

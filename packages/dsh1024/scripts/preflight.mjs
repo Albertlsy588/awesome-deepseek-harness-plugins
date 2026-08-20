@@ -14,6 +14,9 @@ if (!client.startsWith(`window.__ModuleLoader__.load({ id: ${JSON.stringify(mani
 }
 if (!patch.includes(`name: '${manifest.name}'`)) failures.push('bundle patch package name is stale')
 if (manifest.version !== rootManifest.version) failures.push('plugin and monorepo versions must stay synchronized')
+if (manifest.releaseUrl !== 'https://deepseek1024.com/plugins/imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024') {
+  failures.push('published manifest releaseUrl must send legacy clients to the domestic update page')
+}
 if (!registrySource.includes('https://deepseek1024.com/api/v1/registry')) failures.push('catalog must use the dynamic v1 registry API')
 if (registrySource.includes('registry-snapshot')) failures.push('catalog must not bundle a fixed plugin snapshot')
 if (!client.includes('/dsh1024/update')) failures.push('client update self-check is missing')

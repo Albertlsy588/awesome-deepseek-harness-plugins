@@ -95,6 +95,25 @@ describe('install method verdicts', () => {
     expect(deriveInstallMethods('owner/repo', git, GITHUB_ONLY).map((m) => m.kind)).toEqual(['github'])
   })
 
+  it('makes the store package command cross pre-1.0 minor version ranges', () => {
+    const methods = deriveInstallMethods(
+      'imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024',
+      { code: 'entry_committed', hasPrepare: false },
+      {
+        packageName: 'dsh1024',
+        binding: 'strict',
+        bundleDeclared: true,
+        version: '0.4.1',
+      },
+    )
+
+    expect(methods[0]).toMatchObject({
+      kind: 'npm',
+      spec: 'dsh1024',
+      command: 'dsh plugin --profile web add dsh1024@latest',
+    })
+  })
+
   it('projects both npm verdict codes for old v1 consumers without duplicating targets', () => {
     const methods = deriveInstallMethods(
       'owner/repo',

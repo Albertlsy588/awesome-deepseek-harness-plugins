@@ -42,8 +42,12 @@ describe('install command generation', () => {
   })
 
   it('uses the published package for the store itself', () => {
-    const plugin = { id: 'imsai-sh/awesome-deepseek-harness-plugins' }
-    expect(trackedInstallCommand(plugin)).toBe(SELF_TRACKED_COMMAND)
-    expect(officialInstallCommand(plugin)).toBe(SELF_OFFICIAL_COMMAND)
+    for (const id of [
+      'imsai-sh/awesome-deepseek-harness-plugins',
+      'imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024',
+    ]) {
+      expect(trackedInstallCommand({ id })).toBe(SELF_TRACKED_COMMAND)
+      expect(officialInstallCommand({ id })).toBe(SELF_OFFICIAL_COMMAND)
+    }
   })
 })

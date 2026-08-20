@@ -28,14 +28,14 @@ npm install -g dsh1024
 ## Install the in-app store
 
 ```sh
-npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024
+npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024@latest
 ```
 
 Installing directly with the official CLI is the same command under a different
 name:
 
 ```sh
-dsh plugin --profile web add dsh1024
+dsh plugin --profile web add dsh1024@latest
 ```
 
 Restart DeepSeek Harness after installation.
@@ -234,7 +234,7 @@ secrets, and can be removed safely while DSH is stopped.
 `dsh1024` replaces the deprecated `@dsh-1024store/cli` and `dsh-1024store` npm
 packages. Replace `npx @dsh-1024store/cli ...` with `npx dsh1024 ...`, and
 `dsh plugin --profile web add dsh-1024store` with
-`dsh plugin --profile web add dsh1024`; every command, option, and
+`dsh plugin --profile web add dsh1024@latest`; every command, option, and
 pass-through behavior is unchanged. Existing telemetry preferences, the
 anonymous identity, and local receipts are stored under
 `$DSH_HOME/.dsh-1024store/` and are reused as-is, so no migration step is

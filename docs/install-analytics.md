@@ -161,7 +161,7 @@ rewrite historical aggregate data.
 
 ## Self-install events (`dsh1024 plugin ... add dsh1024`)
 
-`dsh1024 plugin --profile web add dsh1024` installs the 1024 Store marketplace
+`dsh1024 plugin --profile web add dsh1024@latest` installs or upgrades the 1024 Store marketplace
 plugin itself into a DeepSeek Harness profile. It uses the same event schema and
 channel (`sourceChannel: "dsh-1024store-cli"`) as any other install, with a fixed
 identity:

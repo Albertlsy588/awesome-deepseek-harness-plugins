@@ -209,7 +209,7 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   // The four things this repository ships beyond the list itself.
   assert.match(zh, /deepseek1024\.com/)
   assert.match(zh, /CLOUDFLARE_API_TOKEN/)
-  assert.match(zh, /dsh plugin --profile web add dsh1024/)
+  assert.match(zh, /dsh plugin --profile web add dsh1024@latest/)
   assert.match(zh, /定时收集/)
   assert.match(zh, /格式校验/)
   assert.match(zh, /绝不执行仓库代码/)
@@ -222,7 +222,7 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   assert.match(zh, /\/fork\)/)
 
   assert.match(en, /CLOUDFLARE_API_TOKEN/)
-  assert.match(en, /dsh plugin --profile web add dsh1024/)
+  assert.match(en, /dsh plugin --profile web add dsh1024@latest/)
   assert.match(en, /never installing dependencies or executing repository code/)
   assert.match(en, /api\.deepseek1024\.com\/v1\/plugins\/search/)
   for (const suffix of ['/stargazers)', '/issues/new)', '/pulls)', '/fork)']) {

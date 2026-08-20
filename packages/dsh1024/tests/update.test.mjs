@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   CURRENT_VERSION,
@@ -46,6 +47,19 @@ test('automatic update check reads the configured primary manifest first', async
   assert.equal(result.currentVersion, CURRENT_VERSION)
   assert.equal(result.latestVersion, '99.0.0')
   assert.equal(result.updateAvailable, true)
+  assert.equal(result.releaseUrl, DEFAULT_RELEASE_URL)
+})
+
+test('published npm manifest sends legacy 0.3 clients to the domestic update page', async () => {
+  const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.equal(manifest.releaseUrl, DEFAULT_RELEASE_URL)
+
+  const result = await checkForUpdate(
+    'https://registry.npmjs.org/dsh1024/latest',
+    'https://fallback.example/package.json',
+    async () => new Response(JSON.stringify(manifest), { status: 200 }),
+  )
+
   assert.equal(result.releaseUrl, DEFAULT_RELEASE_URL)
 })
 

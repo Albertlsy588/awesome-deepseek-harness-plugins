@@ -473,8 +473,8 @@ try {
   }
   const desktopBannerText = await desktop.locator('.catalog-hero .self-install-banner').textContent()
   for (const command of [
-    'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024',
-    'dsh plugin --profile web add dsh1024',
+    'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024@latest',
+    'dsh plugin --profile web add dsh1024@latest',
   ]) {
     if (!desktopBannerText?.includes(command)) {
       throw new Error(`directory self install banner is missing the command: ${command}`)
@@ -610,8 +610,8 @@ try {
   }
   const rankingsBannerText = await rankings.locator('.catalog-hero .self-install-banner').textContent()
   for (const command of [
-    'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024',
-    'dsh plugin --profile web add dsh1024',
+    'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024@latest',
+    'dsh plugin --profile web add dsh1024@latest',
   ]) {
     if (!rankingsBannerText?.includes(command)) {
       throw new Error(`rankings self install banner is missing the command: ${command}`)
@@ -899,7 +899,7 @@ try {
   const selfDetail = await openPage({ width: 1440, height: 1000 }, '/plugins/imsai-sh/awesome-deepseek-harness-plugins')
   await selfDetail.locator('.detail-header').waitFor()
   const selfInstallCommands = await selfDetail.locator('.install-section .install-command code:visible').allTextContents()
-  if (!selfInstallCommands.some((text) => text.includes('npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024'))) {
+  if (!selfInstallCommands.some((text) => text.includes('npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024@latest'))) {
     throw new Error('self entry detail page is missing the global dsh1024 store install command')
   }
   if (selfInstallCommands.some((text) => text.includes('add imsai-sh/awesome-deepseek-harness-plugins') || text.includes('add github:imsai-sh/awesome-deepseek-harness-plugins'))) {

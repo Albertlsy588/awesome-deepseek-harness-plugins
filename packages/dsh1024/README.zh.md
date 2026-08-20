@@ -24,13 +24,13 @@ npm install -g dsh1024
 ## 安装店内插件
 
 ```sh
-npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024
+npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024@latest
 ```
 
 直接用官方 CLI 是同一条命令，只是换了个名字：
 
 ```sh
-dsh plugin --profile web add dsh1024
+dsh plugin --profile web add dsh1024@latest
 ```
 
 安装完成后重启 DeepSeek Harness。
@@ -158,7 +158,7 @@ API；新数据返回后无感替换页面并更新缓存。旧数据最多保�
 `dsh1024` 取代已弃用的 `@dsh-1024store/cli` 与 `dsh-1024store` 两个 npm 包。
 把 `npx @dsh-1024store/cli ...` 换成 `npx dsh1024 ...`，把
 `dsh plugin --profile web add dsh-1024store` 换成
-`dsh plugin --profile web add dsh1024` 即可；所有命令、选项与透传行为不变。
+`dsh plugin --profile web add dsh1024@latest` 即可；所有命令、选项与透传行为不变。
 遥测偏好、匿名身份与本地 receipt 仍存放在 `$DSH_HOME/.dsh-1024store/`
 下并原样复用，无需任何迁移步骤，也无需改环境变量名。
 

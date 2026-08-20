@@ -1,9 +1,10 @@
 {
   "name": "dsh1024",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "The 1024 Store for DeepSeek Harness: in-app plugin market and tracked installer CLI.",
   "license": "MIT",
   "homepage": "https://deepseek1024.com/",
+  "releaseUrl": "https://deepseek1024.com/plugins/imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/imsai-sh/awesome-deepseek-harness-plugins.git",

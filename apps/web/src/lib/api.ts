@@ -330,14 +330,16 @@ export function repositoryName(plugin: Pick<RegistryPlugin, 'name' | 'url'>): st
 }
 
 export const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
-export const SELF_TRACKED_COMMAND = 'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024'
-export const SELF_OFFICIAL_COMMAND = 'dsh plugin --profile web add dsh1024'
+export const SELF_PACKAGE_PLUGIN_ID = `${SELF_PLUGIN_ID}/packages/dsh1024`
+export const SELF_TRACKED_COMMAND = 'npm install -g dsh1024 && dsh1024 plugin --profile web add dsh1024@latest'
+export const SELF_OFFICIAL_COMMAND = 'dsh plugin --profile web add dsh1024@latest'
 
 // The catalog lists this repository itself as the store client plugin; the
 // generic spec would tell people to install the whole catalog repository, so it
 // gets the published package name instead.
-function isSelfPlugin(plugin: Pick<RegistryPlugin, 'id'>): boolean {
-  return normalizePluginId(plugin.id) === SELF_PLUGIN_ID
+export function isSelfPlugin(plugin: Pick<RegistryPlugin, 'id'>): boolean {
+  const id = normalizePluginId(plugin.id)
+  return id === SELF_PLUGIN_ID || id === SELF_PACKAGE_PLUGIN_ID
 }
 
 /**
