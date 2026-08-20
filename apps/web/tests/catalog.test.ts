@@ -387,6 +387,13 @@ describe('edge cache key normalization', () => {
       .toBe('https://deepseek1024.com/api/v1/plugins?sort=name&__edge_v=2')
   })
 
+  it('versions npm-bearing listing and ranking caches for ownership fixes', () => {
+    expect(key('https://deepseek1024.com/api/v2/plugins?sort=npmDownloads7d'))
+      .toBe('https://deepseek1024.com/api/v2/plugins?sort=npmDownloads7d&__edge_v=1')
+    expect(key('https://deepseek1024.com/api/v3/rankings?bust=old'))
+      .toBe('https://deepseek1024.com/api/v3/rankings?__edge_v=1')
+  })
+
   it('leaves HTML routes keyed by their whole URL', () => {
     // A filtered permutation carries different SEO metadata than the bare page,
     // so its query must stay in the key.
@@ -574,16 +581,35 @@ describe('v2 rankings', () => {
 })
 
 describe('v3 rankings', () => {
-  it('adds an uncollapsed npm download board without changing v2', () => {
+  it('ranks each published npm package once without changing v2', () => {
     const base = testCatalogResult()
     const plugins = base.snapshot.plugins.map((plugin, index) => ({
       ...plugin,
-      npmDownloads7d: index === 0 ? 12 : index === 1 ? 42 : null,
+      npmDownloads7d: index === 0 ? 50 : index === 1 ? 42 : index === 2 ? 12 : null,
+      installMethods: index < 2 ? [{
+        kind: 'npm' as const,
+        spec: '@scope/shared',
+        command: 'dsh plugin add @scope/shared',
+        verification: 'verified' as const,
+        code: 'published_package' as const,
+        requiresBuildAllowance: false,
+        revision: '1.0.0',
+        checkedAt: '2026-08-20T00:00:00.000Z',
+      }] : index === 2 ? [{
+        kind: 'npm' as const,
+        spec: '@scope/other',
+        command: 'dsh plugin add @scope/other',
+        verification: 'verified' as const,
+        code: 'published_package' as const,
+        requiresBuildAllowance: false,
+        revision: '1.0.0',
+        checkedAt: '2026-08-20T00:00:00.000Z',
+      }] : undefined,
     }))
     const result = { snapshot: { ...base.snapshot, plugins }, source: base.source }
 
     expect(buildRankingsResponse(result).rankings).not.toHaveProperty('npmDownloads7d')
     expect(buildRankingsV3Response(result).rankings.npmDownloads7d.map((plugin) => plugin.npmDownloads7d))
-      .toEqual([42, 12])
+      .toEqual([50, 12])
   })
 })

@@ -65,7 +65,7 @@ function catalogDatabase(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
   for (const migration of ['0002_plugin_catalog.sql', '0005_catalog_plugins.sql',
     '0006_ai_classification.sql', '0009_manifest_sweep.sql', '0010_npm_etag.sql',
-    '0011_npm_downloads.sql']) {
+    '0011_npm_downloads.sql', '0012_npm_download_ownership.sql']) {
     database.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'))
   }
   // One topic-discovered repository; its accepted plugins are the eligible set.
@@ -205,6 +205,23 @@ describe('npm refresh task', () => {
       npm_downloads_end: '2026-08-18',
     })
     expect(refreshCatalogSnapshot).toHaveBeenCalledTimes(1)
+    database.close()
+  })
+
+  it('never fetches downloads for a package owned by another repository', async () => {
+    const database = catalogDatabase()
+    seedPlugin(database, 'fork', { npmEtag: '"fork1"', npmVersion: '1.0.0' })
+    database.prepare(
+      `UPDATE catalog_plugins
+          SET npm_package_name = 'pkg-fork', npm_bundle_declared = 1, npm_binding = 'mismatch'
+        WHERE plugin_path = 'fork'`,
+    ).run()
+    probeNpmPackage.mockImplementation(async (_id, _name, etag) => notModified(etag ?? ''))
+
+    const result = await runNpmRefreshTask(envFor(database), SCHEDULED_AT)
+
+    expect(result).toMatchObject({ notModified: 1, downloadsChecked: 0, downloadsUpdated: 0 })
+    expect(fetchNpmDownloads7d).not.toHaveBeenCalled()
     database.close()
   })
 

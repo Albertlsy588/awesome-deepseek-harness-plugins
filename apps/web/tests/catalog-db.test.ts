@@ -61,7 +61,7 @@ function catalogDatabase(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
   for (const migration of ['0002_plugin_catalog.sql', '0005_catalog_plugins.sql',
     '0006_ai_classification.sql', '0009_manifest_sweep.sql', '0010_npm_etag.sql',
-    '0011_npm_downloads.sql']) {
+    '0011_npm_downloads.sql', '0012_npm_download_ownership.sql']) {
     database.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'))
   }
   return database
@@ -444,7 +444,9 @@ describe('catalog snapshot', () => {
          SET package_name = '@scope/source-plugin',
              git_code = 'prepare_builds_entry', git_has_prepare = 1,
              npm_package_name = '@scope/published-plugin',
-             npm_bundle_declared = 1, npm_binding = 'mismatch', npm_version = '2.0.0'
+             npm_bundle_declared = 1, npm_binding = 'mismatch', npm_version = '2.0.0',
+             npm_downloads_7d = 633545, npm_downloads_start = '2026-08-12',
+             npm_downloads_end = '2026-08-18', npm_downloads_status = 'found'
        WHERE normalized_plugin_id = 'scan/repo'
     `).run()
 
@@ -459,6 +461,9 @@ describe('catalog snapshot', () => {
     expect(plugin?.installMethods?.[1]?.command).toBe(
       'dsh plugin --profile web add --allow-build=@scope/source-plugin github:Scan/Repo',
     )
+    expect(plugin?.npmDownloads7d).toBeNull()
+    expect(plugin?.npmDownloadsStart).toBeNull()
+    expect(plugin?.npmDownloadsEnd).toBeNull()
     database.close()
   })
 })
@@ -992,10 +997,12 @@ describe('npm download persistence', () => {
     const db = sqliteD1(database)
 
     await saveNpmDownloadResults(db, [{
-      pluginId: 'Scan/Repo', status: 'found', downloads: 321,
+      pluginId: 'Scan/Repo', packageName: '@scope/plugin', status: 'found', downloads: 321,
       start: '2026-08-12', end: '2026-08-18',
     }], '2026-08-19T00:00:00.000Z')
-    await saveNpmDownloadResults(db, [{ pluginId: 'Scan/Repo', status: 'error' }], '2026-08-20T00:00:00.000Z')
+    await saveNpmDownloadResults(db, [{
+      pluginId: 'Scan/Repo', packageName: '@scope/plugin', status: 'error',
+    }], '2026-08-20T00:00:00.000Z')
 
     expect(database.prepare(
       `SELECT npm_downloads_7d, npm_downloads_start, npm_downloads_end,
@@ -1008,6 +1015,35 @@ describe('npm download persistence', () => {
       npm_downloads_status: 'error',
       npm_downloads_checked_at: '2026-08-20T00:00:00.000Z',
     })
+    database.close()
+  })
+
+  it('rejects download writes for stale package names and repository mismatches', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    seedPlugin(database, 'Scan/Repo', { validation_status: 'accepted' })
+    database.prepare(
+      `UPDATE catalog_plugins
+          SET package_name = '@scope/current', npm_package_name = '@scope/current',
+              npm_status = 'found', npm_bundle_declared = 1, npm_binding = 'strict'
+        WHERE normalized_plugin_id = 'scan/repo'`,
+    ).run()
+    const db = sqliteD1(database)
+
+    await saveNpmDownloadResults(db, [{
+      pluginId: 'Scan/Repo', packageName: '@scope/stale', status: 'found', downloads: 999,
+      start: '2026-08-12', end: '2026-08-18',
+    }], '2026-08-19T00:00:00.000Z')
+    database.prepare("UPDATE catalog_plugins SET npm_binding = 'mismatch' WHERE normalized_plugin_id = 'scan/repo'").run()
+    await saveNpmDownloadResults(db, [{
+      pluginId: 'Scan/Repo', packageName: '@scope/current', status: 'found', downloads: 888,
+      start: '2026-08-12', end: '2026-08-18',
+    }], '2026-08-20T00:00:00.000Z')
+
+    expect(database.prepare(
+      `SELECT npm_downloads_7d, npm_downloads_checked_at
+         FROM catalog_plugins WHERE normalized_plugin_id = 'scan/repo'`,
+    ).get()).toEqual({ npm_downloads_7d: null, npm_downloads_checked_at: null })
     database.close()
   })
 })
