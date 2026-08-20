@@ -1,5 +1,4 @@
 import {
-  ArrowUpRight,
   CalendarDays,
   ChevronDown,
   Download,
@@ -9,7 +8,7 @@ import {
   Users,
 } from 'lucide-react'
 import { memo, useId, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import type { CatalogPlugin, CategoryResult, RankingMode } from '../lib/api'
 import { packagePath, pluginListIdentity, repositoryInstallTarget } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
@@ -54,6 +53,7 @@ export const PackageRow = memo(function PackageRow({
 }: PackageRowProps) {
   const { language, t } = useI18n()
   const { embedded } = useEmbedBridge()
+  const location = useLocation()
   const [expanded, setExpanded] = useState(false)
   const panelId = useId()
   const growth = ranking === 'growth24h'
@@ -145,6 +145,9 @@ export const PackageRow = memo(function PackageRow({
                 to={packagePath(plugin)}
                 target={linkTarget}
                 rel={linkTarget ? 'noreferrer' : undefined}
+                state={embedded ? {
+                  dsh1024ReturnTo: `${location.pathname}${location.search}${location.hash}`,
+                } : undefined}
               >
                 {listIdentity.displayName}
               </Link>
@@ -262,15 +265,6 @@ export const PackageRow = memo(function PackageRow({
           ? <span />
           : <SplitInstallButton plugin={installableRoot} />
         : <SplitInstallButton plugin={plugin} />}
-
-      {isRepository ? <span /> : (
-        <span
-          className="row-open"
-          aria-hidden="true"
-        >
-          <ArrowUpRight size={17} aria-hidden="true" />
-        </span>
-      )}
 
       {isRepository ? (
         // Spans every grid column so the panel reads as part of the row rather

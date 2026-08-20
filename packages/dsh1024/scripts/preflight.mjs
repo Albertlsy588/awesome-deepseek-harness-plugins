@@ -25,6 +25,8 @@ if (!client.includes('event.origin !== embedOrigin')) failures.push('bridge must
 if (!client.includes('event.source !== iframeRef.current?.contentWindow')) failures.push('bridge must validate the embedded frame source')
 if (manifest.exports?.['./package.json'] === undefined) failures.push('exports["./package.json"] must exist so the harness loads the client half')
 if (!client.includes("const SITE_URL = 'https://deepseek1024.com/'")) failures.push('1024 main website link is missing')
+if (!client.includes("const BRAND_ICON_URL = '/dsh1024/icon'")) failures.push('sidebar icon must be served by the local plugin')
+if (client.includes("SITE_URL + 'deepseek1024.png'")) failures.push('sidebar icon must not depend on the remote website')
 if (!client.includes("name: 'settings.section'")) failures.push('left settings navigation entry is missing')
 // 三个入口全留:设置页导航行、设置-插件标签页、侧边栏底部动作。任一被误删都要拦下。
 if (!client.includes("name: 'sidebar.footer.action'")) failures.push('sidebar footer entry is missing')

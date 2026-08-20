@@ -145,6 +145,14 @@ npx dsh1024 telemetry enable
 npx dsh1024 telemetry reset
 ```
 
+## 本地目录缓存
+
+DSH 插件会把最近一次通过校验的公开插件目录与嵌入版目录页保存到
+`$DSH_HOME/.dsh-1024store/registry-cache.json` 和
+`catalog-page-cache.json`。嵌入版会先展示本地页面，同时并行请求生产
+API；新数据返回后无感替换页面并更新缓存。旧数据最多保留七天。这些
+文件归 `dsh1024` 插件所有，不包含账号或安装密钥，停止 DSH 后可安全删除。
+
 ## 从旧包迁移
 
 `dsh1024` 取代已弃用的 `@dsh-1024store/cli` 与 `dsh-1024store` 两个 npm 包。

@@ -1,5 +1,7 @@
 /** Fetch and validate the public 1024 Store registry API. */
 
+import { readJson, storePaths, writeJsonAtomic } from './shared/files.ts'
+
 export interface RegistryCategory {
   id: string
   order: number
@@ -34,15 +36,24 @@ export type RegistrySource = 'api' | 'cache'
 
 export const DEFAULT_REGISTRY_URL = 'https://deepseek1024.com/api/v1/registry'
 const CACHE_TTL_MS = 5 * 60 * 1000
+const PERSISTED_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const FETCH_TIMEOUT_MS = 8_000
 // Revalidation URLs carry a coarse timestamp so a stale CDN copy cannot answer
 // them, while a whole minute of revalidations still collapses onto one URL.
 const REVALIDATE_WINDOW_MS = 60_000
 
-let cache: { url: string; at: number; registry: Registry } | null = null
+let cache: { url: string; at: number; registry: Registry; persisted: boolean } | null = null
 // One network refresh at a time: opening the panel twice, or opening it while a
 // visibility-triggered refresh is still running, must not stack up requests.
 let inFlight: { url: string; promise: Promise<Registry> } | null = null
+let hydration: { path: string; promise: Promise<void> } | null = null
+
+interface PersistedRegistryCache {
+  version: 1
+  url: string
+  fetchedAt: number
+  registry: unknown
+}
 
 function isStringMap(value: unknown): value is Record<string, string> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
@@ -201,6 +212,7 @@ export function installExtraArgs(plugin: RegistryPlugin): string[] {
 export function clearRegistryCache(): void {
   cache = null
   inFlight = null
+  hydration = null
 }
 
 export interface LoadRegistryOptions {
@@ -210,9 +222,42 @@ export interface LoadRegistryOptions {
    * again, so a newly listed plugin shows up without waiting out any TTL.
    */
   revalidate?: boolean
+  /** Return any validated disk snapshot immediately so the client can revalidate separately. */
+  preferCache?: boolean
+  /** Enable the plugin-owned on-disk cache under this DSH home directory. */
+  dshHome?: string
 }
 
-async function fetchRegistry(registryUrl: string, fetcher: typeof fetch, bustEdgeCache: boolean): Promise<Registry> {
+function hydrateRegistryCache(path: string, registryUrl: string): Promise<void> {
+  if (hydration?.path === path) return hydration.promise
+  const promise = (async () => {
+    try {
+      const persisted = await readJson<PersistedRegistryCache>(path, null)
+      if (persisted === null || persisted.version !== 1 || persisted.url !== registryUrl
+        || typeof persisted.fetchedAt !== 'number' || !Number.isFinite(persisted.fetchedAt)
+        || persisted.fetchedAt > Date.now() + CACHE_TTL_MS
+        || Date.now() - persisted.fetchedAt > PERSISTED_CACHE_MAX_AGE_MS) return
+      cache = {
+        url: registryUrl,
+        at: persisted.fetchedAt,
+        registry: validateRegistry(persisted.registry),
+        persisted: true,
+      }
+    } catch {
+      // A missing, partial, old, or manually edited cache is non-fatal. The
+      // validated network response remains the only source that can replace it.
+    }
+  })()
+  hydration = { path, promise }
+  return promise
+}
+
+async function fetchRegistry(
+  registryUrl: string,
+  fetcher: typeof fetch,
+  bustEdgeCache: boolean,
+  cachePath: string | null,
+): Promise<Registry> {
   const url = new URL(registryUrl)
   if (url.protocol !== 'https:') throw new Error('registry API URL must use HTTPS')
   if (bustEdgeCache) url.searchParams.set('t', String(Math.floor(Date.now() / REVALIDATE_WINDOW_MS)))
@@ -222,13 +267,27 @@ async function fetchRegistry(registryUrl: string, fetcher: typeof fetch, bustEdg
   })
   if (!response.ok) throw new Error(`registry API HTTP ${response.status}`)
   const registry = validateRegistry(await response.json() as unknown)
-  cache = { url: registryUrl, at: Date.now(), registry }
+  const fetchedAt = Date.now()
+  cache = { url: registryUrl, at: fetchedAt, registry, persisted: false }
+  if (cachePath !== null) {
+    await writeJsonAtomic(cachePath, {
+      version: 1,
+      url: registryUrl,
+      fetchedAt,
+      registry,
+    } satisfies PersistedRegistryCache).catch(() => {})
+  }
   return registry
 }
 
-function refresh(registryUrl: string, fetcher: typeof fetch, bustEdgeCache: boolean): Promise<Registry> {
+function refresh(
+  registryUrl: string,
+  fetcher: typeof fetch,
+  bustEdgeCache: boolean,
+  cachePath: string | null,
+): Promise<Registry> {
   if (inFlight !== null && inFlight.url === registryUrl) return inFlight.promise
-  const promise = fetchRegistry(registryUrl, fetcher, bustEdgeCache).finally(() => {
+  const promise = fetchRegistry(registryUrl, fetcher, bustEdgeCache, cachePath).finally(() => {
     if (inFlight?.promise === promise) inFlight = null
   })
   inFlight = { url: registryUrl, promise }
@@ -251,12 +310,15 @@ export async function loadRegistry(
   fetcher: typeof fetch = fetch,
   options: LoadRegistryOptions = {},
 ): Promise<{ registry: Registry; source: RegistrySource }> {
+  const cachePath = options.dshHome === undefined ? null : storePaths(options.dshHome).registryCache
+  if (cachePath !== null) await hydrateRegistryCache(cachePath, registryUrl)
   const cached = cache !== null && cache.url === registryUrl ? cache : null
-  if (options.revalidate !== true && cached !== null && Date.now() - cached.at < CACHE_TTL_MS) {
-    return { registry: cached.registry, source: 'api' }
+  if (options.revalidate !== true && cached !== null
+    && (options.preferCache === true || Date.now() - cached.at < CACHE_TTL_MS)) {
+    return { registry: cached.registry, source: cached.persisted ? 'cache' : 'api' }
   }
   try {
-    const registry = await refresh(registryUrl, fetcher, options.revalidate === true)
+    const registry = await refresh(registryUrl, fetcher, options.revalidate === true, cachePath)
     return { registry, source: 'api' }
   } catch (error) {
     // Last-good fallback: an offline machine keeps browsing what it already has.

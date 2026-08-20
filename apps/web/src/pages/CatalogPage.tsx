@@ -28,7 +28,6 @@ import type {
 import {
   getCachedPluginsPage,
   getCachedRankings,
-  isRankingsFresh,
   loadPluginsPage,
   loadRankings,
 } from '../lib/catalog-cache'
@@ -178,7 +177,14 @@ interface CatalogPageProps {
 
 export function CatalogPage({ view }: CatalogPageProps) {
   const { language, t } = useI18n()
-  const { embedded, installedPluginIds } = useEmbedBridge()
+  const {
+    embedded,
+    connected: bridgeConnected,
+    activation,
+    installedPluginIds,
+    readCatalogPageCache,
+    writeCatalogPageCache,
+  } = useEmbedBridge()
   const { stats, connected } = useLiveStats()
   const [searchParams, setSearchParams] = useSearchParams()
   const query = searchParams.get('q') ?? ''
@@ -208,6 +214,9 @@ export function CatalogPage({ view }: CatalogPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [reload, setReload] = useState(0)
+  const [showingPluginCache, setShowingPluginCache] = useState(false)
+  const pluginCacheKeyRef = useRef<string | null>(null)
+  const networkResolvedKeyRef = useRef<string | null>(null)
 
   useEffect(() => setDraftQuery(query), [query])
 
@@ -222,22 +231,52 @@ export function CatalogPage({ view }: CatalogPageProps) {
     return () => window.clearTimeout(timeout)
   }, [draftQuery, query, searchParams, setSearchParams])
 
+  const pluginCacheEligible = embedded && view === 'catalog'
+    && query === '' && category === '' && sort === 'stars'
+
+  // The embedded plugin owns this snapshot. Ask for it immediately, but do
+  // not wait before starting the production request below: cached content is
+  // the first paint, never the freshness mechanism.
+  useEffect(() => {
+    if (!pluginCacheEligible || !bridgeConnected) {
+      pluginCacheKeyRef.current = null
+      setShowingPluginCache(false)
+      return
+    }
+    let cancelled = false
+    void readCatalogPageCache().then((page) => {
+      if (cancelled || page === null || networkResolvedKeyRef.current === directoryKey) return
+      pluginCacheKeyRef.current = directoryKey
+      setShowingPluginCache(true)
+      setDirectory(directoryFrom(directoryKey, page))
+      setError(null)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [directoryKey, pluginCacheEligible, bridgeConnected, readCatalogPageCache])
+
   // Directory: fetch page 1 whenever the filter changes or a refresh fires.
+  // In the DSH shell this is classic stale-while-revalidate: the memory/disk
+  // snapshot paints first, but every activation still reaches the real API.
   // "Load more" appends later pages; it does not run here.
   useEffect(() => {
     if (view !== 'catalog') return
     let cancelled = false
-    const force = reload > 0
+    networkResolvedKeyRef.current = null
+    const force = embedded || reload > 0
     const params = { q: query, category, sort, page: 1, limit: PAGE_SIZE }
-    if (force || getCachedPluginsPage(params) === null) setRefreshing(true)
+    if (getCachedPluginsPage(params) === null) setRefreshing(true)
     loadPluginsPage(params, { force })
       .then((data) => {
         if (cancelled) return
+        networkResolvedKeyRef.current = directoryKey
+        pluginCacheKeyRef.current = null
+        setShowingPluginCache(false)
         setDirectory(directoryFrom(directoryKey, data))
         setError(null)
+        if (pluginCacheEligible) void writeCatalogPageCache(data).catch(() => {})
       })
       .catch((requestError: unknown) => {
-        if (cancelled || getCachedPluginsPage(params)) return
+        if (cancelled || getCachedPluginsPage(params) || pluginCacheKeyRef.current === directoryKey) return
         setError(requestError instanceof Error ? requestError.message : t('loadError'))
       })
       .finally(() => {
@@ -246,14 +285,15 @@ export function CatalogPage({ view }: CatalogPageProps) {
     return () => {
       cancelled = true
     }
-  }, [view, directoryKey, query, category, sort, reload, t])
+  }, [view, directoryKey, query, category, sort, reload, activation, t, embedded, pluginCacheEligible, writeCatalogPageCache])
 
-  // Rankings: one small payload for all ten boards, fetched when that view shows.
+  // Rankings use the same embedded stale-while-revalidate contract: cached
+  // boards remain visible while each activation requests a fresh payload.
   useEffect(() => {
     if (view !== 'rankings') return
     let cancelled = false
-    const force = reload > 0
-    if (force || !isRankingsFresh()) setRefreshing(true)
+    const force = embedded || reload > 0
+    if (!getCachedRankings()) setRefreshing(true)
     loadRankings({ force })
       .then((data) => {
         if (cancelled) return
@@ -270,7 +310,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
     return () => {
       cancelled = true
     }
-  }, [view, reload, t])
+  }, [view, reload, activation, t, embedded])
 
   // Searching on the rankings view shows the matches, ranked by the active
   // board's metric — the same behaviour the client-derived model had, now a
@@ -721,7 +761,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
                   </button>
                 ))}
               </div>
-              {refreshing && directoryReady && (
+              {refreshing && directoryReady && !showingPluginCache && (
                 <span className="refresh-note" role="status">{t('refreshing')}</span>
               )}
             </div>
@@ -748,7 +788,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
               </div>
             ) : (
               <>
-                <div className={`package-list${refreshing ? ' is-refreshing' : ''}`} aria-live="polite">
+                <div className={`package-list${refreshing && !showingPluginCache ? ' is-refreshing' : ''}`} aria-live="polite">
                   {visiblePackages.map((plugin, index) => (
                     <PackageRow
                       key={plugin.id}

@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { installedPluginIds, isTrustedSameOrigin, mountMarketRoutes } from '../lib/routes.js'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  installedPluginIds,
+  isTrustedSameOrigin,
+  mountMarketRoutes,
+  readProfilePnpmStoreDir,
+} from '../lib/routes.js'
 
 const baseConfig = {
   profile: 'market-test',
@@ -37,6 +45,26 @@ test('the shell exposes its validated embed URL without credentials', async () =
   })
   dispose()
   assert.equal(routes.size, 0)
+})
+
+test('the shell serves its packaged sidebar icon locally with immutable caching', async () => {
+  const { routes, dispose } = routeHarness('https://deepseek1024.com/embed/store?bridge=dsh1024-v1')
+  let status = 0
+  let headers = {}
+  let body = null
+  await routes.get('/dsh1024/icon').handler(
+    { method: 'GET' },
+    {
+      writeHead(value, valueHeaders = {}) { status = value; headers = valueHeaders },
+      end(value = '') { body = value },
+    },
+  )
+  assert.equal(status, 200)
+  assert.equal(headers['content-type'], 'image/png')
+  assert.match(headers['cache-control'], /immutable/)
+  assert.equal(Buffer.isBuffer(body), true)
+  assert.equal(body.subarray(1, 4).toString(), 'PNG')
+  dispose()
 })
 
 test('loopback HTTP is accepted for local preview but remote HTTP is rejected', () => {
@@ -89,4 +117,20 @@ test('installed dependencies map to catalog ids without exposing their specs', (
     'owner/mono/packages/child',
     'owner/npm-plugin',
   ])
+})
+
+test('plugin installs reuse the pnpm store already linked to the profile', async () => {
+  const profile = await mkdtemp(join(tmpdir(), 'dsh1024-store-dir-'))
+  const modules = join(profile, 'node_modules')
+  await mkdir(modules)
+  await writeFile(join(modules, '.modules.yaml'), JSON.stringify({
+    storeDir: '/private/tmp/.pnpm-store/v10',
+  }))
+  assert.equal(readProfilePnpmStoreDir(profile), '/private/tmp/.pnpm-store/v10')
+
+  await writeFile(join(modules, '.modules.yaml'), "storeDir: '/tmp/yaml-pnpm-store/v10'\n")
+  assert.equal(readProfilePnpmStoreDir(profile), '/tmp/yaml-pnpm-store/v10')
+
+  await writeFile(join(modules, '.modules.yaml'), JSON.stringify({ storeDir: '../unsafe' }))
+  assert.equal(readProfilePnpmStoreDir(profile), undefined)
 })

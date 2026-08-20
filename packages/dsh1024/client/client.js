@@ -8,7 +8,7 @@ const { useCallback, useEffect, useRef, useState, useSyncExternalStore } = React
 const NS = 'dsh1024'
 
 const SITE_URL = 'https://deepseek1024.com/'
-const BRAND_ICON_URL = SITE_URL + 'deepseek1024.png'
+const BRAND_ICON_URL = '/dsh1024/icon'
 const DEFAULT_EMBED_URL = SITE_URL + 'embed/store?bridge=dsh1024-v1'
 const BRIDGE_PROTOCOL = 'dsh1024-bridge'
 const BRIDGE_VERSION = 1
@@ -17,6 +17,7 @@ const PLUGIN_ID_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/
 
 const zh = {
   tab: '1024 Store', connected: '商店已连接', connecting: '正在连接商店', unavailable: '商店无法嵌入',
+  loading: '正在刷新商店…',
   reload: '重新加载', openSite: '在浏览器打开', checkUpdate: '检查更新', updating: '更新中…',
   updateNow: '更新到', upToDate: '已是最新', current: '当前版本',
   fallbackTitle: '商店页面未能加载', fallbackBody: '可以重试、在系统浏览器打开主站，或检查本地壳更新。',
@@ -28,6 +29,7 @@ const zh = {
 
 const en = {
   tab: '1024 Store', connected: 'Store connected', connecting: 'Connecting to store', unavailable: 'Store could not be embedded',
+  loading: 'Refreshing store…',
   reload: 'Reload', openSite: 'Open in browser', checkUpdate: 'Check for updates', updating: 'Updating…',
   updateNow: 'Update to', upToDate: 'Up to date', current: 'Current version',
   fallbackTitle: 'The store page did not load', fallbackBody: 'Reload it, open the website in your browser, or check for a local shell update.',
@@ -62,15 +64,15 @@ function useCatalogCount() {
 const CSS = `
 .dsm-shell{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;color:var(--dsw-alias-label-primary);display:grid;grid-template-rows:auto minmax(0,1fr);height:clamp(520px,calc(100vh - 170px),860px);min-height:0;min-width:0;overflow:hidden}
 .dsm-shellbar{align-items:center;background:var(--dsw-alias-bg-layer-1);border-bottom:1px solid var(--dsw-alias-border-l2);display:flex;gap:10px;min-height:48px;padding:7px 10px}
-.dsm-brand{align-items:center;display:flex;gap:9px;min-width:0}.dsm-mark{align-items:center;background:var(--dsw-alias-brand-primary);border-radius:6px;color:#fff;display:flex;flex:0 0 28px;font-size:11px;font-weight:800;height:28px;justify-content:center}.dsm-title{font-size:14px;font-weight:720;line-height:1.2;white-space:nowrap}
-.dsm-status{align-items:center;color:var(--dsw-alias-label-secondary);display:flex;font-size:11px;gap:6px;min-width:0}.dsm-dot{background:var(--dsw-alias-label-tertiary);border-radius:50%;display:block;flex:0 0 7px;height:7px;width:7px}.dsm-status[data-state=connected] .dsm-dot{background:#22a06b}.dsm-status[data-state=failed] .dsm-dot{background:var(--dsw-alias-state-error-primary)}
+.dsm-brand{align-items:center;display:flex;gap:9px;min-width:0}.dsm-brand-logo{display:block;flex:0 0 32px;height:32px;object-fit:contain;width:32px}.dsm-title{align-items:baseline;display:flex;font-size:14px;font-weight:720;gap:5px;line-height:1.2;white-space:nowrap}.dsm-title em{color:var(--dsw-alias-brand-primary);font-style:normal}
 .dsm-grow{flex:1}.dsm-version{color:var(--dsw-alias-label-tertiary);font-size:11px;white-space:nowrap}
 .dsm-icon,.dsm-command{appearance:none;align-items:center;background:transparent;border:1px solid var(--dsw-alias-border-l3);border-radius:7px;color:inherit;cursor:pointer;display:inline-flex;font:inherit;font-size:12px;gap:6px;justify-content:center;min-height:32px;padding:0 9px;white-space:nowrap}.dsm-icon{font-size:16px;padding:0;width:32px}.dsm-command[data-kind=primary]{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-foreground);font-weight:680}.dsm-icon:hover,.dsm-command:hover{background:var(--dsw-alias-button-ghost-active-fill)}.dsm-command[data-kind=primary]:hover{filter:brightness(.94)}.dsm-icon:disabled,.dsm-command:disabled{cursor:not-allowed;opacity:.5}
-.dsm-stage{min-height:0;position:relative}.dsm-frame{background:var(--dsw-alias-bg-layer-1);border:0;height:100%;width:100%}.dsm-toast{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:7px;box-shadow:0 8px 28px rgba(0,0,0,.2);font-size:12px;left:50%;max-width:min(520px,calc(100% - 24px));overflow-wrap:anywhere;padding:9px 12px;position:absolute;top:12px;transform:translateX(-50%);z-index:2}
+.dsm-stage{min-height:0;position:relative}.dsm-frame{background:var(--dsw-alias-bg-layer-1);border:0;height:100%;width:100%}.dsm-loading{align-items:center;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);display:flex;font-size:12px;gap:9px;inset:0;justify-content:center;position:absolute;z-index:1}.dsm-spinner{animation:dsm-spin .8s linear infinite;border:2px solid var(--dsw-alias-border-l3);border-radius:50%;border-top-color:var(--dsw-alias-brand-primary);height:18px;width:18px}@keyframes dsm-spin{to{transform:rotate(360deg)}}.dsm-toast{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:7px;box-shadow:0 8px 28px rgba(0,0,0,.2);font-size:12px;left:50%;max-width:min(520px,calc(100% - 24px));overflow-wrap:anywhere;padding:9px 12px;position:absolute;top:12px;transform:translateX(-50%);z-index:2}
 .dsm-fallback{align-items:center;background:var(--dsw-alias-bg-layer-1);display:flex;inset:0;justify-content:center;overflow:auto;padding:22px;position:absolute}.dsm-fallback-inner{max-width:520px;text-align:center;width:100%}.dsm-fallback-mark{align-items:center;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;display:inline-flex;font-size:22px;height:48px;justify-content:center;width:48px}.dsm-fallback h3{font-size:17px;letter-spacing:0;margin:14px 0 7px}.dsm-fallback p{color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1.55;margin:0 auto}.dsm-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:18px}.dsm-update-state{border-top:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5;margin-top:18px;padding-top:14px}.dsm-error{color:var(--dsw-alias-state-error-primary);overflow-wrap:anywhere}.dsm-success{color:#16845b}
-.dsm-rail{align-items:center;appearance:none;background:none;border:0;border-radius:8px;color:inherit;cursor:pointer;display:flex;font:inherit;font-size:13px;gap:9px;min-height:40px;padding:0 8px;width:100%}.dsm-rail:hover{background:var(--dsw-alias-button-ghost-active-fill)}.dsm-rail[data-wide=false]{border-radius:50%;height:40px;justify-content:center;padding:0;width:40px}.dsm-rail-icon{align-items:center;display:flex;flex:0 0 28px;height:28px;justify-content:center;position:relative;width:28px}.dsm-rail-icon img{display:block;height:27px;object-fit:contain;width:27px}.dsm-rail-status-dot{background:var(--dsw-alias-label-tertiary);border:2px solid var(--dsw-alias-bg-layer-1);border-radius:50%;bottom:-1px;height:9px;position:absolute;right:-1px;width:9px}.dsm-rail-status-dot[data-connected=true]{background:#22a06b}.dsm-rail-copy{align-items:baseline;display:flex;flex:1;gap:7px;min-width:0}.dsm-rail-label{font-weight:650;overflow:hidden;text-align:left;text-overflow:ellipsis;white-space:nowrap}.dsm-rail-count{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
-.dsm-pop-backdrop{background:rgba(15,18,24,.32);inset:0;position:fixed;z-index:2147483000}.dsm-pop{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 20px 64px rgba(0,0,0,.3);display:flex;height:min(820px,calc(100vh - 64px));left:50%;overflow:hidden;position:fixed;top:50%;transform:translate(-50%,-50%);width:min(1080px,calc(100vw - 64px));z-index:2147483001}.dsm-pop .dsm-shell{border:0;border-radius:0;height:100%;width:100%}
-@media(max-width:640px){.dsm-shell{border-left:0;border-right:0;border-radius:0;height:calc(100vh - 120px);min-height:480px}.dsm-shellbar{gap:7px;padding:7px 8px}.dsm-status span:last-child,.dsm-version{display:none}.dsm-command{min-height:38px}.dsm-fallback{padding:16px}.dsm-pop{border:0;border-radius:0;height:100vh;height:100dvh;left:0;top:0;transform:none;width:100vw}.dsm-pop .dsm-shell{height:100vh;height:100dvh}.dsm-title{font-size:13px}}
+.dsm-rail{align-items:center;appearance:none;background:none;border:0;border-radius:8px;color:inherit;cursor:pointer;display:flex;font:inherit;font-size:13px;gap:9px;min-height:40px;padding:0 8px;width:100%}.dsm-rail:hover{background:var(--dsw-alias-button-ghost-active-fill)}.dsm-rail[data-wide=false]{border-radius:50%;height:40px;justify-content:center;padding:0;width:40px}.dsm-rail-icon{align-items:center;display:flex;flex:0 0 28px;height:28px;justify-content:center;position:relative;width:28px}.dsm-rail-icon img{display:block;height:27px;object-fit:contain;width:27px}.dsm-rail-status-dot{background:var(--dsw-alias-label-tertiary);border-radius:50%;display:block;flex:0 0 7px;height:7px;width:7px}.dsm-rail-status-dot.is-icon{border:2px solid var(--dsw-alias-bg-layer-1);bottom:-1px;height:9px;position:absolute;right:-1px;width:9px}.dsm-rail-status-dot[data-connected=true]{background:#22a06b}.dsm-rail-copy{align-items:center;display:flex;flex:1;gap:7px;min-width:0}.dsm-rail-label{font-weight:650;overflow:hidden;text-align:left;text-overflow:ellipsis;white-space:nowrap}.dsm-rail-count{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dsm-pop-backdrop{background:rgba(15,18,24,.32);inset:0;position:fixed;z-index:2147483000}.dsm-pop{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 20px 64px rgba(0,0,0,.3);display:flex;height:min(820px,calc(100vh - 64px));left:50%;overflow:hidden;position:fixed;top:50%;transform:translate(-50%,-50%);width:min(1080px,calc(100vw - 64px));z-index:2147483001}.dsm-pop[hidden]{display:none}.dsm-pop .dsm-shell{border:0;border-radius:0;height:100%;width:100%}
+@media(max-width:640px){.dsm-shell{border-left:0;border-right:0;border-radius:0;height:calc(100vh - 120px);min-height:480px}.dsm-shellbar{gap:7px;padding:7px 8px}.dsm-version{display:none}.dsm-command{min-height:38px}.dsm-fallback{padding:16px}.dsm-pop{border:0;border-radius:0;height:100vh;height:100dvh;left:0;top:0;transform:none;width:100vw}.dsm-pop .dsm-shell{height:100vh;height:100dvh}.dsm-title{font-size:13px}}
+@media(prefers-reduced-motion:reduce){.dsm-spinner{animation:none}}
 `
 
 function injectStyles() {
@@ -121,13 +123,18 @@ function validBridgeRequest(message) {
     && message.requestId.length <= 128
   if (!base) return false
   if (message.action === 'installed') return message.pluginId === undefined
+  if (message.action === 'catalog-cache-read') return message.catalogPage === undefined
+  if (message.action === 'catalog-cache-write') {
+    return message.catalogPage !== null && typeof message.catalogPage === 'object'
+      && !Array.isArray(message.catalogPage)
+  }
   return message.action === 'install'
     && typeof message.pluginId === 'string'
     && message.pluginId.length <= 201
     && PLUGIN_ID_RE.test(message.pluginId)
 }
 
-function MarketShell({ locale, onClose }) {
+function MarketShell({ locale, onClose, activation }) {
   const localeSnapshot = useSyncExternalStore(
     listener => locale.subscribe(listener),
     () => locale.getSnapshot(),
@@ -137,6 +144,8 @@ function MarketShell({ locale, onClose }) {
   const portRef = useRef(null)
   const readyTimerRef = useRef(null)
   const operationBusyRef = useRef(false)
+  const activationRef = useRef(activation)
+  const activationPendingRef = useRef(false)
   const [frameKey, setFrameKey] = useState(0)
   const [embedUrl, setEmbedUrl] = useState(null)
   const [connection, setConnection] = useState('connecting')
@@ -169,6 +178,17 @@ function MarketShell({ locale, onClose }) {
 
   useEffect(() => { checkUpdate() }, [checkUpdate])
   useEffect(() => closeBridge, [closeBridge])
+  useEffect(() => {
+    if (activation === undefined) return
+    if (activation !== activationRef.current) {
+      activationRef.current = activation
+      activationPendingRef.current = true
+    }
+    const port = portRef.current
+    if (!activationPendingRef.current || connection !== 'connected' || port === null) return
+    activationPendingRef.current = false
+    port.postMessage({ protocol: BRIDGE_PROTOCOL, version: BRIDGE_VERSION, type: 'activate' })
+  }, [activation, connection])
   useEffect(() => {
     let active = true
     fetch('/dsh1024/embed-config', { cache: 'no-store' })
@@ -246,6 +266,44 @@ function MarketShell({ locale, onClose }) {
       .catch(error => reply({ ok: false, error: String(error).trim().slice(-800) }))
   }, [])
 
+  const readCatalogPageCache = useCallback((message, port) => {
+    const reply = payload => port.postMessage({
+      protocol: BRIDGE_PROTOCOL,
+      version: BRIDGE_VERSION,
+      type: 'result',
+      requestId: message.requestId,
+      ...payload,
+    })
+    fetch('/dsh1024/catalog-page-cache', { cache: 'no-store' })
+      .then(responseJson)
+      .then(({ status, body }) => {
+        if (status !== 200) throw new Error(body.error || ('HTTP ' + status))
+        reply({ ok: true, catalogPage: body.page ?? null })
+      })
+      .catch(error => reply({ ok: false, error: String(error).trim().slice(-800) }))
+  }, [])
+
+  const writeCatalogPageCache = useCallback((message, port) => {
+    const reply = payload => port.postMessage({
+      protocol: BRIDGE_PROTOCOL,
+      version: BRIDGE_VERSION,
+      type: 'result',
+      requestId: message.requestId,
+      ...payload,
+    })
+    fetch('/dsh1024/catalog-page-cache', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ page: message.catalogPage }),
+    })
+      .then(responseJson)
+      .then(({ status, body }) => {
+        if (status !== 200 || body.ok !== true) throw new Error(body.error || ('HTTP ' + status))
+        reply({ ok: true })
+      })
+      .catch(error => reply({ ok: false, error: String(error).trim().slice(-800) }))
+  }, [])
+
   const connectFrame = useCallback(() => {
     closeBridge()
     setConnection('connecting')
@@ -268,7 +326,9 @@ function MarketShell({ locale, onClose }) {
       }
       if (!validBridgeRequest(message)) return
       if (message.action === 'install') runInstall(message, channel.port1)
-      else readInstalled(message, channel.port1)
+      else if (message.action === 'installed') readInstalled(message, channel.port1)
+      else if (message.action === 'catalog-cache-read') readCatalogPageCache(message, channel.port1)
+      else writeCatalogPageCache(message, channel.port1)
     }
     channel.port1.onmessageerror = () => setConnection('failed')
     channel.port1.start()
@@ -280,7 +340,7 @@ function MarketShell({ locale, onClose }) {
       new URL(embedUrl).origin,
       [channel.port2],
     )
-  }, [closeBridge, embedUrl, readInstalled, runInstall])
+  }, [closeBridge, embedUrl, readCatalogPageCache, readInstalled, runInstall, writeCatalogPageCache])
 
   useEffect(() => {
     if (embedUrl === null) return undefined
@@ -329,7 +389,6 @@ function MarketShell({ locale, onClose }) {
       .finally(() => setUpdating(false))
   }, [copy, updateInfo, updating])
 
-  const statusLabel = connection === 'connected' ? copy.connected : connection === 'failed' ? copy.unavailable : copy.connecting
   const renderUpdateAction = () => updateInfo?.updateAvailable
     ? h('button', { className: 'dsm-command', 'data-kind': 'primary', type: 'button', disabled: updating, onClick: selfUpdate },
         updating ? copy.updating : copy.updateNow + ' v' + updateInfo.latestVersion)
@@ -338,10 +397,9 @@ function MarketShell({ locale, onClose }) {
   return h('div', { className: 'dsm-shell' },
     h('header', { className: 'dsm-shellbar' },
       h('div', { className: 'dsm-brand' },
-        h('span', { className: 'dsm-mark', 'aria-hidden': true }, '1024'),
-        h('span', { className: 'dsm-title' }, copy.tab)),
-      h('div', { className: 'dsm-status', 'data-state': connection },
-        h('span', { className: 'dsm-dot', 'aria-hidden': true }), h('span', null, statusLabel)),
+        h('img', { className: 'dsm-brand-logo', src: BRAND_ICON_URL, alt: '', 'aria-hidden': true }),
+        h('span', { className: 'dsm-title' },
+          h('span', null, 'DeepSeek Harness Plugin'), h('em', null, '1024Store'))),
       h('span', { className: 'dsm-grow' }),
       updateInfo && h('span', { className: 'dsm-version' }, 'v' + updateInfo.currentVersion),
       renderUpdateAction(),
@@ -355,6 +413,8 @@ function MarketShell({ locale, onClose }) {
         onError: () => setConnection('failed'),
         sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox',
       }),
+      connection === 'connecting' && h('div', { className: 'dsm-loading', role: 'status', 'aria-label': copy.loading },
+        h('span', { className: 'dsm-spinner', 'aria-hidden': true })),
       connection !== 'failed' && (operationMessage || restartRequired) && h('div', {
         className: 'dsm-toast ' + (operationMessage.startsWith(copy.operationFailed) ? 'dsm-error' : 'dsm-success'),
         role: 'status',
@@ -385,7 +445,10 @@ function SidebarEntry({ wide, locale }) {
   )
   const copy = String(localeSnapshot.active).toLowerCase().startsWith('zh') ? zh : en
   const count = useCatalogCount()
+  const entryRef = useRef(null)
   const [open, setOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const [activation, setActivation] = useState(0)
   const label = t('tab')
   const formattedCount = count === null
     ? ''
@@ -400,22 +463,40 @@ function SidebarEntry({ wide, locale }) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [open])
 
+  const closeMarket = useCallback(() => {
+    setOpen(false)
+    window.setTimeout(() => entryRef.current?.focus(), 0)
+  }, [])
+
+  const toggleMarket = useCallback(() => {
+    if (!open) {
+      setMounted(true)
+      setActivation(value => value + 1)
+    }
+    setOpen(value => !value)
+  }, [open])
+
   return h(React.Fragment, null,
     h('button', {
+      ref: entryRef,
       className: 'dsm-rail', type: 'button', 'data-wide': wide !== false,
       title, 'aria-label': title, 'aria-expanded': open,
-      onClick: () => setOpen(value => !value),
+      onClick: toggleMarket,
     },
       h('span', { className: 'dsm-rail-icon', 'aria-hidden': true },
         h('img', { src: BRAND_ICON_URL, alt: '' }),
-        h('span', { className: 'dsm-rail-status-dot', 'data-connected': count !== null })),
+        wide === false && count !== null && h('span', { className: 'dsm-rail-status-dot is-icon', 'data-connected': true })),
       wide !== false && h('span', { className: 'dsm-rail-copy' },
         h('span', { className: 'dsm-rail-label' }, label),
-        count !== null && h('span', { className: 'dsm-rail-count' }, countLabel))),
-    open && h(React.Fragment, null,
-      h('div', { className: 'dsm-pop-backdrop', onClick: () => setOpen(false) }),
-      h('div', { className: 'dsm-pop', role: 'dialog', 'aria-modal': true, 'aria-label': label },
-        h(MarketShell, { locale, onClose: () => setOpen(false) }))))
+        count !== null && h(React.Fragment, null,
+          h('span', { className: 'dsm-rail-count' }, countLabel),
+          h('span', { className: 'dsm-rail-status-dot', 'data-connected': true, 'aria-hidden': true })))),
+    mounted && h(React.Fragment, null,
+      open && h('div', { className: 'dsm-pop-backdrop', onClick: closeMarket }),
+      h('div', {
+        className: 'dsm-pop', hidden: !open, role: open ? 'dialog' : undefined,
+        'aria-modal': open ? true : undefined, 'aria-label': label,
+      }, h(MarketShell, { locale, onClose: closeMarket, activation }))))
 }
 
 exports.name = 'dsh1024/client'
@@ -427,6 +508,12 @@ exports.apply = function apply(ctx) {
     .then(responseJson)
     .then(({ status, body }) => {
       if (status === 200 && body.registry) publishCatalogCount(body.registry.count)
+      if (status !== 200 || body.source !== 'cache') return null
+      return fetch('/dsh1024/registry?revalidate=1', { cache: 'no-store' })
+        .then(responseJson)
+        .then(({ status: refreshStatus, body: refreshBody }) => {
+          if (refreshStatus === 200 && refreshBody.registry) publishCatalogCount(refreshBody.registry.count)
+        })
     })
     .catch(() => {})
 

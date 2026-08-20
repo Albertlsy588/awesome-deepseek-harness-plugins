@@ -125,6 +125,24 @@ export interface PluginsPageParams {
   limit?: number
 }
 
+function apiRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+/** Runtime guard for a plugin-owned cached v2 page received over the embed bridge. */
+export function isPluginsPage(value: unknown): value is PluginsPage {
+  const page = apiRecord(value)
+  return page !== null && page.page === 1 && page.limit === 100
+    && typeof page.total === 'number' && Number.isSafeInteger(page.total) && page.total >= 0
+    && typeof page.totalPages === 'number' && Number.isSafeInteger(page.totalPages) && page.totalPages >= 0
+    && typeof page.catalogTotal === 'number' && Number.isSafeInteger(page.catalogTotal) && page.catalogTotal >= 0
+    && typeof page.generatedAt === 'string'
+    && Array.isArray(page.plugins) && page.plugins.length <= 100
+    && Array.isArray(page.categories) && page.categories.length <= 100
+}
+
 export function fetchPluginsPage(params: PluginsPageParams, signal?: AbortSignal): Promise<PluginsPage> {
   const search = new URLSearchParams()
   if (params.q) search.set('q', params.q)

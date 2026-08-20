@@ -15,6 +15,8 @@ export interface MarketRouteConfig {
     updateUrl: string;
     embedUrl: string;
 }
+/** Read the store that pnpm used to link an existing profile's node_modules. */
+export declare function readProfilePnpmStoreDir(directory: string): string | undefined;
 /**
  * Read non-official dependencies installed into one profile.
  * @param profile - validated profile name.

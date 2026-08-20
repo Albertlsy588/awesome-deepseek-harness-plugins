@@ -219,6 +219,16 @@ The legacy `DSH_1024STORE_*` spellings of these variables (for example
 `DSH_1024STORE_TELEMETRY=0`) remain supported permanently. When both spellings
 are set, the `DSH1024_*` value wins.
 
+## Local catalog cache
+
+The DSH plugin keeps its last validated public registry and embedded catalog
+page at `$DSH_HOME/.dsh-1024store/registry-cache.json` and
+`catalog-page-cache.json`. The embedded view paints the local page first while
+requesting the production API in parallel, then replaces the snapshot and
+cache with the fresh response. Cached data can remain available for up to seven
+days. These files belong to `dsh1024`, contain no account or installation
+secrets, and can be removed safely while DSH is stopped.
+
 ## Migrating from the old packages
 
 `dsh1024` replaces the deprecated `@dsh-1024store/cli` and `dsh-1024store` npm

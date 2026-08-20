@@ -1279,7 +1279,7 @@ main {
   min-height: 76px;
   /* main's fixed metric columns, with the install column widened for the
      split button (32px copy + 22px menu toggle). */
-  grid-template-columns: 38px 36px minmax(240px, 1fr) 120px 244px 54px 30px;
+  grid-template-columns: 38px 36px minmax(240px, 1fr) 120px 244px 54px;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
@@ -1318,7 +1318,7 @@ main {
 
 .ranking-row {
   /* Ranking rows carry the split install button too, so they keep its column. */
-  grid-template-columns: 38px 36px minmax(270px, 1fr) 120px 244px 54px 30px;
+  grid-template-columns: 38px 36px minmax(270px, 1fr) 120px 244px 54px;
 }
 
 .ranking-list {
@@ -1485,7 +1485,7 @@ main {
 /* A repository row renders its title as plain text, not a link, so there is no
    stretched overlay to switch off — the row's job is to open its panel. The
    rows inside that panel are ordinary plugin rows and keep their overlay, which
-   is what makes their whole width, trailing arrow included, clickable. */
+   is what makes their whole width clickable. */
 .package-row.is-expandable {
   cursor: pointer;
 }
@@ -1514,7 +1514,7 @@ main {
   /* One column fewer than the board row, and stated explicitly: the avatar
      belongs to the repository above, and with implicit placement the name slid
      into the vacated 36px avatar slot and truncated to three characters. */
-  grid-template-columns: 30px minmax(200px, 1fr) 120px 244px 54px 30px;
+  grid-template-columns: 30px minmax(200px, 1fr) 120px 244px 54px;
   padding-top: 6px;
   padding-bottom: 6px;
   background: var(--brand-wash);
@@ -2018,20 +2018,6 @@ main {
   color: var(--subtle);
   font-size: 11px;
   font-weight: 620;
-}
-
-.row-open {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--faint);
-}
-
-.package-row:hover .row-open,
-.package-row:has(.row-link:focus-visible) .row-open {
-  color: var(--brand-dark);
 }
 
 .state-panel,
@@ -2662,12 +2648,12 @@ main {
   }
 
   .package-row {
-    grid-template-columns: 32px 36px minmax(210px, 1fr) 110px 200px 54px 30px;
+    grid-template-columns: 32px 36px minmax(210px, 1fr) 110px 200px 54px;
     gap: 9px;
   }
 
   .ranking-row {
-    grid-template-columns: 32px 36px minmax(220px, 1fr) 110px 200px 54px 30px;
+    grid-template-columns: 32px 36px minmax(220px, 1fr) 110px 200px 54px;
   }
 
   .row-metrics {
@@ -2719,11 +2705,11 @@ main {
   }
 
   .package-row {
-    grid-template-columns: 30px 36px minmax(190px, 1fr) 180px 54px 30px;
+    grid-template-columns: 30px 36px minmax(190px, 1fr) 180px 54px;
   }
 
   .ranking-row {
-    grid-template-columns: 30px 36px minmax(190px, 1fr) 180px 54px 30px;
+    grid-template-columns: 30px 36px minmax(190px, 1fr) 180px 54px;
   }
 
   .package-row .category-tag,
@@ -3087,14 +3073,6 @@ main {
     padding: 0 10px;
   }
 
-  .row-open {
-    grid-column: 4;
-    grid-row: 1;
-    width: 44px;
-    height: 44px;
-    justify-self: end;
-  }
-
   .skeleton-row {
     min-height: 104px;
     grid-template-columns: 24px 40px minmax(0, 1fr);
@@ -3411,13 +3389,13 @@ main {
 
   .package-row {
     min-height: 84px;
-    grid-template-columns: 42px 42px minmax(320px, 1fr) 130px 272px 54px 34px;
+    grid-template-columns: 42px 42px minmax(320px, 1fr) 130px 272px 54px;
     gap: 14px;
     padding: 12px 18px;
   }
 
   .ranking-row {
-    grid-template-columns: 42px 42px minmax(360px, 1fr) 130px 272px 54px 34px;
+    grid-template-columns: 42px 42px minmax(360px, 1fr) 130px 272px 54px;
   }
 
   .ranking-list .ranking-row:nth-child(-n + 3) > .row-index {
@@ -3471,11 +3449,6 @@ main {
 
   .date-metric {
     min-width: 132px !important;
-  }
-
-  .row-open {
-    width: 34px;
-    height: 34px;
   }
 
   .skeleton-row {
@@ -4647,6 +4620,7 @@ html[data-dsh1024-embed="true"] .embedded-site-shell {
 html[data-dsh1024-embed="true"] .site-bottom-link,
 html[data-dsh1024-embed="true"] .floating-nav,
 html[data-dsh1024-embed="true"] .kanban-girl-root,
+html[data-dsh1024-embed="true"] .catalog-hero,
 html[data-dsh1024-embed="true"] .hero-actions,
 html[data-dsh1024-embed="true"] .hero-heading > p:last-child,
 html[data-dsh1024-embed="true"] .self-install-banner {
@@ -4740,32 +4714,34 @@ html[data-dsh1024-embed="true"] .catalog-content {
    website's compact copy control and its denser columns unchanged. */
 @media (min-width: 1081px) {
   html[data-dsh1024-embed="true"] .package-row {
-    grid-template-columns: 38px 36px minmax(240px, 1fr) 120px 244px 108px 30px;
+    grid-template-columns: 38px 36px minmax(240px, 1fr) 120px 244px 108px;
   }
 
   html[data-dsh1024-embed="true"] .ranking-row {
-    grid-template-columns: 38px 36px minmax(270px, 1fr) 120px 244px 108px 30px;
+    grid-template-columns: 38px 36px minmax(270px, 1fr) 120px 244px 108px;
   }
 
   html[data-dsh1024-embed="true"] .row-repo-panel .package-row {
-    grid-template-columns: 30px minmax(200px, 1fr) 120px 244px 108px 30px;
+    grid-template-columns: 30px minmax(200px, 1fr) 120px 244px 108px;
   }
+
 }
 
 @media (min-width: 861px) and (max-width: 1080px) {
   html[data-dsh1024-embed="true"] .package-row {
-    grid-template-columns: 32px 36px minmax(210px, 1fr) 110px 200px 108px 30px;
+    grid-template-columns: 32px 36px minmax(210px, 1fr) 110px 200px 108px;
   }
 
   html[data-dsh1024-embed="true"] .ranking-row {
-    grid-template-columns: 32px 36px minmax(220px, 1fr) 110px 200px 108px 30px;
+    grid-template-columns: 32px 36px minmax(220px, 1fr) 110px 200px 108px;
   }
+
 }
 
 @media (min-width: 681px) and (max-width: 860px) {
   html[data-dsh1024-embed="true"] .package-row,
   html[data-dsh1024-embed="true"] .ranking-row {
-    grid-template-columns: 30px 36px minmax(190px, 1fr) 180px 108px 30px;
+    grid-template-columns: 30px 36px minmax(190px, 1fr) 180px 108px;
   }
 }
 

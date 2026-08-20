@@ -2,17 +2,44 @@
 import { readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { installExtraArgs, installTarget, loadRegistry, parseGitHubSource } from './registry.js';
 import { runPluginCommand } from './shared/install-runner.js';
 import { reportInstallEvent } from './telemetry.js';
 import { checkForUpdate } from './update.js';
+import { resolveDshHome } from './shared/files.js';
+import { readCatalogPageCache, writeCatalogPageCache } from './catalog-cache.js';
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/;
 const PACKAGE_RE = /^(?:@[a-z0-9._-]+\/)?[A-Za-z0-9._-]+$/;
 const COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
 const BODY_LIMIT_BYTES = 4 * 1024;
+const CATALOG_CACHE_BODY_LIMIT_BYTES = 4 * 1024 * 1024;
+const BRAND_ICON = readFileSync(new URL('../client/brand-icon.png', import.meta.url));
 function profileDirectory(profile) {
     return join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'profiles', profile);
+}
+/** Read the store that pnpm used to link an existing profile's node_modules. */
+export function readProfilePnpmStoreDir(directory) {
+    try {
+        const contents = readFileSync(join(directory, 'node_modules', '.modules.yaml'), 'utf8');
+        let candidate;
+        try {
+            candidate = JSON.parse(contents).storeDir;
+        }
+        catch {
+            const match = /^\s*storeDir:\s*(.+?)\s*$/m.exec(contents);
+            candidate = match?.[1]?.replace(/^(["'])(.*)\1$/, '$2');
+        }
+        return typeof candidate === 'string'
+            && candidate !== ''
+            && !candidate.includes('\0')
+            && isAbsolute(candidate)
+            ? candidate
+            : undefined;
+    }
+    catch {
+        return undefined;
+    }
 }
 /**
  * Read non-official dependencies installed into one profile.
@@ -87,6 +114,7 @@ async function runTrackedPluginCommand(profile, action, target, progress, extraA
     progress.startedAt = Date.now();
     progress.lastLine = '';
     try {
+        const pnpmStoreDir = readProfilePnpmStoreDir(profileDirectory(profile));
         const result = await runPluginCommand({
             invocation: cliInvocation(),
             action: action === 'uninstall' ? 'remove' : 'add',
@@ -95,7 +123,14 @@ async function runTrackedPluginCommand(profile, action, target, progress, extraA
             extraArgs,
             stdio: 'capture',
             timeoutMs: COMMAND_TIMEOUT_MS,
-            env: { ...process.env, CI: 'true' },
+            env: {
+                ...process.env,
+                CI: 'true',
+                ...(pnpmStoreDir === undefined ? {} : {
+                    npm_config_store_dir: pnpmStoreDir,
+                    PNPM_STORE_DIR: pnpmStoreDir,
+                }),
+            },
             onLine: line => { progress.lastLine = line; },
         });
         if (result.error !== null) {
@@ -132,6 +167,14 @@ function sendJson(response, status, value) {
         'content-type': 'application/json; charset=utf-8',
     });
     response.end(JSON.stringify(value));
+}
+function sendBrandIcon(response) {
+    response.writeHead(200, {
+        'cache-control': 'public, max-age=31536000, immutable',
+        'content-length': String(BRAND_ICON.byteLength),
+        'content-type': 'image/png',
+    });
+    response.end(BRAND_ICON);
 }
 function isPrivateNetworkHostname(hostname) {
     const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase();
@@ -170,13 +213,13 @@ function isSameOrigin(request) {
     const host = request.headers.host;
     return isTrustedSameOrigin(origin, host);
 }
-async function readJsonBody(request) {
+async function readJsonBody(request, limit = BODY_LIMIT_BYTES) {
     const chunks = [];
     let size = 0;
     for await (const chunk of request) {
         const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         size += buffer.length;
-        if (size > BODY_LIMIT_BYTES)
+        if (size > limit)
             throw new Error('request body too large');
         chunks.push(buffer);
     }
@@ -222,8 +265,18 @@ export function mountMarketRoutes(webServer, config) {
         throw new Error('embed URL must use HTTPS (loopback HTTP is allowed for development)');
     }
     let mutating = false;
+    const dshHome = resolveDshHome();
     const progress = { active: false, action: null, target: '', startedAt: 0, lastLine: '' };
     const disposers = [
+        webServer.register({
+            kind: 'exact',
+            path: '/dsh1024/icon',
+            handler: (request, response) => {
+                if (!requireMethod(request, response, 'GET'))
+                    return;
+                sendBrandIcon(response);
+            },
+        }),
         webServer.register({
             kind: 'exact',
             path: '/dsh1024/embed-config',
@@ -243,11 +296,40 @@ export function mountMarketRoutes(webServer, config) {
                     // `?revalidate=1` is the panel asking for the current catalog behind
                     // the copy it already rendered; everything else stays cache-first.
                     const revalidate = /[?&]revalidate=1(?:&|$)/.test(request.url ?? '');
-                    const result = await loadRegistry(config.registryUrl, fetch, { revalidate });
+                    const result = await loadRegistry(config.registryUrl, fetch, {
+                        revalidate,
+                        preferCache: !revalidate,
+                        dshHome,
+                    });
                     sendJson(response, 200, result);
                 }
                 catch (error) {
                     sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+                }
+            },
+        }),
+        webServer.register({
+            kind: 'exact',
+            path: '/dsh1024/catalog-page-cache',
+            handler: async (request, response) => {
+                if (request.method === 'GET') {
+                    sendJson(response, 200, { page: await readCatalogPageCache(dshHome) });
+                    return;
+                }
+                if (request.method !== 'POST') {
+                    response.writeHead(405, { allow: 'GET, POST' });
+                    response.end();
+                    return;
+                }
+                if (!requireTrustedPost(request, response))
+                    return;
+                try {
+                    const body = await readJsonBody(request, CATALOG_CACHE_BODY_LIMIT_BYTES);
+                    await writeCatalogPageCache(dshHome, body.page);
+                    sendJson(response, 200, { ok: true });
+                }
+                catch (error) {
+                    sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
                 }
             },
         }),
@@ -268,7 +350,7 @@ export function mountMarketRoutes(webServer, config) {
                     return;
                 try {
                     const installed = readInstalled(config.profile);
-                    const { registry } = await loadRegistry(config.registryUrl);
+                    const { registry } = await loadRegistry(config.registryUrl, fetch, { dshHome });
                     const pluginIds = installedPluginIds(installed, registry.plugins);
                     const idSet = new Set(pluginIds);
                     const categoryLabels = new Map(registry.categories.map(category => [category.id, category.label]));
@@ -358,7 +440,7 @@ export function mountMarketRoutes(webServer, config) {
                     // monorepo can contribute several plugins.
                     const body = await readJsonBody(request);
                     const requestedId = typeof body.id === 'string' ? body.id.toLowerCase() : '';
-                    const { registry } = await loadRegistry(config.registryUrl);
+                    const { registry } = await loadRegistry(config.registryUrl, fetch, { dshHome });
                     const plugin = registry.plugins.find(entry => entry.id.toLowerCase() === requestedId);
                     if (plugin === undefined) {
                         sendJson(response, 400, { error: 'plugin is not in the 1024 Store registry' });
@@ -407,7 +489,7 @@ export function mountMarketRoutes(webServer, config) {
                         sendJson(response, 400, { error: 'plugin is not installed' });
                         return;
                     }
-                    const { registry } = await loadRegistry(config.registryUrl);
+                    const { registry } = await loadRegistry(config.registryUrl, fetch, { dshHome });
                     // Prefer the plugin whose github:owner/repo target appears in the installed
                     // manifest spec so telemetry is attributed to the actually-installed plugin;
                     // fall back to the display-name match only for the catalog-membership gate

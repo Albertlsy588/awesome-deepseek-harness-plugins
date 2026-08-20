@@ -14,6 +14,7 @@ function Probe() {
   return (
     <>
       <output data-testid="installed">{bridge.installedPluginIds?.join(',') ?? 'loading'}</output>
+      <output data-testid="activation">{bridge.activation}</output>
       <button
         type="button"
         data-connected={bridge.connected}
@@ -79,7 +80,7 @@ describe('EmbedBridgeProvider', () => {
       protocol: EMBED_BRIDGE_PROTOCOL,
       version: EMBED_BRIDGE_VERSION,
       type: 'ready',
-      capabilities: ['install', 'installed'],
+      capabilities: ['install', 'installed', 'catalog-cache'],
     })
 
     expect(port.postMessage).toHaveBeenLastCalledWith({
@@ -89,6 +90,17 @@ describe('EmbedBridgeProvider', () => {
       requestId: 'request-1',
       action: 'installed',
     })
+
+    await act(async () => {
+      port.onmessage?.(new MessageEvent('message', {
+        data: {
+          protocol: EMBED_BRIDGE_PROTOCOL,
+          version: EMBED_BRIDGE_VERSION,
+          type: 'activate',
+        },
+      }))
+    })
+    expect(document.querySelector('[data-testid="activation"]')?.textContent).toBe('1')
 
     await act(async () => {
       port.onmessage?.(new MessageEvent('message', {

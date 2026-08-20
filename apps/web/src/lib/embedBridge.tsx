@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { isPluginsPage, type PluginsPage } from './api'
 
 export const EMBED_BRIDGE_PROTOCOL = 'dsh1024-bridge'
 export const EMBED_BRIDGE_VERSION = 1
@@ -30,6 +31,7 @@ interface BridgeResult {
   error?: string
   pluginIds?: string[]
   plugins?: BridgeInstalledPlugin[]
+  catalogPage?: PluginsPage | null
 }
 
 interface PendingRequest {
@@ -41,21 +43,27 @@ interface PendingRequest {
 interface EmbedBridgeValue {
   embedded: boolean
   connected: boolean
+  activation: number
   installedPluginIds: string[] | null
   installedPlugins: BridgeInstalledPlugin[] | null
   installedError: string
   refreshInstalled: () => Promise<void>
   install: (pluginId: string) => Promise<BridgeResult>
+  readCatalogPageCache: () => Promise<PluginsPage | null>
+  writeCatalogPageCache: (page: PluginsPage) => Promise<void>
 }
 
 const EmbedBridgeContext = createContext<EmbedBridgeValue>({
   embedded: false,
   connected: false,
+  activation: 0,
   installedPluginIds: null,
   installedPlugins: null,
   installedError: '',
   refreshInstalled: async () => undefined,
   install: async () => ({ ok: false, error: 'Local DSH bridge is not connected.' }),
+  readCatalogPageCache: async () => null,
+  writeCatalogPageCache: async () => undefined,
 })
 
 function messageObject(value: unknown): Record<string, unknown> | null {
@@ -97,6 +105,7 @@ function initialEmbeddedState(): boolean {
 export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
   const [embedded] = useState(initialEmbeddedState)
   const [connected, setConnected] = useState(false)
+  const [activation, setActivation] = useState(0)
   const [installedPluginIds, setInstalledPluginIds] = useState<string[] | null>(null)
   const [installedPlugins, setInstalledPlugins] = useState<BridgeInstalledPlugin[] | null>(null)
   const [installedError, setInstalledError] = useState('')
@@ -138,6 +147,12 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
       portRef.current = port
       port.onmessage = (portEvent) => {
         const payload = messageObject(portEvent.data)
+        if (payload?.protocol === EMBED_BRIDGE_PROTOCOL
+          && payload.version === EMBED_BRIDGE_VERSION
+          && payload.type === 'activate') {
+          setActivation(value => value + 1)
+          return
+        }
         if (payload?.type !== 'result' || typeof payload.requestId !== 'string') return
         const pending = pendingRef.current.get(payload.requestId)
         if (!pending) return
@@ -153,11 +168,15 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
               return parsed === null ? [] : [parsed]
             })
           : undefined
+        const catalogPage = payload.catalogPage === null
+          ? null
+          : isPluginsPage(payload.catalogPage) ? payload.catalogPage : undefined
         pending.resolve({
           ok,
           error: typeof payload.error === 'string' ? payload.error : undefined,
           pluginIds,
           plugins,
+          catalogPage,
         })
       }
       port.onmessageerror = () => disconnect('Local DSH bridge sent an invalid message.')
@@ -167,7 +186,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
         protocol: EMBED_BRIDGE_PROTOCOL,
         version: EMBED_BRIDGE_VERSION,
         type: 'ready',
-        capabilities: ['install', 'installed'],
+        capabilities: ['install', 'installed', 'catalog-cache'],
       })
     }
 
@@ -188,16 +207,19 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
     }
   }, [embedded])
 
-  const sendRequest = useCallback((action: 'install' | 'installed', pluginId?: string): Promise<BridgeResult> => {
+  const sendRequest = useCallback((
+    action: 'install' | 'installed' | 'catalog-cache-read' | 'catalog-cache-write',
+    options: { pluginId?: string; catalogPage?: PluginsPage } = {},
+  ): Promise<BridgeResult> => {
     const port = portRef.current
-    if (!connected || port === null) {
+    if (port === null) {
       return Promise.resolve({ ok: false, error: 'Local DSH bridge is not connected.' })
     }
     const requestId = crypto.randomUUID()
     return new Promise<BridgeResult>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         pendingRef.current.delete(requestId)
-        reject(new Error(action === 'install' ? 'Local installation timed out.' : 'Reading installed plugins timed out.'))
+        reject(new Error(action === 'install' ? 'Local installation timed out.' : 'Local DSH bridge request timed out.'))
       }, 6 * 60 * 1000)
       pendingRef.current.set(requestId, { resolve, reject, timer })
       const message: Record<string, unknown> = {
@@ -207,10 +229,11 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
         requestId,
         action,
       }
-      if (pluginId !== undefined) message.pluginId = pluginId
+      if (options.pluginId !== undefined) message.pluginId = options.pluginId
+      if (options.catalogPage !== undefined) message.catalogPage = options.catalogPage
       port.postMessage(message)
     })
-  }, [connected])
+  }, [])
 
   const refreshInstalled = useCallback(async () => {
     setInstalledError('')
@@ -232,7 +255,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
   }, [connected, refreshInstalled])
 
   const install = useCallback(async (pluginId: string) => {
-    const result = await sendRequest('install', pluginId)
+    const result = await sendRequest('install', { pluginId })
     if (result.ok) {
       setInstalledPluginIds((current) => [...new Set([...(current ?? []), pluginId])].sort())
       void refreshInstalled()
@@ -240,15 +263,28 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
     return result
   }, [refreshInstalled, sendRequest])
 
+  const readCatalogPageCache = useCallback(async () => {
+    const result = await sendRequest('catalog-cache-read')
+    return result.ok ? result.catalogPage ?? null : null
+  }, [sendRequest])
+
+  const writeCatalogPageCache = useCallback(async (page: PluginsPage) => {
+    const result = await sendRequest('catalog-cache-write', { catalogPage: page })
+    if (!result.ok) throw new Error(result.error || 'Writing the local catalog cache failed.')
+  }, [sendRequest])
+
   const value = useMemo(() => ({
     embedded,
     connected,
+    activation,
     installedPluginIds,
     installedPlugins,
     installedError,
     refreshInstalled,
     install,
-  }), [connected, embedded, install, installedError, installedPluginIds, installedPlugins, refreshInstalled])
+    readCatalogPageCache,
+    writeCatalogPageCache,
+  }), [activation, connected, embedded, install, installedError, installedPluginIds, installedPlugins, readCatalogPageCache, refreshInstalled, writeCatalogPageCache])
   return <EmbedBridgeContext.Provider value={value}>{children}</EmbedBridgeContext.Provider>
 }
 

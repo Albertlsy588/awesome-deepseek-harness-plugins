@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   clearRegistryCache,
   installExtraArgs,
@@ -52,6 +55,43 @@ test('registry loading reuses fresh API data without reporting an outage', async
   assert.equal(first.source, 'api')
   assert.equal(second.source, 'api')
   assert.equal(calls, 1)
+})
+
+test('the plugin persists a validated registry under DSH_HOME and restores it without a request', async () => {
+  clearRegistryCache()
+  const dshHome = await mkdtemp(join(tmpdir(), 'dsh1024-registry-cache-'))
+  const registryUrl = 'https://store.example/api/v1/registry'
+  let calls = 0
+  const fetcher = async () => {
+    calls += 1
+    return new Response(JSON.stringify(registry), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  try {
+    const first = await loadRegistry(registryUrl, fetcher, { dshHome })
+    assert.equal(first.source, 'api')
+    assert.equal(calls, 1)
+
+    const cachePath = join(dshHome, '.dsh-1024store', 'registry-cache.json')
+    const persisted = JSON.parse(await readFile(cachePath, 'utf8'))
+    assert.equal(persisted.version, 1)
+    assert.equal(persisted.url, registryUrl)
+    assert.deepEqual(persisted.registry, registry)
+
+    clearRegistryCache()
+    const restored = await loadRegistry(registryUrl, async () => {
+      calls += 1
+      throw new Error('the network must not run for a fresh plugin cache')
+    }, { dshHome })
+    assert.equal(restored.source, 'cache')
+    assert.deepEqual(restored.registry, registry)
+    assert.equal(calls, 1)
+  } finally {
+    clearRegistryCache()
+    await rm(dshHome, { recursive: true, force: true })
+  }
 })
 
 test('registry loading reports cache only when an expired API refresh fails', async () => {

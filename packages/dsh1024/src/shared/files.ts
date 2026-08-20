@@ -14,6 +14,8 @@ export interface StorePaths {
   client: string
   pending: string
   receipts: string
+  registryCache: string
+  catalogPageCache: string
 }
 
 export interface FileLockOptions {
@@ -36,6 +38,8 @@ export function storePaths(dshHome: string): StorePaths {
     client: join(directory, 'client.json'),
     pending: join(directory, 'pending.json'),
     receipts: join(directory, 'receipts.json'),
+    registryCache: join(directory, 'registry-cache.json'),
+    catalogPageCache: join(directory, 'catalog-page-cache.json'),
   }
 }
 

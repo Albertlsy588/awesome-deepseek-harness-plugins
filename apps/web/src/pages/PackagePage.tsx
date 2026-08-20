@@ -41,15 +41,23 @@ import {
 } from '../../worker/seo-templates'
 import { SITE_ORIGIN, usePageSeo } from '../lib/usePageSeo'
 
+function returnPathFromState(state: unknown): string | null {
+  if (state === null || typeof state !== 'object' || Array.isArray(state)) return null
+  const candidate = (state as { dsh1024ReturnTo?: unknown }).dsh1024ReturnTo
+  if (typeof candidate !== 'string' || !candidate.startsWith('/') || candidate.startsWith('//')) return null
+  return candidate
+}
+
 export function PackagePage() {
   // Splat route: the id is owner plus every remaining segment, which is how a
   // monorepo subpackage (owner/repo/packages/foo) addresses its detail page.
   const { owner = '', '*': rest = '' } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
+  const returnPath = returnPathFromState(location.state)
   // React Router stamps the first entry of a tab's history with key 'default',
   // which is exactly "nothing on this site preceded this page".
-  const cameFromSite = location.key !== 'default'
+  const cameFromSite = returnPath !== null || location.key !== 'default'
   const requestedId = [owner, ...rest.split('/')].filter(Boolean).join('/')
   const { language, t } = useI18n()
   const [detail, setDetail] = useState<PackageDetail | null>(null)
@@ -144,7 +152,7 @@ export function PackagePage() {
         <h1>{t('notFound')}</h1>
         <p>{error}</p>
         <div className="state-actions">
-          <Link className="button button-primary" to="/plugins">
+          <Link className="button button-primary" to={returnPath ?? '/plugins'} replace={returnPath !== null}>
             <ArrowLeft size={16} aria-hidden="true" />
             {t('back')}
           </Link>
@@ -216,7 +224,11 @@ export function PackagePage() {
           or a search engine; in those tabs there is no in-app history to
           return to, so the control stays a plain link to the catalog. */}
       {cameFromSite ? (
-        <button type="button" className="back-link" onClick={() => navigate(-1)}>
+        <button
+          type="button"
+          className="back-link"
+          onClick={() => returnPath === null ? navigate(-1) : navigate(returnPath, { replace: true })}
+        >
           <ArrowLeft size={16} aria-hidden="true" />
           {t('backToPrevious')}
         </button>

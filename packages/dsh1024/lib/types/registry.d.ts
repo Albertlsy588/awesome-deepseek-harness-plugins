@@ -62,6 +62,10 @@ export interface LoadRegistryOptions {
      * again, so a newly listed plugin shows up without waiting out any TTL.
      */
     revalidate?: boolean;
+    /** Return any validated disk snapshot immediately so the client can revalidate separately. */
+    preferCache?: boolean;
+    /** Enable the plugin-owned on-disk cache under this DSH home directory. */
+    dshHome?: string;
 }
 /**
  * Load the registry from the configured HTTPS API, with a last-good response cache.
