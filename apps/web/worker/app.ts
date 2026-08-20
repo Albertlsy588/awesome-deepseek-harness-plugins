@@ -60,8 +60,12 @@ interface AppDependencies {
 
 const CACHE_HEADER = 'public, max-age=30, s-maxage=300, stale-while-revalidate=3600'
 const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
+const SELF_CATALOG_PLUGIN_IDS = new Set([
+  SELF_PLUGIN_ID,
+  `${SELF_PLUGIN_ID}/packages/dsh1024`,
+])
 const SELF_PACKAGE_NAME = 'dsh1024'
-const SELF_RELEASE_URL = 'https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh1024'
+const SELF_RELEASE_URL = 'https://deepseek1024.com/plugins/imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024'
 const SEMVER_RELEASE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 // The catalog listing is a snapshot projection that only moves when the KV
 // snapshot does; the detail endpoint carries live install counters and keeps
@@ -601,10 +605,14 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       context.env,
       executionContext(context),
     )
-    const self = snapshot.plugins.find((plugin) => normalizePluginId(plugin.id) === SELF_PLUGIN_ID)
-    const published = self?.installMethods?.find((method) =>
-      method.kind === 'npm' && method.spec === SELF_PACKAGE_NAME,
-    )
+    // Discovery now identifies this monorepo package by its subdirectory, while
+    // historical curated snapshots used the repository-root id. Search both so
+    // an old cached snapshot and the current canonical entry publish the same
+    // update manifest.
+    const published = snapshot.plugins
+      .filter((plugin) => SELF_CATALOG_PLUGIN_IDS.has(normalizePluginId(plugin.id)))
+      .flatMap((plugin) => plugin.installMethods ?? [])
+      .find((method) => method.kind === 'npm' && method.spec === SELF_PACKAGE_NAME)
     const version = published?.revision
     if (typeof version !== 'string' || !SEMVER_RELEASE.test(version)) {
       context.header('Cache-Control', 'no-store')

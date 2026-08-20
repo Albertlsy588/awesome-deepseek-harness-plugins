@@ -14,7 +14,10 @@ test('the 1024 Store API is preferred over public registry fallbacks', () => {
   assert.equal(DEFAULT_UPDATE_URL, 'https://deepseek1024.com/api/v1/self/update')
   assert.equal(DEFAULT_UPDATE_FALLBACK_URL, 'https://registry.npmjs.org/dsh1024/latest')
   assert.match(DEFAULT_UPDATE_LAST_RESORT_URL, /contents\/packages\/dsh1024\/package\.json/)
-  assert.match(DEFAULT_RELEASE_URL, /\/packages\/dsh1024$/)
+  assert.equal(
+    DEFAULT_RELEASE_URL,
+    'https://deepseek1024.com/plugins/imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024',
+  )
 })
 
 test('semantic version comparison handles releases and prereleases', () => {

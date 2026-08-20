@@ -213,7 +213,7 @@ method for the catalog's own plugin entry:
 {
   "package": "dsh1024",
   "version": "0.4.0",
-  "releaseUrl": "https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh1024",
+  "releaseUrl": "https://deepseek1024.com/plugins/imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024",
   "checkedAt": "<ISO 8601>"
 }
 ```

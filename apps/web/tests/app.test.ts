@@ -592,7 +592,7 @@ describe('market API', () => {
     const result = testCatalogResult()
     result.snapshot.plugins = [...result.snapshot.plugins, {
       ...result.snapshot.plugins[0]!,
-      id: 'imsai-sh/awesome-deepseek-harness-plugins',
+      id: 'imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024',
       name: 'dsh1024',
       owner: 'imsai-sh',
       repository: 'awesome-deepseek-harness-plugins',
@@ -619,7 +619,7 @@ describe('market API', () => {
     await expect(response.json()).resolves.toEqual({
       package: 'dsh1024',
       version: '4.5.6',
-      releaseUrl: 'https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh1024',
+      releaseUrl: 'https://deepseek1024.com/plugins/imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024',
       checkedAt: '2026-08-20T08:00:00Z',
     })
   })
