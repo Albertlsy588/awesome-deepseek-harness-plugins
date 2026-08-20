@@ -9,6 +9,7 @@ import {
   buildCatalog,
   buildPluginsPage,
   buildRankingsResponse,
+  buildRankingsV3Response,
   clampLimit,
   filterCatalogPackages,
   findPluginById,
@@ -41,6 +42,7 @@ import type {
   BackgroundContext,
   CatalogSnapshotResult,
   PackageDetail,
+  PackageSummary,
   RegistryPlugin,
   RegistryProjection,
 } from './types'
@@ -537,6 +539,53 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     })
   })
 
+  // First-party detail shell. Unlike v1 detail above, this endpoint never
+  // reaches GitHub: it is a projection of the catalog snapshot already in KV,
+  // so slow or blocked GitHub access cannot hold the whole page behind a
+  // skeleton. The client paints this response first, then requests v1 as a
+  // non-blocking enhancement for README, manifest and live repository facts.
+  app.get('/api/v2/plugins/:owner/*', async (context) => {
+    const requestedId = decodePluginIdPath(
+      new URL(context.req.url).pathname,
+      '/api/v2/plugins/',
+    )
+    if (requestedId === null) {
+      return context.json({ error: 'Invalid package identifier.' }, 400)
+    }
+
+    const snapshot = await dependencies.catalogLoader(
+      context.env,
+      executionContext(context),
+    )
+    const plugin = findPluginById(snapshot.snapshot.plugins, requestedId)
+    if (!plugin) {
+      context.header('X-Catalog-Source', snapshot.source)
+      if (snapshot.source === 'empty') {
+        context.header('Cache-Control', 'no-store')
+        return context.json(
+          { error: 'The package catalog is temporarily unavailable.', code: 'CATALOG_UNAVAILABLE' },
+          503,
+        )
+      }
+      const successors = findPluginsUnder(snapshot.snapshot.plugins, requestedId)
+      if (successors.length === 1) {
+        const canonical = new URL(context.req.url)
+        canonical.pathname = `/api/v2/plugins/${successors[0]!.id.split('/').map(encodeURIComponent).join('/')}`
+        return context.redirect(canonical.toString(), 301)
+      }
+      return context.json({ error: 'Package not found.', code: 'NOT_FOUND' }, 404)
+    }
+
+    const summary: PackageSummary = {
+      ...plugin,
+      category: categoryDescriptor(plugin.category),
+    }
+    context.header('Cache-Control', LIST_CACHE_HEADER)
+    context.header('X-Catalog-Source', snapshot.source)
+    context.header('X-Robots-Tag', 'noindex')
+    return context.json(summary)
+  })
+
   app.get('/api/v1/self/install-stats', async (context) => {
     const db = context.env?.CATALOG_DB
     const metrics = db
@@ -637,6 +686,20 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       executionContext(context),
     )
     const payload = JSON.stringify(buildRankingsResponse(snapshot))
+    context.header('Cache-Control', LIST_CACHE_HEADER)
+    context.header('ETag', contentEtag(payload))
+    context.header('X-Catalog-Source', snapshot.source)
+    context.header('X-Robots-Tag', 'noindex')
+    context.header('Content-Type', 'application/json; charset=UTF-8')
+    return context.body(payload)
+  })
+
+  app.get('/api/v3/rankings', async (context) => {
+    const snapshot = await dependencies.catalogLoader(
+      context.env,
+      executionContext(context),
+    )
+    const payload = JSON.stringify(buildRankingsV3Response(snapshot))
     context.header('Cache-Control', LIST_CACHE_HEADER)
     context.header('ETag', contentEtag(payload))
     context.header('X-Catalog-Source', snapshot.source)

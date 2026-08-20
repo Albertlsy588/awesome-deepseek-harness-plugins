@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { NpmProbeResult } from '../worker/lib/npm-registry'
+import type { NpmDownloadsResult } from '../worker/lib/npm-downloads'
 
 // The snapshot refresh and the registry are separate concerns with their own
 // tests; stubbing them keeps this file about the sweep/cursor/write logic.
@@ -13,6 +14,9 @@ const probeNpmPackage = vi.fn<
   (id: string, packageName: string, etag: string | null) => Promise<NpmProbeResult>
 >()
 vi.mock('../worker/lib/npm-registry', () => ({ probeNpmPackage }))
+
+const fetchNpmDownloads7d = vi.fn<(packageName: string) => Promise<NpmDownloadsResult>>()
+vi.mock('../worker/lib/npm-downloads', () => ({ fetchNpmDownloads7d }))
 
 const { runNpmRefreshTask } = await import('../worker/lib/npm-refresh-task')
 
@@ -60,7 +64,8 @@ const SCHEDULED_AT = Date.parse(NOW)
 function catalogDatabase(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
   for (const migration of ['0002_plugin_catalog.sql', '0005_catalog_plugins.sql',
-    '0006_ai_classification.sql', '0009_manifest_sweep.sql', '0010_npm_etag.sql']) {
+    '0006_ai_classification.sql', '0009_manifest_sweep.sql', '0010_npm_etag.sql',
+    '0011_npm_downloads.sql', '0012_npm_download_ownership.sql']) {
     database.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'))
   }
   // One topic-discovered repository; its accepted plugins are the eligible set.
@@ -146,6 +151,8 @@ function envFor(database: DatabaseSync): Env {
 describe('npm refresh task', () => {
   beforeEach(() => {
     probeNpmPackage.mockReset()
+    fetchNpmDownloads7d.mockReset()
+    fetchNpmDownloads7d.mockResolvedValue({ status: 'error' })
     refreshCatalogSnapshot.mockClear()
   })
   afterEach(() => {
@@ -170,15 +177,98 @@ describe('npm refresh task', () => {
     database.close()
   })
 
+  it('records stale download counts while the existing version sweep visits a package', async () => {
+    const database = catalogDatabase()
+    seedPlugin(database, 'a', { npmEtag: '"a1"', npmVersion: '1.0.0' })
+    database.prepare(
+      `UPDATE catalog_plugins
+          SET npm_package_name = 'pkg-a', npm_bundle_declared = 1
+        WHERE plugin_path = 'a'`,
+    ).run()
+    probeNpmPackage.mockImplementation(async (_id, _name, etag) => notModified(etag ?? ''))
+    fetchNpmDownloads7d.mockResolvedValue({
+      status: 'found', downloads: 321, start: '2026-08-12', end: '2026-08-18',
+    })
+
+    const result = await runNpmRefreshTask(envFor(database), SCHEDULED_AT)
+
+    expect(result).toMatchObject({
+      notModified: 1, downloadsChecked: 1, downloadsUpdated: 1, downloadErrors: 0,
+    })
+    expect(fetchNpmDownloads7d).toHaveBeenCalledWith('pkg-a')
+    expect(database.prepare(
+      `SELECT npm_downloads_7d, npm_downloads_start, npm_downloads_end
+         FROM catalog_plugins WHERE plugin_path = 'a'`,
+    ).get()).toEqual({
+      npm_downloads_7d: 321,
+      npm_downloads_start: '2026-08-12',
+      npm_downloads_end: '2026-08-18',
+    })
+    expect(refreshCatalogSnapshot).toHaveBeenCalledTimes(1)
+    database.close()
+  })
+
+  it('never fetches downloads for a package owned by another repository', async () => {
+    const database = catalogDatabase()
+    seedPlugin(database, 'fork', { npmEtag: '"fork1"', npmVersion: '1.0.0' })
+    database.prepare(
+      `UPDATE catalog_plugins
+          SET npm_package_name = 'pkg-fork', npm_bundle_declared = 1, npm_binding = 'mismatch'
+        WHERE plugin_path = 'fork'`,
+    ).run()
+    probeNpmPackage.mockImplementation(async (_id, _name, etag) => notModified(etag ?? ''))
+
+    const result = await runNpmRefreshTask(envFor(database), SCHEDULED_AT)
+
+    expect(result).toMatchObject({ notModified: 1, downloadsChecked: 0, downloadsUpdated: 0 })
+    expect(fetchNpmDownloads7d).not.toHaveBeenCalled()
+    database.close()
+  })
+
+  it('caps a cold-start download backfill at 50 packages per scheduled tick', async () => {
+    const database = catalogDatabase()
+    for (let index = 0; index < 51; index += 1) {
+      seedPlugin(database, `pkg-${String(index).padStart(2, '0')}`, { npmEtag: `"${index}"` })
+    }
+    database.prepare(`
+      UPDATE catalog_plugins
+         SET npm_package_name = package_name, npm_bundle_declared = 1
+    `).run()
+    probeNpmPackage.mockImplementation(async (_id, _name, etag) => notModified(etag ?? ''))
+    fetchNpmDownloads7d.mockResolvedValue({
+      status: 'found', downloads: 123, start: '2026-08-12', end: '2026-08-18',
+    })
+
+    const result = await runNpmRefreshTask(envFor(database), SCHEDULED_AT)
+
+    expect(result.downloadsChecked).toBe(50)
+    expect(result.downloadsUpdated).toBe(50)
+    expect(fetchNpmDownloads7d).toHaveBeenCalledTimes(50)
+    expect(database.prepare(
+      'SELECT COUNT(*) AS count FROM catalog_plugins WHERE npm_downloads_status = \'pending\'',
+    ).get()).toEqual({ count: 1 })
+    database.close()
+  })
+
   it('records the new version and ETag and refreshes the snapshot on a change', async () => {
     const database = catalogDatabase()
     seedPlugin(database, 'a', { npmEtag: '"a1"', npmVersion: '1.0.0' })
+    database.prepare(
+      `UPDATE catalog_plugins
+          SET npm_package_name = 'pkg-a', npm_downloads_7d = 99,
+              npm_downloads_start = '2026-08-12', npm_downloads_end = '2026-08-18',
+              npm_downloads_status = 'found', npm_downloads_checked_at = ?
+        WHERE plugin_path = 'a'`,
+    ).run(NOW)
     probeNpmPackage.mockImplementation(async () => found('3.4.5', '"a2"'))
 
     const result = await runNpmRefreshTask(envFor(database), SCHEDULED_AT)
 
     expect(result).toMatchObject({ probed: 1, found: 1 })
     expect(pluginRow(database, 'a')).toMatchObject({ npm_version: '3.4.5', npm_etag: '"a2"', npm_status: 'found' })
+    expect(database.prepare(
+      `SELECT npm_downloads_7d, npm_downloads_checked_at FROM catalog_plugins WHERE plugin_path = 'a'`,
+    ).get()).toEqual({ npm_downloads_7d: 99, npm_downloads_checked_at: NOW })
     expect(refreshCatalogSnapshot).toHaveBeenCalledTimes(1)
     database.close()
   })
@@ -235,6 +325,12 @@ describe('npm refresh task', () => {
   it('writes when a found package becomes absent (a real transition, not churn)', async () => {
     const database = catalogDatabase()
     seedPlugin(database, 'x', { npmStatus: 'found', npmVersion: '1.0.0', npmEtag: '"x1"' })
+    database.prepare(
+      `UPDATE catalog_plugins
+          SET npm_package_name = 'pkg-x', npm_downloads_7d = 99,
+              npm_downloads_status = 'found', npm_downloads_checked_at = ?
+        WHERE plugin_path = 'x'`,
+    ).run(NOW)
     probeNpmPackage.mockImplementation(async () => absent())
 
     const result = await runNpmRefreshTask(envFor(database), SCHEDULED_AT)
@@ -242,6 +338,9 @@ describe('npm refresh task', () => {
     expect(result).toMatchObject({ absent: 1, skippedUnchanged: 0 })
     // The package was unpublished: status flips and the version clears.
     expect(pluginRow(database, 'x')).toMatchObject({ npm_status: 'absent', npm_version: null, npm_etag: null })
+    expect(database.prepare(
+      `SELECT npm_downloads_7d, npm_downloads_checked_at FROM catalog_plugins WHERE plugin_path = 'x'`,
+    ).get()).toEqual({ npm_downloads_7d: null, npm_downloads_checked_at: null })
     expect(refreshCatalogSnapshot).toHaveBeenCalledTimes(1)
     database.close()
   })

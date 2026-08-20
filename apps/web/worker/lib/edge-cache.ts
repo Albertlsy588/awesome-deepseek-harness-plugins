@@ -12,6 +12,17 @@ const CACHEABLE_API_PATHS: Record<string, readonly string[]> = {
   '/api/v1/registry': [],
   '/api/v2/plugins': ['q', 'category', 'sort', 'page', 'limit'],
   '/api/v2/rankings': [],
+  '/api/v3/rankings': [],
+}
+
+function cacheableApiParams(pathname: string): readonly string[] | undefined {
+  const exact = CACHEABLE_API_PATHS[pathname]
+  if (exact !== undefined) return exact
+  // A detail has at least owner/repository after the prefix. Search remains
+  // outside the cache because it is a separate, no-store endpoint.
+  if (/^\/api\/v1\/plugins\/[^/]+\/[^/]+(?:\/.*)?$/.test(pathname)) return []
+  if (/^\/api\/v2\/plugins\/[^/]+\/[^/]+(?:\/.*)?$/.test(pathname)) return []
+  return undefined
 }
 
 // Deploys cannot purge Cache API entries already stored at every POP. Bump a
@@ -19,10 +30,12 @@ const CACHEABLE_API_PATHS: Record<string, readonly string[]> = {
 // do not wait out the previous entry's s-maxage before seeing the fix.
 const CACHE_KEY_REVISIONS: Readonly<Record<string, string>> = {
   '/api/v1/plugins': '2',
+  '/api/v2/plugins': '1',
+  '/api/v3/rankings': '1',
 }
 
 export function edgeCacheablePath(pathname: string): boolean {
-  if (pathname.startsWith('/api/')) return Object.prototype.hasOwnProperty.call(CACHEABLE_API_PATHS, pathname)
+  if (pathname.startsWith('/api/')) return cacheableApiParams(pathname) !== undefined
   // Hashed bundles are already immutable to the browser, and a miss here is the
   // SPA fallback document rather than an asset.
   if (pathname.startsWith('/assets/')) return false
@@ -48,8 +61,8 @@ export function edgeCacheablePath(pathname: string): boolean {
 export function edgeCacheKey(url: URL): Request | null {
   const pathname = isPublicApiHost(url) ? rewritePublicApiUrl(url)?.pathname : url.pathname
   if (pathname === undefined || !edgeCacheablePath(pathname)) return null
-  const significant = pathname.startsWith('/api/') ? CACHEABLE_API_PATHS[pathname] : undefined
-  if (!significant) {
+  const significant = pathname.startsWith('/api/') ? cacheableApiParams(pathname) : undefined
+  if (significant === undefined) {
     // HTML routes: the whole URL matters — a filtered permutation carries
     // different SEO metadata (noindex, canonical) than the bare page.
     return new Request(url.toString(), { method: 'GET' })
@@ -62,7 +75,13 @@ export function edgeCacheKey(url: URL): Request | null {
     if (value !== null && value !== '') canonical.searchParams.set(name, value)
   }
   const revision = CACHE_KEY_REVISIONS[pathname]
-  if (revision) canonical.searchParams.set('__edge_v', revision)
+  if (revision) {
+    // Some zones are configured to ignore query strings in cache keys. A
+    // synthetic pathname therefore provides a real namespace boundary across
+    // deployments, whereas `?__edge_v=…` can silently collide with the old
+    // entry. This URL is used only as the Cache API key and is never fetched.
+    canonical.pathname = `/__edge_cache/v${revision}${pathname}`
+  }
   return new Request(canonical.toString(), { method: 'GET' })
 }
 

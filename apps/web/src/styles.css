@@ -1625,10 +1625,6 @@ main {
   color: var(--brand);
 }
 
-.row-metrics > span.installer-metric svg {
-  color: var(--accent-teal);
-}
-
 .date-metric {
   min-width: 118px !important;
 }
@@ -2192,6 +2188,26 @@ main {
   color: var(--muted);
   font-size: 14px;
   line-height: 1.65;
+}
+
+.github-detail-notice {
+  align-items: center;
+  margin: -8px 0 18px;
+  border-color: var(--warning-line);
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+}
+
+.github-detail-notice > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.github-detail-notice .button {
+  min-height: 36px;
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .detail-actions {
@@ -2883,14 +2899,12 @@ main {
   }
 
   .category-filter {
-    flex-wrap: nowrap;
-    gap: 6px;
-    margin-right: -12px;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    padding: 2px 12px 7px 0;
-    scrollbar-width: none;
-    touch-action: pan-x;
+    flex-wrap: wrap;
+    gap: 8px 6px;
+    margin-right: 0;
+    overflow-x: visible;
+    padding: 2px 0;
+    touch-action: auto;
   }
 
   .category-filter::-webkit-scrollbar,
@@ -2943,6 +2957,24 @@ main {
     overscroll-behavior-inline: contain;
     scrollbar-width: none;
     touch-action: pan-x;
+  }
+
+  /* Directory filters are primary mobile controls, so keep every option in
+     view instead of hiding the tail behind a horizontal gesture. */
+  .sort-segments {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 2px;
+    overflow-x: visible;
+    border-radius: 14px;
+    scrollbar-width: auto;
+    touch-action: auto;
+  }
+
+  .sort-segments button {
+    min-width: 0;
+    flex: 1 1 calc(33.333% - 2px);
   }
 
   .segmented-control button {
@@ -3117,6 +3149,18 @@ main {
 
   .detail-description {
     font-size: 15px;
+  }
+
+  .github-detail-notice {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin: -6px 0 16px;
+  }
+
+  .github-detail-notice .button {
+    width: 100%;
+    min-height: 44px;
+    margin-left: 0;
   }
 
   .detail-actions {

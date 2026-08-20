@@ -1,4 +1,5 @@
 import { createApp } from './app'
+import { LIVE_STATS_API_PATH } from './api-paths'
 import { browserRevalidated, edgeCacheKey, isStorable, notModifiedFor, tagged } from './lib/edge-cache'
 import { communityPostMetadata } from './community/metadata'
 import { cleanupExpiredAuthRows } from './lib/auth'
@@ -68,7 +69,7 @@ function route(
     if (!rewritten) return publicApiNotFound(url.pathname)
     return app.fetch(new Request(rewritten.toString(), request), env, ctx)
   }
-  if (url.pathname === '/api/live') return handleLiveStats(request, env)
+  if (url.pathname === LIVE_STATS_API_PATH) return handleLiveStats(request, env)
   const trailingSlashRedirect = canonicalTrailingSlashRedirect(url)
   if (trailingSlashRedirect) return trailingSlashRedirect
   if (isWorkerRoute(url.pathname)) return app.fetch(request, env, ctx)
@@ -191,6 +192,6 @@ function logDiscovery(result: Awaited<ReturnType<typeof runPluginDiscoveryTask>>
 
 function logNpmRefresh(result: Awaited<ReturnType<typeof runNpmRefreshTask>>): void {
   // A tick that only saw 304s changed nothing; keep the log for the ones that did.
-  if (result.found + result.absent + result.errors === 0) return
+  if (result.found + result.absent + result.errors + result.downloadsChecked === 0) return
   console.log(JSON.stringify({ message: 'npm_refresh', ...result }))
 }

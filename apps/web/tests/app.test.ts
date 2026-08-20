@@ -393,6 +393,36 @@ describe('market API', () => {
     expect(missing.status).toBe(404)
   })
 
+  it('serves a first-party package summary without waiting for the GitHub detail loader', async () => {
+    const detailLoader = vi.fn(async () => {
+      throw new Error('the summary route must never reach GitHub')
+    })
+    const app = createApp({
+      catalogLoader: vi.fn(async () => testCatalogResult()),
+      detailLoader,
+    })
+
+    const summary = await app.request('/api/v2/plugins/openma-ai/deepseek-harness-tui')
+    expect(summary.status).toBe(200)
+    expect(summary.headers.get('X-Catalog-Source')).toBe('kv')
+    expect(summary.headers.get('Cache-Control')).toContain('max-age=300')
+    await expect(summary.json()).resolves.toMatchObject({
+      id: 'openma-ai/deepseek-harness-tui',
+      name: 'deepseek-harness-tui',
+      description: expect.objectContaining({ en: expect.any(String), zh: expect.any(String) }),
+      installCount: expect.any(Number),
+      category: {
+        id: 'ui',
+        order: 10,
+        label: { en: 'UI Enhancements', zh: 'UI 增强' },
+      },
+    })
+    expect(detailLoader).not.toHaveBeenCalled()
+
+    expect((await app.request('/api/v2/plugins/openma-ai/not%20valid')).status).toBe(400)
+    expect((await app.request('/api/v2/plugins/openma-ai/missing')).status).toBe(404)
+  })
+
   it('serves a monorepo subpackage plugin at its subdirectory path', async () => {
     // Echoes back whichever plugin the route resolved, so the assertions prove
     // the id lookup rather than the stub's fixed payload.
@@ -1021,5 +1051,19 @@ describe('v2 endpoints', () => {
     const body = await response.json() as { rankings: Record<string, unknown[]>; siblingsByRepository: Record<string, unknown> }
     expect(Object.keys(body.rankings)).toContain('stars')
     expect(body.siblingsByRepository).toBeTypeOf('object')
+  })
+})
+
+describe('v3 endpoints', () => {
+  it('serves npm downloads separately from the compatible v2 boards', async () => {
+    const app = testApp()
+    const v2 = await app.request('https://deepseek1024.com/api/v2/rankings')
+    const v3 = await app.request('https://deepseek1024.com/api/v3/rankings')
+    const v2Body = await v2.json() as { rankings: Record<string, unknown[]> }
+    const v3Body = await v3.json() as { rankings: Record<string, unknown[]> }
+
+    expect(v2Body.rankings).not.toHaveProperty('npmDownloads7d')
+    expect(v3.status).toBe(200)
+    expect(v3Body.rankings).toHaveProperty('npmDownloads7d')
   })
 })

@@ -217,6 +217,28 @@ async function assertHorizontalTouchScroller(page, label, selector, { requireOve
   }
 }
 
+async function assertWrappedControls(page, label, selector) {
+  const result = await page.locator(selector).evaluate((node) => {
+    const rows = new Set(
+      [...node.querySelectorAll('button')]
+        .filter((button) => button.getClientRects().length > 0)
+        .map((button) => Math.round(button.getBoundingClientRect().top)),
+    )
+    return {
+      rows: rows.size,
+      clientWidth: node.clientWidth,
+      scrollWidth: node.scrollWidth,
+      flexWrap: getComputedStyle(node).flexWrap,
+    }
+  })
+  if (result.flexWrap !== 'wrap' || result.rows < 2) {
+    throw new Error(`${label} does not wrap onto multiple rows: ${JSON.stringify(result)}`)
+  }
+  if (result.scrollWidth > result.clientWidth + 1) {
+    throw new Error(`${label} still requires horizontal scrolling: ${JSON.stringify(result)}`)
+  }
+}
+
 // Install commands must stay fully readable: they wrap onto a second line
 // instead of hiding their tail behind an inner horizontal scrollbar.
 async function assertInstallCommandsReadable(page, label, scope) {
@@ -440,8 +462,11 @@ try {
   if ((await desktop.locator('.ranking-section').count()) !== 0) {
     throw new Error('desktop catalog unexpectedly renders rankings')
   }
-  if ((await desktop.locator('.directory-section .sort-segments button').count()) !== 3) {
-    throw new Error('directory sort controls should only contain stars, newest, and active')
+  if ((await desktop.locator('.directory-section .sort-segments button').count()) !== 5) {
+    throw new Error('directory sort controls should contain stars, npm, installs, newest, and active')
+  }
+  if ((await desktop.getByRole('button', { name: 'npm榜', exact: true }).count()) !== 1) {
+    throw new Error('directory npm sort does not use the compact npm榜 label')
   }
   if ((await desktop.locator('.catalog-hero .self-install-banner').count()) !== 1) {
     throw new Error('directory hero is missing the self install banner')
@@ -507,8 +532,11 @@ try {
   if ((await rankings.locator('.directory-section').count()) !== 0) {
     throw new Error('desktop rankings unexpectedly renders the directory')
   }
-  if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 4) {
-    throw new Error('rankings should only expose the four GitHub activity modes')
+  if ((await rankings.locator('.ranking-section .segmented-control button').count()) !== 6) {
+    throw new Error('rankings should expose install plus the five public activity modes')
+  }
+  if ((await rankings.getByRole('button', { name: 'npm榜', exact: true }).count()) !== 1) {
+    throw new Error('rankings npm mode does not use the compact npm榜 label')
   }
   if (
     (await rankings.locator('.ranking-section > .section-title').count()) !== 0
@@ -712,7 +740,8 @@ try {
   await assertMinFontSize(mobile, 'mobile package metrics', '.row-metrics > span', 11)
   await assertMinFontSize(mobile, 'mobile hero description', '.hero-heading > p:last-child', 14)
   await assertMinFontSize(mobile, 'mobile hero tally label', '.hero-tally-label', 11)
-  await assertHorizontalTouchScroller(mobile, 'mobile category filters', '.category-filter')
+  await assertWrappedControls(mobile, 'mobile category filters', '.category-filter')
+  await assertWrappedControls(mobile, 'mobile directory sort modes', '.sort-segments')
 
   await mobile.locator('.category-filter button').nth(1).click()
   await mobile.waitForURL((url) => url.searchParams.has('category'))
@@ -786,7 +815,7 @@ try {
     mobileRankings,
     'mobile GitHub ranking modes',
     '.ranking-mode-group:last-child .segmented-control',
-    // Four modes fit within 390px; the scroller only engages when they overflow.
+    // Five short modes fit within 390px; the scroller only engages when they overflow.
     { requireOverflow: false },
   )
   await mobileRankings.locator('.ranking-section .segmented-control button').last().click()
@@ -931,6 +960,12 @@ try {
   await scoped.waitForURL((url) => url.pathname === '/')
   await scoped.locator('.ranking-section').waitFor()
   await scoped.close()
+
+  const compactDirectory = await openPage({ width: 320, height: 568 }, '/plugins', { touch: true })
+  await compactDirectory.locator('.directory-section .package-list').waitFor()
+  await assertWrappedControls(compactDirectory, 'compact directory sort modes', '.sort-segments')
+  await assertNoHorizontalOverflow(compactDirectory, 'compact mobile directory')
+  await compactDirectory.close()
 
   const compactMobile = await openPage({ width: 320, height: 568 }, '/rankings', { touch: true })
   await waitForRankingList(compactMobile)

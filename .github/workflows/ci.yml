@@ -21,6 +21,7 @@ jobs:
         env:
           GITHUB_TOKEN: ci-typecheck-placeholder
       - run: npm run typecheck
+      - run: npm run test:api-contract
       - run: npm test
       - run: npm run build
         env:

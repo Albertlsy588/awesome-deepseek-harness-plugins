@@ -12,11 +12,10 @@ import { normalizePluginId } from './plugin-id'
 import { emptyInstallMetrics, loadInstallMetrics } from './install-metrics'
 import { updateStarHistory } from './star-history'
 
-// v9 is a fresh key on purpose: both sides of this merge shipped their own
-// numbering, and the tightened plugin validation rejects either side's leftover
-// payload wholesale, which would leave the catalog endpoint empty until the
-// next refresh. Starting clean costs one cold read instead.
-const SNAPSHOT_KEY = 'catalog:snapshot:v9'
+// v10 drops npm download metrics from repositories that do not own the
+// published package. Starting with a fresh key prevents an old v9 snapshot
+// from keeping duplicated package-level counts visible after deployment.
+const SNAPSHOT_KEY = 'catalog:snapshot:v10'
 const SNAPSHOT_TTL_MS = 15 * 60 * 1000
 
 type JsonObject = Record<string, unknown>
@@ -56,7 +55,10 @@ function isCatalogPlugin(value: unknown): value is CatalogPlugin {
     typeof value.installs24h === 'number' &&
     typeof value.installs7d === 'number' &&
     typeof value.installs30d === 'number' &&
-    (typeof value.latestInstallAt === 'string' || value.latestInstallAt === null)
+    (typeof value.latestInstallAt === 'string' || value.latestInstallAt === null) &&
+    (value.npmDownloads7d === undefined || typeof value.npmDownloads7d === 'number' || value.npmDownloads7d === null) &&
+    (value.npmDownloadsStart === undefined || typeof value.npmDownloadsStart === 'string' || value.npmDownloadsStart === null) &&
+    (value.npmDownloadsEnd === undefined || typeof value.npmDownloadsEnd === 'string' || value.npmDownloadsEnd === null)
   )
 }
 

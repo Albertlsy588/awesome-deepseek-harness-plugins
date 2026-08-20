@@ -21,6 +21,7 @@
     "test:catalog-sync": "node --test scripts/sync-catalog.test.mjs",
     "test:readme-build": "node --test scripts/build-readme.test.mjs",
     "test:cli": "npm test --workspace dsh1024",
+    "test:api-contract": "npm run test:api-contract --workspace @dsh-1024store/web",
     "dev": "npm run dev --workspace @dsh-1024store/web",
     "build": "npm run build --workspace @dsh-1024store/web && npm run build --workspace dsh1024",
     "typecheck": "npm run typecheck --workspace @dsh-1024store/web && npm run typecheck --workspace dsh1024",

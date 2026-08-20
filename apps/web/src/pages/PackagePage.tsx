@@ -20,6 +20,9 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
+import rehypeSlug from 'rehype-slug'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
 import { CategoryTag } from '../components/CategoryTag'
@@ -28,10 +31,19 @@ import { InstallOptions } from '../components/InstallOptions'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
 import { pluginDetailPath, pluginSourceUrl } from '../../worker/lib/plugin-id'
-import { ApiError, getPackage, repositoryName, type PackageDetail } from '../lib/api'
+import {
+  ApiError,
+  getPackage,
+  getPackageSummary,
+  npmPackageUrl,
+  repositoryName,
+  type PackageDetail,
+  type PackageSummaryDetail,
+} from '../lib/api'
 import { publicAsset } from '../lib/assets'
 import { formatDate, formatDateTime, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
+import { readmeImage, readmeLink } from '../lib/readme'
 import {
   graph,
   pluginDescription,
@@ -60,18 +72,23 @@ export function PackagePage() {
   const cameFromSite = returnPath !== null || location.key !== 'default'
   const requestedId = [owner, ...rest.split('/')].filter(Boolean).join('/')
   const { language, t } = useI18n()
+  const [summary, setSummary] = useState<PackageSummaryDetail | null>(null)
   const [detail, setDetail] = useState<PackageDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [githubError, setGithubError] = useState<string | null>(null)
   const [missing, setMissing] = useState(false)
   const [reload, setReload] = useState(0)
+  const [githubReload, setGithubReload] = useState(0)
 
   useEffect(() => {
     const controller = new AbortController()
+    setSummary(null)
     setDetail(null)
     setError(null)
+    setGithubError(null)
     setMissing(false)
-    getPackage(requestedId, controller.signal)
-      .then(setDetail)
+    getPackageSummary(requestedId, controller.signal)
+      .then(setSummary)
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === 'AbortError') return
         // Only a 404 proves the plugin is gone. Anything else is a failure of
@@ -82,22 +99,38 @@ export function PackagePage() {
     return () => controller.abort()
   }, [requestedId, reload, t])
 
-  const canonicalPath = pluginDetailPath(detail?.id ?? requestedId)
+  // GitHub is an enhancement, never a prerequisite for the useful page. This
+  // effect cannot start until the first-party summary has painted once.
+  useEffect(() => {
+    if (!summary) return
+    const controller = new AbortController()
+    setDetail(null)
+    setGithubError(null)
+    getPackage(summary.id, controller.signal)
+      .then(setDetail)
+      .catch((requestError: unknown) => {
+        if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+        setGithubError(requestError instanceof Error ? requestError.message : t('githubDetailsUnavailable'))
+      })
+    return () => controller.abort()
+  }, [summary, githubReload, t])
+
+  const canonicalPath = pluginDetailPath(summary?.id ?? requestedId)
   // The splat route carries one id, so the pieces upstream took from separate
   // route params come from it: the owner is the first segment and the display
   // name the last (the subpackage directory for a monorepo plugin).
   const requestedSegments = requestedId.split('/')
-  const name = detail ? repositoryName(detail) : (requestedSegments.at(-1) ?? '')
+  const name = summary ? repositoryName(summary) : (requestedSegments.at(-1) ?? '')
   const canonicalRepository = name
   const canonicalUrl = `${SITE_ORIGIN}${canonicalPath}`
-  const categoryLabel = detail?.category?.label[language] ?? ''
-  const seoTitle = detail
-    ? pluginTitle(detail.name, detail.owner, language)
+  const categoryLabel = summary?.category?.label[language] ?? ''
+  const seoTitle = summary
+    ? pluginTitle(summary.name, summary.owner, language)
     : missing
       ? language === 'zh' ? '插件未找到 | DSH 1024Store' : 'Plugin not found | DSH 1024Store'
       : pluginTitle(name || 'DeepSeek Harness', owner || 'DSH 1024Store', language)
-  const seoDescription = detail
-    ? pluginDescription(detail.name, detail.owner, detail.description[language], categoryLabel, language)
+  const seoDescription = summary
+    ? pluginDescription(summary.name, summary.owner, summary.description[language], categoryLabel, language)
     : missing
       ? language === 'zh'
         ? '该插件不在 DeepSeek Harness 社区插件目录中。'
@@ -105,23 +138,23 @@ export function PackagePage() {
       : language === 'zh'
         ? '浏览 DeepSeek Harness 社区插件的功能、安装命令与仓库信息。'
         : 'Explore features, install commands, and repository details for a DeepSeek Harness community plugin.'
-  const schema = detail
+  const schema = summary
     ? graph([
         ...siteNodes(),
         ...pluginNodes(
           {
-            name: detail.name,
-            owner: detail.owner,
-            url: detail.url,
-            description: detail.description[language],
+            name: summary.name,
+            owner: summary.owner,
+            url: summary.url,
+            description: summary.description[language],
             categoryLabel,
-            added: detail.added,
-            stars: detail.github?.stars ?? null,
-            pushedAt: detail.github?.pushedAt ?? null,
-            updatedAt: detail.github?.updatedAt ?? null,
-            license: detail.manifest?.license ?? detail.github?.license ?? null,
+            added: summary.added,
+            stars: detail?.github?.stars ?? summary.stars,
+            pushedAt: detail?.github?.pushedAt ?? summary.pushedAt,
+            updatedAt: detail?.github?.updatedAt ?? summary.updatedAt,
+            license: detail?.manifest?.license ?? detail?.github?.license ?? null,
             repository: canonicalRepository,
-            sourceUrl: pluginSourceUrl(detail.id, detail.url, detail.github?.defaultBranch ?? 'HEAD'),
+            sourceUrl: pluginSourceUrl(summary.id, summary.url, detail?.github?.defaultBranch ?? 'HEAD'),
           },
           canonicalUrl,
           seoTitle,
@@ -142,7 +175,7 @@ export function PackagePage() {
     robots: missing ? 'noindex,follow' : 'index,follow',
     canonical: missing ? null : canonicalUrl,
     schema,
-    ready: Boolean(detail || missing),
+    ready: Boolean(summary || missing),
   })
 
   if (error) {
@@ -164,7 +197,7 @@ export function PackagePage() {
     )
   }
 
-  if (!detail) {
+  if (!summary) {
     return (
       <div className="page-container detail-loading" aria-label="Loading">
         <span className="skeleton-line skeleton-line-short" />
@@ -175,10 +208,10 @@ export function PackagePage() {
     )
   }
 
-  const github = detail.github
-  const manifest = detail.manifest
-  const category = detail.category
-    ? { id: detail.category.id, en: detail.category.label.en, zh: detail.category.label.zh, count: 0 }
+  const github = detail?.github ?? null
+  const manifest = detail?.manifest ?? null
+  const category = summary.category
+    ? { id: summary.category.id, en: summary.category.label.en, zh: summary.category.label.zh, count: 0 }
     : undefined
   const runtime = manifest?.engines
     ? Object.entries(manifest.engines)
@@ -187,26 +220,26 @@ export function PackagePage() {
     : null
   // Issues are tracked per repository, so the report link stays at the root
   // even for a subpackage; only the source link points into the subdirectory.
-  const reportUrl = `${detail.url}/issues/new?title=${encodeURIComponent(`[DSH 1024Store] ${detail.name}`)}`
+  const reportUrl = `${summary.url}/issues/new?title=${encodeURIComponent(`[DSH 1024Store] ${summary.name}`)}`
   const branch = github?.defaultBranch ?? 'main'
-  const sourceUrl = pluginSourceUrl(detail.id, detail.url, branch)
-  const detailOwner = detail.owner
-  const detailRepository = repositoryName(detail)
+  const sourceUrl = detail ? pluginSourceUrl(summary.id, summary.url, branch) : summary.url
+  const detailOwner = summary.owner
+  const detailRepository = repositoryName(summary)
   // Relative links resolve against the directory the README actually came
   // from: a subpackage without its own README falls back to the root one, and
   // rebasing that onto the subdirectory would break every link in it.
-  const readmeBasePath = detail.readmeBasePath ?? ''
-  const readmePrefix = readmeBasePath.length === 0 ? '' : `${readmeBasePath}/`
-
-  function readmeLink(href?: string): string | undefined {
-    if (!href || /^(https?:|mailto:|#)/.test(href)) return href
-    return `https://github.com/${detailOwner}/${detailRepository}/blob/${branch}/${readmePrefix}${href.replace(/^\.\//, '')}`
-  }
-
-  function readmeImage(src?: string): string | undefined {
-    if (!src || /^https?:/.test(src)) return src
-    return `https://raw.githubusercontent.com/${detailOwner}/${detailRepository}/${branch}/${readmePrefix}${src.replace(/^\.\//, '')}`
-  }
+  const readmeBasePath = detail?.readmeBasePath ?? ''
+  const readmeLocation = { owner: detailOwner, repository: detailRepository, branch, basePath: readmeBasePath }
+  const npmMethod = summary.installMethods?.find((method) => method.kind === 'npm')
+  const installData = detail ?? summary
+  const githubLoading = detail === null && githubError === null
+  const githubUnavailable = githubError !== null || Boolean(
+    detail && detail.github === null && detail.manifest === null && detail.readme === null,
+  )
+  const githubFactFallback = githubLoading ? t('loading') : t('unavailable')
+  const displayedStars = github?.stars ?? summary.stars
+  const displayedForks = github?.forks ?? summary.forks
+  const displayedPush = github?.pushedAt ?? summary.pushedAt
 
   return (
     <div className="page-container package-detail-page">
@@ -241,25 +274,32 @@ export function PackagePage() {
 
       <section className="detail-header">
         <OwnerAvatar
-          owner={detail.owner}
+          owner={summary.owner}
           size={72}
           className="detail-avatar"
           src={github?.avatarUrl}
           eager
+          fallbackToGitHub={false}
         />
         <div className="detail-heading">
           <div className="detail-title-row">
-            <h1>{detail.name}</h1>
+            <h1>{summary.name}</h1>
             <CategoryTag category={category} />
           </div>
-          <p className="detail-owner">{t('by')} <a href={`https://github.com/${detail.owner}`} target="_blank" rel="noreferrer">{detail.owner}</a></p>
-          <p className="detail-description">{detail.description[language]}</p>
+          <p className="detail-owner">{t('by')} <a href={`https://github.com/${summary.owner}`} target="_blank" rel="noreferrer">{summary.owner}</a></p>
+          <p className="detail-description">{summary.description[language]}</p>
         </div>
         <div className="detail-actions">
           <a className="button button-primary" href={sourceUrl} target="_blank" rel="noreferrer">
             <Code2 size={16} aria-hidden="true" />
             {t('source')}
           </a>
+          {npmMethod && (
+            <a className="button button-secondary" href={npmPackageUrl(npmMethod.spec)} target="_blank" rel="noreferrer">
+              <Package size={16} aria-hidden="true" />
+              {t('npmPackage')}
+            </a>
+          )}
           <a className="button button-secondary" href={reportUrl} target="_blank" rel="noreferrer">
             <CircleDot size={16} aria-hidden="true" />
             {t('report')}
@@ -267,26 +307,37 @@ export function PackagePage() {
         </div>
       </section>
 
-      {github && (
-        <dl className="repository-stats">
+      {githubUnavailable && (
+        <div className="notice github-detail-notice" role="status" title={githubError ?? undefined}>
+          <AlertTriangle size={20} aria-hidden="true" />
           <div>
-            <dt><Star size={16} aria-hidden="true" /> {t('stars')}</dt>
-            <dd>{formatNumber(github.stars, language)}</dd>
+            <strong>{t('githubDetailsUnavailable')}</strong>
+            <p>{t('githubDetailsUnavailableBody')}</p>
           </div>
-          <div>
-            <dt><GitFork size={16} aria-hidden="true" /> {t('forks')}</dt>
-            <dd>{formatNumber(github.forks, language)}</dd>
-          </div>
-          <div>
-            <dt><CircleDot size={16} aria-hidden="true" /> {t('issues')}</dt>
-            <dd>{formatNumber(github.openIssues, language)}</dd>
-          </div>
-          <div>
-            <dt><CalendarDays size={16} aria-hidden="true" /> {t('lastPush')}</dt>
-            <dd>{formatDate(github.pushedAt, language)}</dd>
-          </div>
-        </dl>
+          <button className="button button-secondary" type="button" onClick={() => setGithubReload((value) => value + 1)}>
+            {t('retryGitHub')}
+          </button>
+        </div>
       )}
+
+      <dl className="repository-stats">
+        <div>
+          <dt><Star size={16} aria-hidden="true" /> {t('stars')}</dt>
+          <dd>{displayedStars === null ? githubFactFallback : formatNumber(displayedStars, language)}</dd>
+        </div>
+        <div>
+          <dt><GitFork size={16} aria-hidden="true" /> {t('forks')}</dt>
+          <dd>{displayedForks === null ? githubFactFallback : formatNumber(displayedForks, language)}</dd>
+        </div>
+        <div>
+          <dt><CircleDot size={16} aria-hidden="true" /> {t('issues')}</dt>
+          <dd>{github ? formatNumber(github.openIssues, language) : githubFactFallback}</dd>
+        </div>
+        <div>
+          <dt><CalendarDays size={16} aria-hidden="true" /> {t('lastPush')}</dt>
+          <dd>{displayedPush ? formatDate(displayedPush, language) : githubFactFallback}</dd>
+        </div>
+      </dl>
 
       <div className="detail-layout">
         <div className="detail-primary">
@@ -294,9 +345,9 @@ export function PackagePage() {
             <h2 id="install-heading">{t('install')}</h2>
             {/* Verified methods when the crawler has reached this plugin; the
                 plain two-option form until then. */}
-            {detail.installMethods && detail.installMethods.length > 0
-              ? <InstallMethods methods={detail.installMethods} pluginId={detail.id} />
-              : <InstallOptions plugin={detail} />}
+            {summary.installMethods && summary.installMethods.length > 0
+              ? <InstallMethods methods={summary.installMethods} pluginId={summary.id} />
+              : <InstallOptions plugin={summary} />}
           </section>
 
           <section className="detail-section install-activity-section" aria-labelledby="install-activity-heading">
@@ -310,8 +361,8 @@ export function PackagePage() {
                 <span>
                   <small>{t('latestInstall')}</small>
                   <strong>
-                    {detail.latestInstallAt
-                      ? formatDateTime(detail.latestInstallAt, language)
+                    {installData.latestInstallAt
+                      ? formatDateTime(installData.latestInstallAt, language)
                       : t('neverInstalled')}
                   </strong>
                 </span>
@@ -321,51 +372,51 @@ export function PackagePage() {
             <dl className="install-stat-grid">
               <div className="install-stat-primary">
                 <dt><Download size={16} aria-hidden="true" /> {t('installOperations')}</dt>
-                <dd>{formatNumber(detail.installCount ?? 0, language)}</dd>
+                <dd>{formatNumber(installData.installCount ?? 0, language)}</dd>
               </div>
               <div className="install-stat-primary">
                 <dt><Users size={16} aria-hidden="true" /> {t('anonymousInstallers')}</dt>
-                <dd>{formatNumber(detail.installerCount ?? 0, language)}</dd>
+                <dd>{formatNumber(installData.installerCount ?? 0, language)}</dd>
               </div>
               <div>
                 <dt>{t('installs24h')}</dt>
-                <dd>{formatNumber(detail.installs24h ?? 0, language)}</dd>
+                <dd>{formatNumber(installData.installs24h ?? 0, language)}</dd>
               </div>
               <div>
                 <dt>{t('installs7d')}</dt>
-                <dd>{formatNumber(detail.installs7d ?? 0, language)}</dd>
+                <dd>{formatNumber(installData.installs7d ?? 0, language)}</dd>
               </div>
               <div>
                 <dt>{t('installs30d')}</dt>
-                <dd>{formatNumber(detail.installs30d ?? 0, language)}</dd>
+                <dd>{formatNumber(installData.installs30d ?? 0, language)}</dd>
               </div>
             </dl>
 
             <dl className="install-operation-breakdown">
               <div>
                 <dt><CheckCircle2 size={14} aria-hidden="true" /> {t('firstInstalls')}</dt>
-                <dd>{formatNumber(detail.firstInstallCount ?? 0, language)}</dd>
+                <dd>{formatNumber(installData.firstInstallCount ?? 0, language)}</dd>
               </div>
               <div>
                 <dt><RefreshCw size={14} aria-hidden="true" /> {t('reinstalls')}</dt>
-                <dd>{formatNumber(detail.reinstallCount ?? 0, language)}</dd>
+                <dd>{formatNumber(installData.reinstallCount ?? 0, language)}</dd>
               </div>
               <div>
                 <dt><ArrowUp size={14} aria-hidden="true" /> {t('updates')}</dt>
-                <dd>{formatNumber(detail.updateCount ?? 0, language)}</dd>
+                <dd>{formatNumber(installData.updateCount ?? 0, language)}</dd>
               </div>
               <div>
                 <dt><Trash2 size={14} aria-hidden="true" /> {t('removals')}</dt>
-                <dd>{formatNumber(detail.removeCount ?? 0, language)}</dd>
+                <dd>{formatNumber(installData.removeCount ?? 0, language)}</dd>
               </div>
               <div>
                 <dt><XCircle size={14} aria-hidden="true" /> {t('failedOperations')}</dt>
-                <dd>{formatNumber(detail.failureCount ?? 0, language)}</dd>
+                <dd>{formatNumber(installData.failureCount ?? 0, language)}</dd>
               </div>
             </dl>
           </section>
 
-          <div className={`notice verification-notice ${detail.verification.bundleDeclared ? 'notice-success' : 'notice-warning'}`}>
+          {detail && !githubUnavailable && <div className={`notice verification-notice ${detail.verification.bundleDeclared ? 'notice-success' : 'notice-warning'}`}>
             {detail.verification.bundleDeclared ? (
               <CheckCircle2 size={20} aria-hidden="true" />
             ) : (
@@ -375,7 +426,7 @@ export function PackagePage() {
               <strong>{detail.verification.bundleDeclared ? t('verifiedBundle') : t('unverifiedBundle')}</strong>
               <p>{detail.verification.bundleDeclared ? t('verifiedBody') : t('unverifiedBody')}</p>
             </div>
-          </div>
+          </div>}
 
           <div className="notice security-notice">
             <ShieldAlert size={20} aria-hidden="true" />
@@ -392,12 +443,12 @@ export function PackagePage() {
             {t('packageInfo')}
           </h2>
           <dl className="package-facts">
-            <div><dt>{t('version')}</dt><dd>{manifest?.version ?? t('unavailable')}</dd></div>
-            <div><dt>{t('license')}</dt><dd>{manifest?.license ?? github?.license ?? t('unavailable')}</dd></div>
-            <div><dt>{t('bundlePatch')}</dt><dd><code>{manifest?.bundlePatch ?? t('unavailable')}</code></dd></div>
-            <div><dt>{t('dependencies')}</dt><dd>{manifest?.dependencies ?? t('unavailable')}</dd></div>
-            <div><dt>{t('peerDependencies')}</dt><dd>{manifest?.peerDependencies ?? t('unavailable')}</dd></div>
-            <div><dt>{t('runtime')}</dt><dd>{runtime ?? t('unavailable')}</dd></div>
+            <div><dt>{t('version')}</dt><dd>{manifest?.version ?? npmMethod?.revision ?? githubFactFallback}</dd></div>
+            <div><dt>{t('license')}</dt><dd>{manifest?.license ?? github?.license ?? githubFactFallback}</dd></div>
+            <div><dt>{t('bundlePatch')}</dt><dd><code>{manifest?.bundlePatch ?? githubFactFallback}</code></dd></div>
+            <div><dt>{t('dependencies')}</dt><dd>{manifest?.dependencies ?? githubFactFallback}</dd></div>
+            <div><dt>{t('peerDependencies')}</dt><dd>{manifest?.peerDependencies ?? githubFactFallback}</dd></div>
+            <div><dt>{t('runtime')}</dt><dd>{runtime ?? githubFactFallback}</dd></div>
           </dl>
           {github?.homepage && (
             <a className="sidebar-link" href={github.homepage} target="_blank" rel="noreferrer">
@@ -409,14 +460,15 @@ export function PackagePage() {
 
         <section className="detail-section readme-section" aria-labelledby="readme-heading">
           <h2 id="readme-heading">{t('readme')}</h2>
-          {detail.readme ? (
+          {detail?.readme ? (
             <div className="markdown-body">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeSlug]}
                 components={{
-                  h1: ({ children }) => <h3>{children}</h3>,
-                  h2: ({ children }) => <h3>{children}</h3>,
-                  h3: ({ children }) => <h4>{children}</h4>,
+                  h1: ({ node: _node, children, ...props }) => <h3 {...props}>{children}</h3>,
+                  h2: ({ node: _node, children, ...props }) => <h3 {...props}>{children}</h3>,
+                  h3: ({ node: _node, children, ...props }) => <h4 {...props}>{children}</h4>,
                   a: ({ href, children }) => {
                     if (href?.startsWith('#')) {
                       // Fragment links must never reach the router: under hash-based
@@ -435,17 +487,21 @@ export function PackagePage() {
                       )
                     }
                     return (
-                      <a href={readmeLink(href)} target="_blank" rel="noreferrer">
+                      <a href={readmeLink(href, readmeLocation)} target="_blank" rel="noreferrer">
                         {children}
                       </a>
                     )
                   },
-                  img: ({ src, alt }) => <img src={readmeImage(src)} alt={alt ?? ''} loading="lazy" />,
+                  img: ({ src, alt }) => <img src={readmeImage(src, readmeLocation)} alt={alt ?? ''} loading="lazy" />,
                 }}
               >
                 {detail.readme}
               </ReactMarkdown>
             </div>
+          ) : githubLoading ? (
+            <p className="muted-copy" role="status">{t('githubDetailsLoading')}</p>
+          ) : githubUnavailable ? (
+            <p className="muted-copy">{t('githubDetailsUnavailableBody')}</p>
           ) : (
             <p className="muted-copy">{t('noReadme')}</p>
           )}

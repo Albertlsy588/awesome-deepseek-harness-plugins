@@ -71,9 +71,10 @@ Catalog metadata contributions are provided under CC0-1.0. Code contributions ar
 Non-catalog changes are rejected by the public pull request gate. Maintainers use the explicit emergency ruleset bypass for trusted repository maintenance, including workflows and the Web application. Community pull requests that update or remove catalog entries need no bypass: once their static review is green, a maintainer reviews the change set and merges through the normal pull request UI.
 
 1. Create a focused maintenance branch from `main`.
-2. Run `npm run cf-typecheck`, `npm run typecheck`, `npm test`, and `npm run build`.
-3. Run `npm run test:visual` and attach screenshots for visible UI changes.
-4. Review the complete diff, then use the emergency bypass deliberately when merging the maintenance pull request.
-5. Avoid unrelated formatting churn, and never hand-edit the bot-generated `README.md` or `catalog/README.md`; run `npm run readme:build` instead.
+2. For any API-related change, register the route and compatibility evidence in `apps/web/contracts/`, preserve every existing-version contract, and run `npm run test:api-contract`. Breaking behavior requires a new versioned route while the previous version remains available.
+3. Run `npm run cf-typecheck`, `npm run typecheck`, `npm test`, and `npm run build`.
+4. Run `npm run test:visual` and attach screenshots for visible UI changes.
+5. Review the complete diff, then use the emergency bypass deliberately when merging the maintenance pull request.
+6. Avoid unrelated formatting churn, and never hand-edit the bot-generated `README.md` or `catalog/README.md`; run `npm run readme:build` instead.
 
 Never commit `.dev.vars`, GitHub tokens, Cloudflare credentials, or other secrets.

@@ -46,7 +46,7 @@ import {
 } from '../../worker/seo-templates'
 import { usePageSeo } from '../lib/usePageSeo'
 
-const SORT_MODES: CatalogSort[] = ['stars', 'newest', 'active']
+const SORT_MODES: CatalogSort[] = ['stars', 'npmDownloads7d', 'installs', 'newest', 'active']
 // One directory page. The server slices the catalog; the client asks for the
 // next page on "load more" and appends, so a browse never holds more than it
 // has scrolled to.
@@ -78,9 +78,11 @@ function directoryFrom(key: string, page: PluginsPage): DirectoryState {
 }
 // growth7d / growth30d stay available in the API but are hidden here until
 // enough snapshot history accumulates to make those windows meaningful.
+const INSTALL_RANKING_MODES: RankingMode[] = ['installs']
 const GITHUB_RANKING_MODES: RankingMode[] = [
   'growth24h',
   'stars',
+  'npmDownloads7d',
   'newest',
   'active',
 ]
@@ -90,6 +92,7 @@ function rankingLabel(mode: RankingMode): Parameters<ReturnType<typeof useI18n>[
   if (mode === 'installs24h') return 'installs24h'
   if (mode === 'installs7d') return 'installs7d'
   if (mode === 'installs30d') return 'installs30d'
+  if (mode === 'npmDownloads7d') return 'npmRanking'
   if (mode === 'growth24h') return 'growth24h'
   if (mode === 'growth7d') return 'growth7d'
   if (mode === 'growth30d') return 'growth30d'
@@ -396,6 +399,8 @@ export function CatalogPage({ view }: CatalogPageProps) {
   )
 
   const visiblePackages = directoryReady ? directory.plugins : []
+  const npmDirectoryPending = directoryReady && visiblePackages.length > 0 && sort === 'npmDownloads7d' &&
+    visiblePackages.every((plugin) => plugin.npmDownloads7d == null)
   const hasMorePackages = directoryReady && directory.page < directory.totalPages
   const directoryTotal = directoryReady ? directory.total : 0
   const catalogTotal = directory?.catalogTotal ?? rankingsData?.catalogTotal ?? null
@@ -437,7 +442,8 @@ export function CatalogPage({ view }: CatalogPageProps) {
   }, [query, rankingSearch, rankingsData, rankingMode])
   const isGrowthMode =
     rankingMode === 'growth24h' || rankingMode === 'growth7d' || rankingMode === 'growth30d'
-  const isPendingRanking = !query && isGrowthMode
+  const isNpmMode = rankingMode === 'npmDownloads7d'
+  const isPendingRanking = !query && (isGrowthMode || isNpmMode)
   const catalogHref = query ? `/plugins?q=${encodeURIComponent(query)}` : '/plugins'
   const rankingsHref = query ? `/?q=${encodeURIComponent(query)}` : '/'
   const canonicalPath = view === 'catalog' ? '/plugins' : '/'
@@ -666,6 +672,21 @@ export function CatalogPage({ view }: CatalogPageProps) {
             <div className="view-controls">
               <div className="ranking-mode-groups">
                 <div className="ranking-mode-group">
+                  <div className="segmented-control" role="group" aria-label={t('installRankings')}>
+                    {INSTALL_RANKING_MODES.map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={rankingMode === mode ? 'selected' : undefined}
+                        onClick={() => setRankingMode(mode)}
+                        aria-pressed={rankingMode === mode}
+                      >
+                        {t(rankingLabel(mode))}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="ranking-mode-group">
                   <div className="segmented-control" role="group" aria-label={t('githubRankings')}>
                     {GITHUB_RANKING_MODES.map((mode) => (
                       <button
@@ -701,12 +722,16 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 <h3>{t(
                   isGrowthMode && !query
                     ? 'growthPendingTitle'
-                    : 'emptyTitle',
+                    : isNpmMode && !query
+                      ? 'npmDownloadsPendingTitle'
+                      : 'emptyTitle',
                 )}</h3>
                 <p>{t(
                   isGrowthMode && !query
                     ? 'growthPendingBody'
-                    : 'emptyBody',
+                    : isNpmMode && !query
+                      ? 'npmDownloadsPendingBody'
+                      : 'emptyBody',
                 )}</p>
                 <button
                   className="button button-secondary"
@@ -754,9 +779,13 @@ export function CatalogPage({ view }: CatalogPageProps) {
                     {t(
                       mode === 'stars'
                         ? 'sortStars'
-                        : mode === 'newest'
-                          ? 'sortNewest'
-                          : 'sortActive',
+                        : mode === 'npmDownloads7d'
+                          ? 'npmRanking'
+                          : mode === 'installs'
+                            ? 'sortInstalls'
+                            : mode === 'newest'
+                              ? 'sortNewest'
+                              : 'sortActive',
                     )}
                   </button>
                 ))}
@@ -777,6 +806,15 @@ export function CatalogPage({ view }: CatalogPageProps) {
               </div>
             ) : !directoryReady ? (
               <LoadingState />
+            ) : npmDirectoryPending ? (
+              <div className="state-panel">
+                <Search size={27} aria-hidden="true" />
+                <h3>{t('npmDownloadsPendingTitle')}</h3>
+                <p>{t('npmDownloadsPendingBody')}</p>
+                <button className="button button-secondary" type="button" onClick={() => updateFilter('sort', 'stars')}>
+                  {t('sortStars')}
+                </button>
+              </div>
             ) : visiblePackages.length === 0 ? (
               <div className="state-panel">
                 <Search size={27} aria-hidden="true" />
@@ -795,6 +833,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
                       plugin={plugin}
                       category={categoryMap.get(plugin.category)}
                       index={index}
+                      directorySort={sort}
                     />
                   ))}
                 </div>

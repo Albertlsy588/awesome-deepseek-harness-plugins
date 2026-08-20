@@ -10,6 +10,7 @@ import {
   buildCatalog,
   buildPluginsPage,
   buildRankingsResponse,
+  buildRankingsV3Response,
   clampLimit,
   deriveCatalogResponse,
   findPlugin,
@@ -28,6 +29,7 @@ describe('catalog queries', () => {
     })
     expect(parseCatalogQuery({ sort: 'growth7d' }).sort).toBe('growth7d')
     expect(parseCatalogQuery({ sort: 'installs24h' }).sort).toBe('installs24h')
+    expect(parseCatalogQuery({ sort: 'npmDownloads7d' }).sort).toBe('npmDownloads7d')
   })
 
   it('searches localized descriptions, filters categories, and does not paginate', () => {
@@ -334,7 +336,10 @@ describe('edge cache allowlist', () => {
       '/api/v1/plugins',
       '/api/v1/registry',
       '/api/v2/plugins',
+      '/api/v2/plugins/owner/repository',
       '/api/v2/rankings',
+      '/api/v3/rankings',
+      '/api/v1/plugins/owner/repository',
       '/',
       '/plugins',
       '/rankings',
@@ -367,11 +372,26 @@ describe('edge cache key normalization', () => {
     expect(bare).toBe('https://deepseek1024.com/api/v2/rankings')
   })
 
+  it('canonicalizes detail requests without caching plugin search', () => {
+    expect(key('https://deepseek1024.com/api/v1/plugins/owner/repo?bust=1'))
+      .toBe('https://deepseek1024.com/api/v1/plugins/owner/repo')
+    expect(key('https://deepseek1024.com/api/v2/plugins/owner/repo?bust=1'))
+      .toBe('https://deepseek1024.com/api/v2/plugins/owner/repo')
+    expect(key('https://deepseek1024.com/api/v1/plugins/search?q=repo')).toBeNull()
+  })
+
   it('versions the v1 listing cache independently of its public query shape', () => {
     expect(key('https://deepseek1024.com/api/v1/plugins'))
-      .toBe('https://deepseek1024.com/api/v1/plugins?__edge_v=2')
+      .toBe('https://deepseek1024.com/__edge_cache/v2/api/v1/plugins')
     expect(key('https://deepseek1024.com/api/v1/plugins?sort=name&bust=old'))
-      .toBe('https://deepseek1024.com/api/v1/plugins?sort=name&__edge_v=2')
+      .toBe('https://deepseek1024.com/__edge_cache/v2/api/v1/plugins?sort=name')
+  })
+
+  it('versions npm-bearing listing and ranking caches for ownership fixes', () => {
+    expect(key('https://deepseek1024.com/api/v2/plugins?sort=npmDownloads7d'))
+      .toBe('https://deepseek1024.com/__edge_cache/v1/api/v2/plugins?sort=npmDownloads7d')
+    expect(key('https://deepseek1024.com/api/v3/rankings?bust=old'))
+      .toBe('https://deepseek1024.com/__edge_cache/v1/api/v3/rankings')
   })
 
   it('leaves HTML routes keyed by their whole URL', () => {
@@ -557,5 +577,39 @@ describe('v2 rankings', () => {
     // The stars board seats the monorepo once and records the sibling it hid.
     const seat = response.rankings.stars.find((row) => row.owner === 'mono')
     expect(seat?.repositorySiblings).toBe(1)
+  })
+})
+
+describe('v3 rankings', () => {
+  it('ranks each published npm package once without changing v2', () => {
+    const base = testCatalogResult()
+    const plugins = base.snapshot.plugins.map((plugin, index) => ({
+      ...plugin,
+      npmDownloads7d: index === 0 ? 50 : index === 1 ? 42 : index === 2 ? 12 : null,
+      installMethods: index < 2 ? [{
+        kind: 'npm' as const,
+        spec: '@scope/shared',
+        command: 'dsh plugin add @scope/shared',
+        verification: 'verified' as const,
+        code: 'published_package' as const,
+        requiresBuildAllowance: false,
+        revision: '1.0.0',
+        checkedAt: '2026-08-20T00:00:00.000Z',
+      }] : index === 2 ? [{
+        kind: 'npm' as const,
+        spec: '@scope/other',
+        command: 'dsh plugin add @scope/other',
+        verification: 'verified' as const,
+        code: 'published_package' as const,
+        requiresBuildAllowance: false,
+        revision: '1.0.0',
+        checkedAt: '2026-08-20T00:00:00.000Z',
+      }] : undefined,
+    }))
+    const result = { snapshot: { ...base.snapshot, plugins }, source: base.source }
+
+    expect(buildRankingsResponse(result).rankings).not.toHaveProperty('npmDownloads7d')
+    expect(buildRankingsV3Response(result).rankings.npmDownloads7d.map((plugin) => plugin.npmDownloads7d))
+      .toEqual([50, 12])
   })
 })

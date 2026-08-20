@@ -48,6 +48,9 @@ export interface CatalogPlugin extends RegistryPlugin, InstallMetrics {
   growth24h: number | null
   growth7d: number | null
   growth30d: number | null
+  npmDownloads7d?: number | null
+  npmDownloadsStart?: string | null
+  npmDownloadsEnd?: string | null
 }
 
 export interface CategoryResult {
@@ -62,6 +65,7 @@ export type CatalogSort =
   | 'installs24h'
   | 'installs7d'
   | 'installs30d'
+  | 'npmDownloads7d'
   | 'stars'
   | 'growth24h'
   | 'growth7d'
@@ -107,7 +111,7 @@ export interface PluginsPage {
   source: CatalogSource
 }
 
-/** The leaderboards from `/api/v2/rankings`, with their sibling groups. */
+/** The leaderboards from `/api/v3/rankings`, with their sibling groups. */
 export interface RankingsData {
   rankings: Record<RankingMode, RankedPlugin[]>
   siblingsByRepository: Record<string, CatalogPlugin[]>
@@ -155,14 +159,33 @@ export function fetchPluginsPage(params: PluginsPageParams, signal?: AbortSignal
   return requestJson<PluginsPage>(`${API_ORIGIN}/api/v2/plugins${query ? `?${query}` : ''}`, signal)
 }
 
-export function fetchRankings(signal?: AbortSignal): Promise<RankingsData> {
-  return requestJson<RankingsData>(`${API_ORIGIN}/api/v2/rankings`, signal)
+export async function fetchRankings(signal?: AbortSignal): Promise<RankingsData> {
+  try {
+    return await requestJson<RankingsData>(`${API_ORIGIN}/api/v3/rankings`, signal)
+  } catch (error) {
+    // During a rolling deployment an old Worker can briefly serve the new
+    // client. Its v2 shape is still valid; only the new board is absent.
+    if (!(error instanceof ApiError) || error.status !== 404) throw error
+    const compatible = await requestJson<Omit<RankingsData, 'rankings'> & {
+      rankings: Omit<RankingsData['rankings'], 'npmDownloads7d'>
+    }>(`${API_ORIGIN}/api/v2/rankings`, signal)
+    return {
+      ...compatible,
+      rankings: { ...compatible.rankings, npmDownloads7d: [] },
+    }
+  }
 }
 
 export interface CategoryDescriptor {
   id: string
   order: number
   label: Record<Language, string>
+}
+
+/** Snapshot-only detail data. It is intentionally enough to render the useful
+ * page shell without waiting for GitHub's API or raw-content domains. */
+export interface PackageSummaryDetail extends Omit<CatalogPlugin, 'category'> {
+  category: CategoryDescriptor | null
 }
 
 export interface PackageDetail extends Omit<RegistryPlugin, 'category'>, InstallMetrics {
@@ -241,6 +264,15 @@ export async function requestJson<T>(url: string, signal?: AbortSignal): Promise
 export function getPackage(id: string, signal?: AbortSignal): Promise<PackageDetail> {
   const encoded = id.split('/').map(encodeURIComponent).join('/')
   return requestJson<PackageDetail>(`${API_ORIGIN}/api/v1/plugins/${encoded}`, signal)
+}
+
+export function getPackageSummary(id: string, signal?: AbortSignal): Promise<PackageSummaryDetail> {
+  const encoded = id.split('/').map(encodeURIComponent).join('/')
+  return requestJson<PackageSummaryDetail>(`${API_ORIGIN}/api/v2/plugins/${encoded}`, signal)
+}
+
+export function npmPackageUrl(packageName: string): string {
+  return `https://www.npmjs.com/package/${packageName.split('/').map(encodeURIComponent).join('/')}`
 }
 
 export function packagePath(plugin: Pick<RegistryPlugin, 'id'>): string {

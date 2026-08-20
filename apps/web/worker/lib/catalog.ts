@@ -8,6 +8,7 @@ import type {
   RankedPlugin,
   RankingBoards,
   RankingsResponse,
+  RankingsResponseV3,
   RegistryPlugin,
   StoredCatalogSnapshot,
 } from '../types'
@@ -26,6 +27,7 @@ export function parseCatalogQuery(query: Record<string, string>): CatalogQuery {
     requestedSort === 'installs24h' ||
     requestedSort === 'installs7d' ||
     requestedSort === 'installs30d' ||
+    requestedSort === 'npmDownloads7d' ||
     requestedSort === 'growth24h' ||
     requestedSort === 'growth7d' ||
     requestedSort === 'growth30d' ||
@@ -130,6 +132,12 @@ export function comparePlugins(
     return (left, right) =>
       compareNullableNumber(installsForSort(left, sort), installsForSort(right, sort)) ||
       compareNullableNumber(left.installerCount, right.installerCount) ||
+      compareNullableNumber(left.stars, right.stars) ||
+      left.name.localeCompare(right.name)
+  }
+  if (sort === 'npmDownloads7d') {
+    return (left, right) =>
+      compareNullableNumber(left.npmDownloads7d ?? null, right.npmDownloads7d ?? null) ||
       compareNullableNumber(left.stars, right.stars) ||
       left.name.localeCompare(right.name)
   }
@@ -351,6 +359,35 @@ export function buildRankingsResponse(result: CatalogSnapshotResult): RankingsRe
     categories: categoryResults(snapshot),
     generatedAt: snapshot.generatedAt,
     source,
+  }
+}
+
+/**
+ * v3 adds npm downloads as a separate board. Keeping this outside
+ * `rankingBoards` is deliberate: v1 and v2 have a published, fixed board set.
+ */
+export function buildRankingsV3Response(result: CatalogSnapshotResult): RankingsResponseV3 {
+  const response = buildRankingsResponse(result)
+  const seenPackages = new Set<string>()
+  const npmDownloads7d = ranked(
+    [...result.snapshot.plugins]
+      .filter((plugin) => (plugin.npmDownloads7d ?? 0) > 0)
+      .sort(comparePlugins('npmDownloads7d'))
+      .filter((plugin) => {
+        const npmMethod = plugin.installMethods?.find((method) => (
+          method.kind === 'npm' && method.verification === 'verified'
+        ))
+        if (!npmMethod) return false
+        const packageKey = npmMethod.spec.trim().toLocaleLowerCase('en-US')
+        if (!packageKey || seenPackages.has(packageKey)) return false
+        seenPackages.add(packageKey)
+        return true
+      }),
+  ).map(withoutInstallMethods)
+
+  return {
+    ...response,
+    rankings: { ...response.rankings, npmDownloads7d },
   }
 }
 

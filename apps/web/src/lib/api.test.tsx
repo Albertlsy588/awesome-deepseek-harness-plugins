@@ -1,5 +1,54 @@
-import { describe, expect, it } from 'vitest'
-import { pluginListIdentity, repositoryInstallTarget } from './api'
+import { describe, expect, it, vi } from 'vitest'
+import { fetchRankings, getPackageSummary, npmPackageUrl, pluginListIdentity, repositoryInstallTarget } from './api'
+
+describe('npm package URL', () => {
+  it('preserves scoped package path segments', () => {
+    expect(npmPackageUrl('@scope/plugin')).toBe('https://www.npmjs.com/package/%40scope/plugin')
+  })
+})
+
+describe('ranking API rollout', () => {
+  it('falls back to the compatible v2 response when v3 is not deployed yet', async () => {
+    const v2 = {
+      rankings: { stars: [] },
+      siblingsByRepository: {},
+      catalogTotal: 0,
+      categories: [],
+      generatedAt: '2026-08-20T00:00:00.000Z',
+      source: 'kv',
+    }
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(Response.json({ error: 'Not found' }, { status: 404 }))
+      .mockResolvedValueOnce(Response.json(v2))
+    vi.stubGlobal('fetch', fetcher)
+    try {
+      const response = await fetchRankings()
+      expect(response.rankings.npmDownloads7d).toEqual([])
+      expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+        '/api/v3/rankings',
+        '/api/v2/rankings',
+      ])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
+describe('package detail loading', () => {
+  it('loads the first-party v2 summary independently of GitHub enrichment', async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ id: 'owner/plugin' }))
+    vi.stubGlobal('fetch', fetcher)
+    try {
+      await getPackageSummary('owner/plugin')
+      expect(fetcher).toHaveBeenCalledWith(
+        '/api/v2/plugins/owner/plugin',
+        expect.objectContaining({ headers: { Accept: 'application/json' } }),
+      )
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
 
 describe('plugin list identity', () => {
   it('gives discovered monorepo siblings distinct titles', () => {
