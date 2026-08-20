@@ -83,6 +83,41 @@ export interface RepositoryUpsertResult {
   changedCount: number
 }
 
+export interface PublishedPackageVersion {
+  version: string | null
+  checkedAt: string | null
+}
+
+/**
+ * Reads one published package version directly from D1. Update manifests use
+ * this narrow query so a package release does not wait for the much larger
+ * catalog snapshot to be rebuilt and copied into KV.
+ */
+export async function loadPublishedPackageVersion(
+  db: D1Database,
+  pluginIds: readonly string[],
+  packageName: string,
+): Promise<PublishedPackageVersion | null> {
+  const normalizedIds = [...new Set(pluginIds.map((id) => normalizePluginId(id)))]
+  if (normalizedIds.length === 0) return null
+  const placeholders = normalizedIds.map(() => '?').join(', ')
+  const row = await db.prepare(
+    `SELECT npm_version AS version, npm_checked_at AS checked_at
+       FROM catalog_plugins
+      WHERE normalized_plugin_id IN (${placeholders})
+        AND npm_package_name = ?
+        AND npm_status = 'found'
+        AND npm_bundle_declared = 1
+        AND npm_version IS NOT NULL
+      ORDER BY CASE normalized_plugin_id WHEN ? THEN 0 ELSE 1 END
+      LIMIT 1`,
+  ).bind(...normalizedIds, packageName, normalizedIds[0]).first<{
+    version: string | null
+    checked_at: string | null
+  }>()
+  return row ? { version: row.version, checkedAt: row.checked_at } : null
+}
+
 function chunks<T>(items: T[], size: number): T[][] {
   const result: T[][] = []
   for (let index = 0; index < items.length; index += size) {

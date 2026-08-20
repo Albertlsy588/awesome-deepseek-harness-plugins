@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   hydrateCuratedRepositories,
   loadCatalogSnapshotFromD1,
+  loadPublishedPackageVersion,
   loadPendingValidationRepositories,
   normalizeRepositoryName,
   saveRepositoryInspections,
@@ -364,6 +365,43 @@ describe('curated catalog reconciliation', () => {
 })
 
 describe('catalog snapshot', () => {
+  it('loads a published package version directly without rebuilding the snapshot', async () => {
+    const database = catalogDatabase()
+    seedRepository(database, {
+      github_id: 1024,
+      full_name: 'imsai-sh/awesome-deepseek-harness-plugins',
+      normalized_full_name: 'imsai-sh/awesome-deepseek-harness-plugins',
+      repository_name: 'awesome-deepseek-harness-plugins',
+    })
+    seedPlugin(database, 'imsai-sh/awesome-deepseek-harness-plugins', {
+      plugin_path: 'packages/dsh1024',
+      validation_status: 'accepted',
+    })
+    database.prepare(`
+      UPDATE catalog_plugins
+         SET package_name = 'dsh1024', npm_package_name = 'dsh1024',
+             npm_status = 'found', npm_bundle_declared = 1,
+             npm_version = '0.4.1', npm_checked_at = '2026-08-20T18:27:33.576Z'
+       WHERE normalized_plugin_id =
+             'imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024'
+    `).run()
+
+    const published = await loadPublishedPackageVersion(
+      sqliteD1(database),
+      [
+        'imsai-sh/awesome-deepseek-harness-plugins',
+        'imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024',
+      ],
+      'dsh1024',
+    )
+
+    expect(published).toEqual({
+      version: '0.4.1',
+      checkedAt: '2026-08-20T18:27:33.576Z',
+    })
+    database.close()
+  })
+
   it('publishes curated plugins and accepted discoveries alike', async () => {
     const database = catalogDatabase()
     seedRepository(database, {

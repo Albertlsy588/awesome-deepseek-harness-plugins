@@ -24,7 +24,12 @@ import {
   pluginRepositoryFullName,
   PLUGIN_ID_MAX_LENGTH,
 } from './lib/plugin-id'
-import { syncCuratedEntries, type CuratedCatalogEntry } from './lib/catalog-db'
+import {
+  loadPublishedPackageVersion,
+  syncCuratedEntries,
+  type CuratedCatalogEntry,
+  type PublishedPackageVersion,
+} from './lib/catalog-db'
 import { loadCatalogSnapshot, refreshCatalogSnapshot } from './lib/catalog-store'
 import { categoryDescriptor, isKnownCategoryId, projectCategories } from './lib/categories'
 import { fetchPackageDetail } from './lib/github'
@@ -53,6 +58,11 @@ interface AppDependencies {
   eventRecorder: typeof recordInstallationEvent
   installStatsLoader: typeof loadPluginInstallStats
   curatedSyncer: typeof syncCuratedEntries
+  selfUpdateLoader: (
+    db: D1Database,
+    pluginIds: readonly string[],
+    packageName: string,
+  ) => Promise<PublishedPackageVersion | null>
   snapshotRefresher: (env: Env, fetcher?: typeof fetch, capturedAt?: number) => Promise<CatalogSnapshotResult>
   clock: () => number
   oauthFetcher: typeof fetch
@@ -60,10 +70,11 @@ interface AppDependencies {
 
 const CACHE_HEADER = 'public, max-age=30, s-maxage=300, stale-while-revalidate=3600'
 const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
-const SELF_CATALOG_PLUGIN_IDS = new Set([
-  SELF_PLUGIN_ID,
+const SELF_CATALOG_PLUGIN_ID_LIST = [
   `${SELF_PLUGIN_ID}/packages/dsh1024`,
-])
+  SELF_PLUGIN_ID,
+] as const
+const SELF_CATALOG_PLUGIN_IDS = new Set<string>(SELF_CATALOG_PLUGIN_ID_LIST)
 const SELF_PACKAGE_NAME = 'dsh1024'
 const SELF_RELEASE_URL = 'https://deepseek1024.com/plugins/imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024'
 const SEMVER_RELEASE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
@@ -267,6 +278,7 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     eventRecorder: recordInstallationEvent,
     installStatsLoader: loadPluginInstallStats,
     curatedSyncer: syncCuratedEntries,
+    selfUpdateLoader: loadPublishedPackageVersion,
     snapshotRefresher: refreshCatalogSnapshot,
     clock: Date.now,
     oauthFetcher: (input, init) => fetch(input, init),
@@ -601,31 +613,40 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
   })
 
   app.get('/api/v1/self/update', async (context) => {
-    const { snapshot } = await dependencies.catalogLoader(
-      context.env,
-      executionContext(context),
-    )
-    // Discovery now identifies this monorepo package by its subdirectory, while
-    // historical curated snapshots used the repository-root id. Search both so
-    // an old cached snapshot and the current canonical entry publish the same
-    // update manifest.
-    const published = snapshot.plugins
-      .filter((plugin) => SELF_CATALOG_PLUGIN_IDS.has(normalizePluginId(plugin.id)))
-      .flatMap((plugin) => plugin.installMethods ?? [])
-      .find((method) => method.kind === 'npm' && method.spec === SELF_PACKAGE_NAME)
-    const version = published?.revision
+    let published: PublishedPackageVersion | null = null
+    if (context.env?.CATALOG_DB) {
+      published = await dependencies.selfUpdateLoader(
+        context.env.CATALOG_DB,
+        SELF_CATALOG_PLUGIN_ID_LIST,
+        SELF_PACKAGE_NAME,
+      )
+    } else {
+      // Local/test environments without D1 retain the snapshot fallback.
+      const { snapshot } = await dependencies.catalogLoader(
+        context.env,
+        executionContext(context),
+      )
+      const method = snapshot.plugins
+        .filter((plugin) => SELF_CATALOG_PLUGIN_IDS.has(normalizePluginId(plugin.id)))
+        .flatMap((plugin) => plugin.installMethods ?? [])
+        .find((candidate) => candidate.kind === 'npm' && candidate.spec === SELF_PACKAGE_NAME)
+      published = method ? { version: method.revision, checkedAt: method.checkedAt } : null
+    }
+    const version = published?.version
     if (typeof version !== 'string' || !SEMVER_RELEASE.test(version)) {
       context.header('Cache-Control', 'no-store')
       context.header('X-Robots-Tag', 'noindex')
       return context.json({ error: 'The published dsh1024 version is not available.' }, 503)
     }
-    context.header('Cache-Control', CACHE_HEADER)
+    // Update discovery must reflect a just-published release immediately; the
+    // query is one indexed D1 row and intentionally bypasses edge/KV caches.
+    context.header('Cache-Control', 'no-store')
     context.header('X-Robots-Tag', 'noindex')
     return context.json({
       package: SELF_PACKAGE_NAME,
       version,
       releaseUrl: SELF_RELEASE_URL,
-      checkedAt: published?.checkedAt ?? snapshot.generatedAt,
+      checkedAt: published?.checkedAt ?? null,
     })
   })
 

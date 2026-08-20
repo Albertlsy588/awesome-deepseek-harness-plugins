@@ -588,7 +588,37 @@ describe('market API', () => {
     })
   })
 
-  it('serves the store client update manifest from the cached catalog snapshot', async () => {
+  it('serves the store client update manifest from D1 without consulting the catalog snapshot', async () => {
+    const catalogLoader = vi.fn(async () => testCatalogResult())
+    const selfUpdateLoader = vi.fn(async () => ({
+      version: '4.5.6',
+      checkedAt: '2026-08-20T08:00:00Z',
+    }))
+    const app = createApp({ catalogLoader, selfUpdateLoader })
+
+    const database = {} as D1Database
+    const response = await app.request(
+      '/api/v1/self/update',
+      undefined,
+      { CATALOG_DB: database } as unknown as Env,
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(catalogLoader).not.toHaveBeenCalled()
+    expect(selfUpdateLoader).toHaveBeenCalledWith(database, [
+      'imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024',
+      'imsai-sh/awesome-deepseek-harness-plugins',
+    ], 'dsh1024')
+    await expect(response.json()).resolves.toEqual({
+      package: 'dsh1024',
+      version: '4.5.6',
+      releaseUrl: 'https://deepseek1024.com/plugins/imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024',
+      checkedAt: '2026-08-20T08:00:00Z',
+    })
+  })
+
+  it('retains the cached catalog fallback when D1 is unavailable locally', async () => {
     const result = testCatalogResult()
     result.snapshot.plugins = [...result.snapshot.plugins, {
       ...result.snapshot.plugins[0]!,
@@ -615,7 +645,7 @@ describe('market API', () => {
     const response = await app.request('/api/v1/self/update')
 
     expect(response.status).toBe(200)
-    expect(response.headers.get('Cache-Control')).toContain('stale-while-revalidate=')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
     await expect(response.json()).resolves.toEqual({
       package: 'dsh1024',
       version: '4.5.6',
