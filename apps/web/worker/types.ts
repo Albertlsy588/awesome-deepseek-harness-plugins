@@ -75,6 +75,15 @@ export interface CatalogPlugin extends RegistryPlugin, RepositoryMetric, StarGro
   repository: string
 }
 
+/**
+ * Fast, first-party detail payload used to paint a plugin page before any
+ * GitHub request starts. The category id from the snapshot is resolved to the
+ * descriptor the detail UI needs; everything else comes directly from KV.
+ */
+export type PackageSummary = Omit<CatalogPlugin, 'category'> & {
+  category: CategoryDescriptor | null
+}
+
 export interface StoredCatalogSnapshot {
   generatedAt: string
   registryUpdated: string

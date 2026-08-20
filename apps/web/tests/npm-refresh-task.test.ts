@@ -208,6 +208,31 @@ describe('npm refresh task', () => {
     database.close()
   })
 
+  it('caps a cold-start download backfill at 50 packages per scheduled tick', async () => {
+    const database = catalogDatabase()
+    for (let index = 0; index < 51; index += 1) {
+      seedPlugin(database, `pkg-${String(index).padStart(2, '0')}`, { npmEtag: `"${index}"` })
+    }
+    database.prepare(`
+      UPDATE catalog_plugins
+         SET npm_package_name = package_name, npm_bundle_declared = 1
+    `).run()
+    probeNpmPackage.mockImplementation(async (_id, _name, etag) => notModified(etag ?? ''))
+    fetchNpmDownloads7d.mockResolvedValue({
+      status: 'found', downloads: 123, start: '2026-08-12', end: '2026-08-18',
+    })
+
+    const result = await runNpmRefreshTask(envFor(database), SCHEDULED_AT)
+
+    expect(result.downloadsChecked).toBe(50)
+    expect(result.downloadsUpdated).toBe(50)
+    expect(fetchNpmDownloads7d).toHaveBeenCalledTimes(50)
+    expect(database.prepare(
+      'SELECT COUNT(*) AS count FROM catalog_plugins WHERE npm_downloads_status = \'pending\'',
+    ).get()).toEqual({ count: 1 })
+    database.close()
+  })
+
   it('records the new version and ETag and refreshes the snapshot on a change', async () => {
     const database = catalogDatabase()
     seedPlugin(database, 'a', { npmEtag: '"a1"', npmVersion: '1.0.0' })

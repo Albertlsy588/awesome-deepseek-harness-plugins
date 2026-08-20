@@ -2149,6 +2149,50 @@ main {
   line-height: 1.65;
 }
 
+.github-detail-status {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  margin: -12px 0 18px 88px;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.github-detail-status svg {
+  animation: github-detail-spin 1.5s linear infinite;
+}
+
+@keyframes github-detail-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .github-detail-status svg {
+    animation: none;
+  }
+}
+
+.github-detail-notice {
+  align-items: center;
+  margin: -8px 0 18px;
+  border-color: var(--warning-line);
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+}
+
+.github-detail-notice > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.github-detail-notice .button {
+  min-height: 36px;
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 .detail-actions {
   display: flex;
   gap: 8px;
@@ -3073,6 +3117,24 @@ main {
 
   .detail-description {
     font-size: 15px;
+  }
+
+  .github-detail-status {
+    min-height: 44px;
+    margin: -10px 0 14px;
+    font-size: 13px;
+  }
+
+  .github-detail-notice {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin: -6px 0 16px;
+  }
+
+  .github-detail-notice .button {
+    width: 100%;
+    min-height: 44px;
+    margin-left: 0;
   }
 
   .detail-actions {

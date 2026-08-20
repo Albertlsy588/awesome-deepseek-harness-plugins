@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fetchRankings, npmPackageUrl, pluginListIdentity, repositoryInstallTarget } from './api'
+import { fetchRankings, getPackageSummary, npmPackageUrl, pluginListIdentity, repositoryInstallTarget } from './api'
 
 describe('npm package URL', () => {
   it('preserves scoped package path segments', () => {
@@ -28,6 +28,22 @@ describe('ranking API rollout', () => {
         '/api/v3/rankings',
         '/api/v2/rankings',
       ])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
+describe('package detail loading', () => {
+  it('loads the first-party v2 summary independently of GitHub enrichment', async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ id: 'owner/plugin' }))
+    vi.stubGlobal('fetch', fetcher)
+    try {
+      await getPackageSummary('owner/plugin')
+      expect(fetcher).toHaveBeenCalledWith(
+        '/api/v2/plugins/owner/plugin',
+        expect.objectContaining({ headers: { Accept: 'application/json' } }),
+      )
     } finally {
       vi.unstubAllGlobals()
     }

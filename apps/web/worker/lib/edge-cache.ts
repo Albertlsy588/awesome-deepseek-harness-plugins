@@ -21,6 +21,7 @@ function cacheableApiParams(pathname: string): readonly string[] | undefined {
   // A detail has at least owner/repository after the prefix. Search remains
   // outside the cache because it is a separate, no-store endpoint.
   if (/^\/api\/v1\/plugins\/[^/]+\/[^/]+(?:\/.*)?$/.test(pathname)) return []
+  if (/^\/api\/v2\/plugins\/[^/]+\/[^/]+(?:\/.*)?$/.test(pathname)) return []
   return undefined
 }
 

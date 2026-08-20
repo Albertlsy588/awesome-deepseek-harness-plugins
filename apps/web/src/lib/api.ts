@@ -164,6 +164,12 @@ export interface CategoryDescriptor {
   label: Record<Language, string>
 }
 
+/** Snapshot-only detail data. It is intentionally enough to render the useful
+ * page shell without waiting for GitHub's API or raw-content domains. */
+export interface PackageSummaryDetail extends Omit<CatalogPlugin, 'category'> {
+  category: CategoryDescriptor | null
+}
+
 export interface PackageDetail extends Omit<RegistryPlugin, 'category'>, InstallMetrics {
   /** Category descriptor resolved by the Worker from catalog/categories.json. */
   category: CategoryDescriptor | null
@@ -240,6 +246,11 @@ export async function requestJson<T>(url: string, signal?: AbortSignal): Promise
 export function getPackage(id: string, signal?: AbortSignal): Promise<PackageDetail> {
   const encoded = id.split('/').map(encodeURIComponent).join('/')
   return requestJson<PackageDetail>(`${API_ORIGIN}/api/v1/plugins/${encoded}`, signal)
+}
+
+export function getPackageSummary(id: string, signal?: AbortSignal): Promise<PackageSummaryDetail> {
+  const encoded = id.split('/').map(encodeURIComponent).join('/')
+  return requestJson<PackageSummaryDetail>(`${API_ORIGIN}/api/v2/plugins/${encoded}`, signal)
 }
 
 export function npmPackageUrl(packageName: string): string {

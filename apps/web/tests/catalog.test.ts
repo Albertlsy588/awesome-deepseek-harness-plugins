@@ -336,6 +336,7 @@ describe('edge cache allowlist', () => {
       '/api/v1/plugins',
       '/api/v1/registry',
       '/api/v2/plugins',
+      '/api/v2/plugins/owner/repository',
       '/api/v2/rankings',
       '/api/v3/rankings',
       '/api/v1/plugins/owner/repository',
@@ -374,6 +375,8 @@ describe('edge cache key normalization', () => {
   it('canonicalizes detail requests without caching plugin search', () => {
     expect(key('https://deepseek1024.com/api/v1/plugins/owner/repo?bust=1'))
       .toBe('https://deepseek1024.com/api/v1/plugins/owner/repo')
+    expect(key('https://deepseek1024.com/api/v2/plugins/owner/repo?bust=1'))
+      .toBe('https://deepseek1024.com/api/v2/plugins/owner/repo')
     expect(key('https://deepseek1024.com/api/v1/plugins/search?q=repo')).toBeNull()
   })
 
