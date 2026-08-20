@@ -20,6 +20,9 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
+import rehypeSlug from 'rehype-slug'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
 import { CategoryTag } from '../components/CategoryTag'
@@ -28,10 +31,11 @@ import { InstallOptions } from '../components/InstallOptions'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
 import { pluginDetailPath, pluginSourceUrl } from '../../worker/lib/plugin-id'
-import { ApiError, getPackage, repositoryName, type PackageDetail } from '../lib/api'
+import { ApiError, getPackage, npmPackageUrl, repositoryName, type PackageDetail } from '../lib/api'
 import { publicAsset } from '../lib/assets'
 import { formatDate, formatDateTime, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
+import { readmeImage, readmeLink } from '../lib/readme'
 import {
   graph,
   pluginDescription,
@@ -188,17 +192,8 @@ export function PackagePage() {
   // from: a subpackage without its own README falls back to the root one, and
   // rebasing that onto the subdirectory would break every link in it.
   const readmeBasePath = detail.readmeBasePath ?? ''
-  const readmePrefix = readmeBasePath.length === 0 ? '' : `${readmeBasePath}/`
-
-  function readmeLink(href?: string): string | undefined {
-    if (!href || /^(https?:|mailto:|#)/.test(href)) return href
-    return `https://github.com/${detailOwner}/${detailRepository}/blob/${branch}/${readmePrefix}${href.replace(/^\.\//, '')}`
-  }
-
-  function readmeImage(src?: string): string | undefined {
-    if (!src || /^https?:/.test(src)) return src
-    return `https://raw.githubusercontent.com/${detailOwner}/${detailRepository}/${branch}/${readmePrefix}${src.replace(/^\.\//, '')}`
-  }
+  const readmeLocation = { owner: detailOwner, repository: detailRepository, branch, basePath: readmeBasePath }
+  const npmMethod = detail.installMethods?.find((method) => method.kind === 'npm')
 
   return (
     <div className="page-container package-detail-page">
@@ -248,6 +243,12 @@ export function PackagePage() {
             <Code2 size={16} aria-hidden="true" />
             {t('source')}
           </a>
+          {npmMethod && (
+            <a className="button button-secondary" href={npmPackageUrl(npmMethod.spec)} target="_blank" rel="noreferrer">
+              <Package size={16} aria-hidden="true" />
+              {t('npmPackage')}
+            </a>
+          )}
           <a className="button button-secondary" href={reportUrl} target="_blank" rel="noreferrer">
             <CircleDot size={16} aria-hidden="true" />
             {t('report')}
@@ -401,10 +402,11 @@ export function PackagePage() {
             <div className="markdown-body">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeSlug]}
                 components={{
-                  h1: ({ children }) => <h3>{children}</h3>,
-                  h2: ({ children }) => <h3>{children}</h3>,
-                  h3: ({ children }) => <h4>{children}</h4>,
+                  h1: ({ node: _node, children, ...props }) => <h3 {...props}>{children}</h3>,
+                  h2: ({ node: _node, children, ...props }) => <h3 {...props}>{children}</h3>,
+                  h3: ({ node: _node, children, ...props }) => <h4 {...props}>{children}</h4>,
                   a: ({ href, children }) => {
                     if (href?.startsWith('#')) {
                       // Fragment links must never reach the router: under hash-based
@@ -423,12 +425,12 @@ export function PackagePage() {
                       )
                     }
                     return (
-                      <a href={readmeLink(href)} target="_blank" rel="noreferrer">
+                      <a href={readmeLink(href, readmeLocation)} target="_blank" rel="noreferrer">
                         {children}
                       </a>
                     )
                   },
-                  img: ({ src, alt }) => <img src={readmeImage(src)} alt={alt ?? ''} loading="lazy" />,
+                  img: ({ src, alt }) => <img src={readmeImage(src, readmeLocation)} alt={alt ?? ''} loading="lazy" />,
                 }}
               >
                 {detail.readme}

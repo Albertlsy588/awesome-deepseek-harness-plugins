@@ -63,7 +63,14 @@ export interface InstallMetrics {
   latestInstallAt: string | null
 }
 
-export interface CatalogPlugin extends RegistryPlugin, RepositoryMetric, StarGrowth, InstallMetrics {
+export interface NpmDownloadMetrics {
+  /** npm registry download events for the reported seven-day window. */
+  npmDownloads7d?: number | null
+  npmDownloadsStart?: string | null
+  npmDownloadsEnd?: string | null
+}
+
+export interface CatalogPlugin extends RegistryPlugin, RepositoryMetric, StarGrowth, InstallMetrics, NpmDownloadMetrics {
   /** Repository name only; the in-repo path lives in `id`. */
   repository: string
 }
@@ -95,6 +102,7 @@ export type CatalogSort =
   | 'installs24h'
   | 'installs7d'
   | 'installs30d'
+  | 'npmDownloads7d'
   | 'growth24h'
   | 'growth7d'
   | 'growth30d'
@@ -124,6 +132,10 @@ export interface RankingBoards {
   growth30d: RankedPlugin[]
   newest: RankedPlugin[]
   active: RankedPlugin[]
+}
+
+export interface RankingBoardsV3 extends RankingBoards {
+  npmDownloads7d: RankedPlugin[]
 }
 
 export interface CatalogResponse {
@@ -176,6 +188,11 @@ export interface RankingsResponse {
   categories: CategoryResult[]
   generatedAt: string
   source: CatalogSource
+}
+
+/** Adds npm's independently measured seven-day downloads without changing v2. */
+export interface RankingsResponseV3 extends Omit<RankingsResponse, 'rankings'> {
+  rankings: RankingBoardsV3
 }
 
 export interface RegistryProjectionPlugin {

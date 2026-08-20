@@ -56,7 +56,10 @@ function isCatalogPlugin(value: unknown): value is CatalogPlugin {
     typeof value.installs24h === 'number' &&
     typeof value.installs7d === 'number' &&
     typeof value.installs30d === 'number' &&
-    (typeof value.latestInstallAt === 'string' || value.latestInstallAt === null)
+    (typeof value.latestInstallAt === 'string' || value.latestInstallAt === null) &&
+    (value.npmDownloads7d === undefined || typeof value.npmDownloads7d === 'number' || value.npmDownloads7d === null) &&
+    (value.npmDownloadsStart === undefined || typeof value.npmDownloadsStart === 'string' || value.npmDownloadsStart === null) &&
+    (value.npmDownloadsEnd === undefined || typeof value.npmDownloadsEnd === 'string' || value.npmDownloadsEnd === null)
   )
 }
 

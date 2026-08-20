@@ -67,6 +67,9 @@ interface CatalogRow {
   npm_bundle_declared: number
   npm_version: string | null
   npm_checked_at: string | null
+  npm_downloads_7d: number | null
+  npm_downloads_start: string | null
+  npm_downloads_end: string | null
 }
 
 export interface ScanCounters {
@@ -936,7 +939,8 @@ export async function loadCatalogSnapshotFromD1(
             p.git_code, p.git_has_prepare, p.git_head_sha, p.git_checked_at,
             p.package_name,
             p.npm_package_name, p.npm_binding, p.npm_bundle_declared,
-            p.npm_version, p.npm_checked_at
+            p.npm_version, p.npm_checked_at,
+            p.npm_downloads_7d, p.npm_downloads_start, p.npm_downloads_end
        FROM catalog_plugins p
        JOIN catalog_repositories r ON r.id = p.repository_id
       WHERE p.from_pr = 1
@@ -978,6 +982,9 @@ export async function loadCatalogSnapshotFromD1(
     )
     return {
       ...emptyInstallMetrics(),
+      npmDownloads7d: row.npm_downloads_7d,
+      npmDownloadsStart: row.npm_downloads_start,
+      npmDownloadsEnd: row.npm_downloads_end,
       id,
       // A monorepo's packages share one repository name, so falling back to it
       // published a dozen identically-named plugins whose only difference was
@@ -1031,6 +1038,45 @@ export interface NpmProbeCandidate {
   // (an `absent` package that is still absent has no ETag to answer 304, so it
   // would otherwise be rewritten every sweep).
   currentStatus: string
+  npmPackageName: string | null
+  bundleDeclared: boolean
+  downloadsCheckedAt: string | null
+}
+
+export type NpmDownloadRecord =
+  | {
+      pluginId: string
+      status: 'found'
+      downloads: number
+      start: string
+      end: string
+    }
+  | { pluginId: string; status: 'error' }
+
+/** Stores successes and timestamps failures without erasing the last good count. */
+export async function saveNpmDownloadResults(
+  db: D1Database,
+  records: NpmDownloadRecord[],
+  checkedAt: string,
+): Promise<void> {
+  if (records.length === 0) return
+  for (const group of chunks(records, 40)) {
+    await db.batch(group.map((record) => record.status === 'found'
+      ? db.prepare(
+        `UPDATE catalog_plugins
+            SET npm_downloads_7d = ?, npm_downloads_start = ?, npm_downloads_end = ?,
+                npm_downloads_status = 'found', npm_downloads_checked_at = ?, updated_at = ?
+          WHERE normalized_plugin_id = ?`,
+      ).bind(
+        record.downloads, record.start, record.end,
+        checkedAt, checkedAt, normalizePluginId(record.pluginId),
+      )
+      : db.prepare(
+        `UPDATE catalog_plugins
+            SET npm_downloads_status = 'error', npm_downloads_checked_at = ?, updated_at = ?
+          WHERE normalized_plugin_id = ?`,
+      ).bind(checkedAt, checkedAt, normalizePluginId(record.pluginId))))
+  }
 }
 
 // A package is probed only when it is published here AND its own manifest named
@@ -1044,6 +1090,9 @@ interface NpmProbeCandidateRow {
   npm_etag: string | null
   npm_status: string
   normalized_plugin_id: string
+  npm_package_name: string | null
+  npm_bundle_declared: number
+  npm_downloads_checked_at: string | null
 }
 
 function toNpmProbeCandidate(row: NpmProbeCandidateRow): NpmProbeCandidate {
@@ -1053,6 +1102,9 @@ function toNpmProbeCandidate(row: NpmProbeCandidateRow): NpmProbeCandidate {
     etag: row.npm_etag ?? null,
     normalizedId: row.normalized_plugin_id,
     currentStatus: row.npm_status,
+    npmPackageName: row.npm_package_name,
+    bundleDeclared: row.npm_bundle_declared === 1,
+    downloadsCheckedAt: row.npm_downloads_checked_at,
   }
 }
 
@@ -1067,7 +1119,8 @@ export async function loadNpmPendingProbes(
   limit = 200,
 ): Promise<NpmProbeCandidate[]> {
   const result = await db.prepare(
-    `SELECT p.plugin_id, p.package_name, p.npm_etag, p.npm_status, p.normalized_plugin_id
+    `SELECT p.plugin_id, p.package_name, p.npm_package_name, p.npm_etag, p.npm_status, p.normalized_plugin_id,
+            p.npm_bundle_declared, p.npm_downloads_checked_at
        FROM catalog_plugins p
        JOIN catalog_repositories r ON r.id = p.repository_id
       WHERE ${NPM_PROBE_ELIGIBLE}
@@ -1095,7 +1148,8 @@ export async function loadNpmSweepBatch(
   cursor = '',
 ): Promise<NpmProbeCandidate[]> {
   const result = await db.prepare(
-    `SELECT p.plugin_id, p.package_name, p.npm_etag, p.npm_status, p.normalized_plugin_id
+    `SELECT p.plugin_id, p.package_name, p.npm_package_name, p.npm_etag, p.npm_status, p.normalized_plugin_id,
+            p.npm_bundle_declared, p.npm_downloads_checked_at
        FROM catalog_plugins p
        JOIN catalog_repositories r ON r.id = p.repository_id
       WHERE ${NPM_PROBE_ELIGIBLE}
@@ -1139,25 +1193,49 @@ export async function saveNpmProbes(
 ): Promise<void> {
   if (probes.length === 0) return
   for (const group of chunks(probes, 40)) {
-    await db.batch(group.map((probe) => (probe.status === 'error'
-      ? db.prepare(
+    await db.batch(group.map((probe) => {
+      if (probe.status === 'error') {
+        return db.prepare(
         `UPDATE catalog_plugins
             SET npm_status = 'error', npm_http_status = ?, npm_checked_at = ?, updated_at = ?
           WHERE normalized_plugin_id = ?`,
-      ).bind(probe.httpStatus, now, now, normalizePluginId(probe.pluginId))
-      : db.prepare(
+        ).bind(probe.httpStatus, now, now, normalizePluginId(probe.pluginId))
+      }
+      if (probe.status === 'absent') {
+        return db.prepare(
+          `UPDATE catalog_plugins
+              SET npm_package_name = ?, npm_status = ?, npm_http_status = ?,
+                  npm_version = NULL, npm_repository_url = NULL, npm_repository_directory = NULL,
+                  npm_bundle_declared = 0, npm_binding = ?, npm_etag = NULL,
+                  npm_downloads_7d = NULL, npm_downloads_start = NULL, npm_downloads_end = NULL,
+                  npm_downloads_status = 'pending', npm_downloads_checked_at = NULL,
+                  npm_checked_at = ?, updated_at = ?
+            WHERE normalized_plugin_id = ?`,
+        ).bind(
+          probe.packageName, probe.status, probe.httpStatus, probe.binding,
+          now, now, normalizePluginId(probe.pluginId),
+        )
+      }
+      return db.prepare(
         `UPDATE catalog_plugins
             SET npm_package_name = ?, npm_status = ?, npm_http_status = ?,
                 npm_version = ?, npm_repository_url = ?, npm_repository_directory = ?,
                 npm_bundle_declared = ?, npm_binding = ?, npm_etag = ?,
+                npm_downloads_7d = CASE WHEN npm_package_name = ? THEN npm_downloads_7d ELSE NULL END,
+                npm_downloads_start = CASE WHEN npm_package_name = ? THEN npm_downloads_start ELSE NULL END,
+                npm_downloads_end = CASE WHEN npm_package_name = ? THEN npm_downloads_end ELSE NULL END,
+                npm_downloads_status = CASE WHEN npm_package_name = ? THEN npm_downloads_status ELSE 'pending' END,
+                npm_downloads_checked_at = CASE WHEN npm_package_name = ? THEN npm_downloads_checked_at ELSE NULL END,
                 npm_checked_at = ?, updated_at = ?
           WHERE normalized_plugin_id = ?`,
       ).bind(
         probe.packageName, probe.status, probe.httpStatus,
         probe.version, probe.repositoryUrl, probe.repositoryDirectory,
         probe.bundleDeclared ? 1 : 0, probe.binding, probe.etag,
+        probe.packageName, probe.packageName, probe.packageName, probe.packageName, probe.packageName,
         now, now, normalizePluginId(probe.pluginId),
-      ))))
+      )
+    }))
   }
 }
 

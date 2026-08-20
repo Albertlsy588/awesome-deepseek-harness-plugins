@@ -1,0 +1,5 @@
+# API contracts and their implementation require explicit API-owner review.
+/apps/web/contracts/ @imsai-sh
+/apps/web/worker/ @imsai-sh
+/apps/web/tests/api-contract.test.ts @imsai-sh
+/docs/api.md @imsai-sh

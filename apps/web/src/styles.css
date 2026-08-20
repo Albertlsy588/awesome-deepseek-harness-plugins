@@ -1607,10 +1607,6 @@ main {
   color: var(--brand);
 }
 
-.row-metrics > span.installer-metric svg {
-  color: var(--accent-teal);
-}
-
 .date-metric {
   min-width: 118px !important;
 }

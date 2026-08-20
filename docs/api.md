@@ -1,5 +1,20 @@
 # API reference (v1)
 
+## Compatibility policy
+
+Every API served by this Worker is backward compatible within its published major version,
+including endpoints used only by the site, authenticated tools, internal sync jobs, community
+clients and WebSocket consumers. Known third-party use is not a prerequisite for stability.
+
+Existing-version changes may add optional request parameters or response fields that old clients
+can ignore. They must not remove or rename fields, change types or nullability, reinterpret values,
+change defaults, status/error codes, pagination, ordering, authentication behavior or important
+headers. Breaking changes receive a new versioned route while the previous route remains available
+through a documented migration and deprecation period.
+
+The executable route inventory, historical schemas and semantic fixtures live in
+`apps/web/contracts/` and are enforced by `npm run test:api-contract`.
+
 The public developer API lives on its own host: `https://api.deepseek1024.com/v1/…`
 (currently only the search endpoint and `/v1/health`; everything else on that host is 404,
 and the bare host redirects to the website docs page). The same Worker serves both hosts —

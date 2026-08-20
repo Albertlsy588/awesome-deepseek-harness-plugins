@@ -3,8 +3,8 @@
  *
  * Split out of the discovery crawl on purpose: inside it, npm probing ran last,
  * after GitHub discovery and inspection had already spent the tick's deadline,
- * so a busy tick refreshed nothing. Here it owns its own frequent cron and does
- * one thing.
+ * so a busy tick refreshed nothing. Here it owns its own frequent cron and also
+ * refreshes npm's download window when the rolling sweep reaches a stale row.
  *
  * Two levers make a tight cadence affordable against a public registry:
  *   1. Conditional requests — every probe sends the package's last ETag, so npm
@@ -16,6 +16,8 @@
  *      budget continues the sweep from where the last tick stopped and wraps at
  *      the end. With conditional requests a full cycle is cheap, so freshness is
  *      bounded by cycle length rather than a fixed staleness window.
+ *   3. Download counts have a separate per-tick cap and a 20-hour freshness
+ *      window, so adding them does not multiply every five-minute version probe.
  */
 
 import {
@@ -23,12 +25,15 @@ import {
   loadNpmPendingProbes,
   loadNpmSweepBatch,
   saveNpmProbes,
+  saveNpmDownloadResults,
   setCatalogState,
+  type NpmDownloadRecord,
   type NpmProbeCandidate,
   type NpmProbeRecord,
 } from './catalog-db'
 import { refreshCatalogSnapshot } from './catalog-store'
 import { probeNpmPackage } from './npm-registry'
+import { fetchNpmDownloads7d } from './npm-downloads'
 
 const CURSOR_KEY = 'npm_refresh_cursor'
 // npm sits behind Cloudflare with a 5-minute edge TTL, so a published version is
@@ -38,6 +43,8 @@ const CURSOR_KEY = 'npm_refresh_cursor'
 const NPM_REFRESH_BUDGET = 800
 const NPM_REFRESH_CONCURRENCY = 8
 const NPM_REFRESH_PENDING_CAP = 200
+const NPM_DOWNLOADS_PER_TICK = 50
+const NPM_DOWNLOADS_REFRESH_MS = 20 * 60 * 60 * 1000
 
 export interface NpmRefreshResult {
   probed: number
@@ -45,6 +52,9 @@ export interface NpmRefreshResult {
   absent: number
   notModified: number
   errors: number
+  downloadsChecked: number
+  downloadsUpdated: number
+  downloadErrors: number
   // Probes whose result repeats the stored status (absent→absent, error→error)
   // and so were not written — the sweep's steady-state majority for packages
   // that 404 (they have no ETag to earn a 304 with).
@@ -86,17 +96,57 @@ export async function runNpmRefreshTask(
   }
 
   const result: NpmRefreshResult = {
-    probed: 0, found: 0, absent: 0, notModified: 0, errors: 0, skippedUnchanged: 0, wrapped: false,
+    probed: 0, found: 0, absent: 0, notModified: 0, errors: 0,
+    downloadsChecked: 0, downloadsUpdated: 0, downloadErrors: 0,
+    skippedUnchanged: 0, wrapped: false,
   }
   const writes: NpmProbeRecord[] = []
+  const downloadWrites: NpmDownloadRecord[] = []
+  const downloadsStaleBefore = new Date(scheduledTime - NPM_DOWNLOADS_REFRESH_MS).toISOString()
+  let downloadsRemaining = NPM_DOWNLOADS_PER_TICK
 
   for (const batch of concurrencyBatches(candidates, NPM_REFRESH_CONCURRENCY)) {
     const probes = await Promise.all(batch.map(async (candidate) => ({
       candidate,
       probe: await probeNpmPackage(candidate.pluginId, candidate.packageName, candidate.etag),
     })))
+    const downloads = new Map<string, Awaited<ReturnType<typeof fetchNpmDownloads7d>>>()
+    const downloadCandidates = probes.filter(({ candidate, probe }) => {
+      if (downloadsRemaining <= 0) return false
+      const bundleDeclared = probe.status === 'found'
+        ? probe.bundleDeclared
+        : probe.status === 'not_modified'
+          ? candidate.bundleDeclared
+          : false
+      const stale = candidate.npmPackageName !== candidate.packageName ||
+        candidate.downloadsCheckedAt === null || candidate.downloadsCheckedAt < downloadsStaleBefore
+      if (!bundleDeclared || !stale) return false
+      downloadsRemaining -= 1
+      return true
+    })
+    await Promise.all(downloadCandidates.map(async ({ candidate }) => {
+      downloads.set(candidate.normalizedId, await fetchNpmDownloads7d(candidate.packageName))
+    }))
+
     for (const { candidate, probe } of probes) {
       result.probed += 1
+      const download = downloads.get(candidate.normalizedId)
+      if (download) {
+        result.downloadsChecked += 1
+        if (download.status === 'found') {
+          result.downloadsUpdated += 1
+          downloadWrites.push({
+            pluginId: candidate.pluginId,
+            status: 'found',
+            downloads: download.downloads,
+            start: download.start,
+            end: download.end,
+          })
+        } else {
+          result.downloadErrors += 1
+          downloadWrites.push({ pluginId: candidate.pluginId, status: 'error' })
+        }
+      }
       // 304: nothing published since last ETag — record nothing.
       if (probe.status === 'not_modified') {
         result.notModified += 1
@@ -131,6 +181,7 @@ export async function runNpmRefreshTask(
   }
 
   if (writes.length > 0) await saveNpmProbes(env.CATALOG_DB, writes, now)
+  if (downloadWrites.length > 0) await saveNpmDownloadResults(env.CATALOG_DB, downloadWrites, now)
 
   // Advance the cursor. When the sweep came back short it reached the end, so
   // wrap to the beginning; when pending ate the whole budget, keep the cursor
@@ -149,7 +200,7 @@ export async function runNpmRefreshTask(
   // A `found`/`absent` may have changed a version or badge; rebuild the snapshot
   // so the site does not wait for the next 15-minute catalog refresh. A tick of
   // only 304s changes nothing and skips this.
-  if (result.found + result.absent > 0) {
+  if (result.found + result.absent + result.downloadsUpdated > 0) {
     await refreshCatalogSnapshot(env, fetch, scheduledTime)
   }
 

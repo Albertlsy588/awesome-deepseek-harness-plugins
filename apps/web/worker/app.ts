@@ -9,6 +9,7 @@ import {
   buildCatalog,
   buildPluginsPage,
   buildRankingsResponse,
+  buildRankingsV3Response,
   clampLimit,
   filterCatalogPackages,
   findPluginById,
@@ -609,6 +610,20 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       executionContext(context),
     )
     const payload = JSON.stringify(buildRankingsResponse(snapshot))
+    context.header('Cache-Control', LIST_CACHE_HEADER)
+    context.header('ETag', contentEtag(payload))
+    context.header('X-Catalog-Source', snapshot.source)
+    context.header('X-Robots-Tag', 'noindex')
+    context.header('Content-Type', 'application/json; charset=UTF-8')
+    return context.body(payload)
+  })
+
+  app.get('/api/v3/rankings', async (context) => {
+    const snapshot = await dependencies.catalogLoader(
+      context.env,
+      executionContext(context),
+    )
+    const payload = JSON.stringify(buildRankingsV3Response(snapshot))
     context.header('Cache-Control', LIST_CACHE_HEADER)
     context.header('ETag', contentEtag(payload))
     context.header('X-Catalog-Source', snapshot.source)

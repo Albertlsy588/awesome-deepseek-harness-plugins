@@ -7,6 +7,7 @@ import {
   loadPendingValidationRepositories,
   normalizeRepositoryName,
   saveRepositoryInspections,
+  saveNpmDownloadResults,
   syncCuratedEntries,
   upsertDiscoveredRepositories,
   type CuratedCatalogEntry,
@@ -59,7 +60,8 @@ function sqliteD1(database: DatabaseSync): D1Database {
 function catalogDatabase(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
   for (const migration of ['0002_plugin_catalog.sql', '0005_catalog_plugins.sql',
-    '0006_ai_classification.sql', '0009_manifest_sweep.sql']) {
+    '0006_ai_classification.sql', '0009_manifest_sweep.sql', '0010_npm_etag.sql',
+    '0011_npm_downloads.sql']) {
     database.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'))
   }
   return database
@@ -972,6 +974,40 @@ describe('a repository that declares no bundle at all', () => {
     ).all()).toEqual([
       { plugin_path: '', validation_status: 'rejected', validation_code: 'missing_bundle' },
     ])
+    database.close()
+  })
+})
+
+describe('npm download persistence', () => {
+  it('queues verified published packages and preserves the last good value on failure', async () => {
+    const database = catalogDatabase()
+    seedRepository(database)
+    seedPlugin(database, 'Scan/Repo', { validation_status: 'accepted' })
+    database.prepare(
+      `UPDATE catalog_plugins
+          SET package_name = '@scope/plugin', npm_package_name = '@scope/plugin',
+              npm_status = 'found', npm_bundle_declared = 1
+        WHERE normalized_plugin_id = 'scan/repo'`,
+    ).run()
+    const db = sqliteD1(database)
+
+    await saveNpmDownloadResults(db, [{
+      pluginId: 'Scan/Repo', status: 'found', downloads: 321,
+      start: '2026-08-12', end: '2026-08-18',
+    }], '2026-08-19T00:00:00.000Z')
+    await saveNpmDownloadResults(db, [{ pluginId: 'Scan/Repo', status: 'error' }], '2026-08-20T00:00:00.000Z')
+
+    expect(database.prepare(
+      `SELECT npm_downloads_7d, npm_downloads_start, npm_downloads_end,
+              npm_downloads_status, npm_downloads_checked_at
+         FROM catalog_plugins WHERE normalized_plugin_id = 'scan/repo'`,
+    ).get()).toEqual({
+      npm_downloads_7d: 321,
+      npm_downloads_start: '2026-08-12',
+      npm_downloads_end: '2026-08-18',
+      npm_downloads_status: 'error',
+      npm_downloads_checked_at: '2026-08-20T00:00:00.000Z',
+    })
     database.close()
   })
 })

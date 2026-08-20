@@ -7,7 +7,7 @@ import { buildApiHostRobotsTxt, SITE_ORIGIN } from './seo'
  */
 export const PUBLIC_API_HOST = 'api.deepseek1024.com'
 
-const PUBLIC_API_PATHS: Record<string, string> = {
+export const PUBLIC_API_PATHS: Readonly<Record<string, string>> = {
   '/v1/plugins/search': '/api/v1/plugins/search',
   '/v1/health': '/api/v1/health',
 }

@@ -230,6 +230,19 @@ test('documents automatic merge and automatic sync behavior consistently', async
   assert.match(reference, /维护者人工审核/)
 })
 
+test('keeps the maintainer API checklist out of catalog submission instructions', async () => {
+  const pullRequestTemplate = await readFile(path.join(root, '.github/PULL_REQUEST_TEMPLATE.md'), 'utf8')
+  const skill = await readFile(path.join(root, 'skills/submit-dsh-plugin/SKILL.md'), 'utf8')
+  const reference = await readFile(path.join(root, 'skills/submit-dsh-plugin/references/submission-reference.md'), 'utf8')
+
+  assert.match(pullRequestTemplate, /Maintainer API compatibility/)
+  assert.match(pullRequestTemplate, /Catalog-only plugin submissions leave this section unchecked/)
+  assert.match(skill, /Maintainer API compatibility/)
+  assert.match(skill, /目录投稿不得勾选或填写该段/)
+  assert.match(reference, /Maintainer API compatibility/)
+  assert.match(reference, /插件目录投稿保持该段全部未勾选/)
+})
+
 test('documents the subdirectory plugin id contract consistently', async () => {
   const contributing = await readFile(path.join(root, 'CONTRIBUTING.md'), 'utf8')
   const skill = await readFile(path.join(root, 'skills/submit-dsh-plugin/SKILL.md'), 'utf8')
