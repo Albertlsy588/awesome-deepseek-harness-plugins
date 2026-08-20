@@ -21,6 +21,7 @@
   },
   "include": [
     "src",
+    "worker/api-paths.ts",
     "worker/lib/catalog.ts",
     "worker/community/contract.ts",
     "worker/community/post-body.ts",

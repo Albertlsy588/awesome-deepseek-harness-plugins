@@ -116,6 +116,8 @@ catalog: add owner/repository/packages/foo
 推送前，说明 fork、分支、上游仓库和唯一暂存的文件。只有获得授权后才可推送并创建 PR。
 
 使用 [references/submission-reference.md](references/submission-reference.md) 中的模板编写 PR，填写真实的测试命令和结果，并保持“允许维护者修改”开启。
+仓库根 PR 模板还包含仅供维护者应用/API 变更使用的 `Maintainer API compatibility` 清单；
+目录投稿不得勾选或填写该段，仍只完成插件与目录提交确认。
 
 ## 7. 跟进自动检查
 

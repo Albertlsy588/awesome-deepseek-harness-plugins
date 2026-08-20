@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { LIVE_STATS_API_PATH } from '../../worker/api-paths'
 import { newVisitId, VISIT_ID_PATTERN } from '../../worker/lib/visit-id'
 import { API_ORIGIN, type LiveStats } from './api'
 import { reconnectDelayMs } from './reconnect'
@@ -62,7 +63,7 @@ export function useLiveStats(): LiveStatsState {
     function connect() {
       const httpOrigin = API_ORIGIN || window.location.origin
       const wsOrigin = httpOrigin.replace(/^http/, 'ws')
-      socket = new WebSocket(`${wsOrigin}/api/live?visit=${visitId()}`)
+      socket = new WebSocket(`${wsOrigin}${LIVE_STATS_API_PATH}?visit=${visitId()}`)
       socket.addEventListener('open', () => {
         attempt = 0
         setState((current) => ({ ...current, connected: true }))

@@ -9,6 +9,14 @@
 - Page titles, descriptions, JSON-LD and the crawlable pre-hydration shell all come from `apps/web/worker/seo-templates.ts` and `apps/web/worker/seo-content.ts`. Both the Worker and the React app import them; never fork the copy into a page component or a translation file.
 - When replacing an already-published route, keep a permanent redirect from the old path to the canonical path.
 
+## API backward compatibility
+
+- Every API is a published compatibility contract, whether it is currently used by the site, a non-Web client, a third party, an authenticated tool, an internal sync job or a WebSocket client. Never assume a site-only caller updates in lockstep with the Worker.
+- Within an existing API version, do not remove or rename fields, change types or nullability, reinterpret values, change defaults, status/error codes, pagination, ordering, authentication behavior or important headers. Treat new response enum values as potentially breaking. Compatible additions must remain optional or ignorable to old clients.
+- Breaking changes require a new versioned route while the previous route and its behavior remain available through an explicit migration and deprecation period.
+- `apps/web/contracts/api-surface.json` is the exhaustive API inventory. Every Hono API route, Worker-owned API transport and public-host alias must be registered there. Versioned response schemas and golden semantic fixtures live beside it.
+- Run `npm run test:api-contract` for every API-related change. Do not make a failure green by casually rewriting a historical schema or golden fixture; contract changes require explicit API-owner review. Keep the route coverage test, historical request behavior and known consumer-adapter tests current.
+
 ## Bound hostnames and the public API surface
 
 The Worker answers on three custom domains, all declared in `apps/web/wrangler.jsonc`
