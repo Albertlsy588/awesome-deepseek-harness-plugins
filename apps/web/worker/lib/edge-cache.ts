@@ -75,7 +75,13 @@ export function edgeCacheKey(url: URL): Request | null {
     if (value !== null && value !== '') canonical.searchParams.set(name, value)
   }
   const revision = CACHE_KEY_REVISIONS[pathname]
-  if (revision) canonical.searchParams.set('__edge_v', revision)
+  if (revision) {
+    // Some zones are configured to ignore query strings in cache keys. A
+    // synthetic pathname therefore provides a real namespace boundary across
+    // deployments, whereas `?__edge_v=…` can silently collide with the old
+    // entry. This URL is used only as the Cache API key and is never fetched.
+    canonical.pathname = `/__edge_cache/v${revision}${pathname}`
+  }
   return new Request(canonical.toString(), { method: 'GET' })
 }
 

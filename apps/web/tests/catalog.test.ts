@@ -382,16 +382,16 @@ describe('edge cache key normalization', () => {
 
   it('versions the v1 listing cache independently of its public query shape', () => {
     expect(key('https://deepseek1024.com/api/v1/plugins'))
-      .toBe('https://deepseek1024.com/api/v1/plugins?__edge_v=2')
+      .toBe('https://deepseek1024.com/__edge_cache/v2/api/v1/plugins')
     expect(key('https://deepseek1024.com/api/v1/plugins?sort=name&bust=old'))
-      .toBe('https://deepseek1024.com/api/v1/plugins?sort=name&__edge_v=2')
+      .toBe('https://deepseek1024.com/__edge_cache/v2/api/v1/plugins?sort=name')
   })
 
   it('versions npm-bearing listing and ranking caches for ownership fixes', () => {
     expect(key('https://deepseek1024.com/api/v2/plugins?sort=npmDownloads7d'))
-      .toBe('https://deepseek1024.com/api/v2/plugins?sort=npmDownloads7d&__edge_v=1')
+      .toBe('https://deepseek1024.com/__edge_cache/v1/api/v2/plugins?sort=npmDownloads7d')
     expect(key('https://deepseek1024.com/api/v3/rankings?bust=old'))
-      .toBe('https://deepseek1024.com/api/v3/rankings?__edge_v=1')
+      .toBe('https://deepseek1024.com/__edge_cache/v1/api/v3/rankings')
   })
 
   it('leaves HTML routes keyed by their whole URL', () => {
