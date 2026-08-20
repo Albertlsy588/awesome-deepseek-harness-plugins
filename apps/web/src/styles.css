@@ -445,16 +445,30 @@ body {
   box-shadow: none;
 }
 
-.catalog-navigation .catalog-view-tabs a {
+.catalog-navigation .catalog-view-tabs a,
+.catalog-navigation .catalog-view-tabs button {
   min-height: 35px;
   padding: 0 13px;
   border-radius: 6px;
   font-size: 12px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
 }
 
-.catalog-navigation .catalog-view-tabs a.selected {
+.catalog-navigation .catalog-view-tabs a.selected,
+.catalog-navigation .catalog-view-tabs button.selected {
   background: var(--ink);
   box-shadow: none;
+}
+
+.installed-section .section-heading > span {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
 .catalog-content {
@@ -656,7 +670,8 @@ body {
     width: 100%;
   }
 
-  .catalog-navigation .catalog-view-tabs a {
+  .catalog-navigation .catalog-view-tabs a,
+  .catalog-navigation .catalog-view-tabs button {
     min-height: 44px;
     flex: 1;
     justify-content: center;
@@ -936,7 +951,8 @@ main {
   box-shadow: var(--shadow-xs);
 }
 
-.catalog-view-tabs a {
+.catalog-view-tabs a,
+.catalog-view-tabs button {
   display: inline-flex;
   min-height: 36px;
   align-items: center;
@@ -949,12 +965,14 @@ main {
   font-weight: 650;
 }
 
-.catalog-view-tabs a:hover {
+.catalog-view-tabs a:hover,
+.catalog-view-tabs button:hover {
   background: var(--surface-hover);
   color: var(--ink);
 }
 
-.catalog-view-tabs a.selected {
+.catalog-view-tabs a.selected,
+.catalog-view-tabs button.selected {
   background: var(--brand);
   color: var(--on-brand);
   font-weight: 750;
@@ -1884,6 +1902,43 @@ main {
   width: 32px;
   height: 32px;
   border-radius: 6px 0 0 6px;
+}
+
+.split-install-main.bridge-local-install {
+  display: inline-flex;
+  width: auto;
+  min-width: 96px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 720;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.split-install-main.bridge-local-install:hover:not(:disabled) {
+  border-color: var(--brand-dark);
+  background: var(--brand-dark);
+}
+
+.split-install-main.bridge-local-install[data-state='installed'] {
+  border-color: var(--line-strong);
+  background: var(--surface-soft);
+  color: var(--muted);
+  cursor: default;
+  opacity: 1;
 }
 
 .split-install-toggle.icon-button {
@@ -2817,7 +2872,8 @@ main {
     width: 100%;
   }
 
-  .catalog-view-tabs a {
+  .catalog-view-tabs a,
+  .catalog-view-tabs button {
     flex: 1;
     min-height: 44px;
     justify-content: center;
@@ -3023,6 +3079,12 @@ main {
   .split-install-toggle.icon-button {
     width: 44px;
     height: 44px;
+  }
+
+  .split-install-main.bridge-local-install {
+    min-width: 92px;
+    height: 44px;
+    padding: 0 10px;
   }
 
   .row-open {
@@ -3302,7 +3364,8 @@ main {
     margin-top: 20px;
   }
 
-  .catalog-view-tabs a {
+  .catalog-view-tabs a,
+  .catalog-view-tabs button {
     min-height: 40px;
     padding: 0 18px;
     font-size: 15px;
@@ -3600,7 +3663,8 @@ main {
     font-size: 16px;
   }
 
-  .catalog-navigation .catalog-view-tabs a {
+  .catalog-navigation .catalog-view-tabs a,
+  .catalog-navigation .catalog-view-tabs button {
     min-height: 44px;
     font-size: 13px;
   }
@@ -4563,6 +4627,201 @@ main {
 @media (pointer: coarse) {
   .floating-nav-item {
     min-height: 44px;
+  }
+}
+
+/* Embedded DSH surface. The website keeps its catalog identity, but sheds the
+   public-site furniture and oversized masthead inside a tool panel. */
+html[data-dsh1024-embed="true"] {
+  background: var(--canvas);
+}
+
+html[data-dsh1024-embed="true"] body {
+  min-width: 0;
+}
+
+html[data-dsh1024-embed="true"] .embedded-site-shell {
+  min-height: 100vh;
+}
+
+html[data-dsh1024-embed="true"] .site-bottom-link,
+html[data-dsh1024-embed="true"] .floating-nav,
+html[data-dsh1024-embed="true"] .kanban-girl-root,
+html[data-dsh1024-embed="true"] .hero-actions,
+html[data-dsh1024-embed="true"] .hero-heading > p:last-child,
+html[data-dsh1024-embed="true"] .self-install-banner {
+  display: none;
+}
+
+html[data-dsh1024-embed="true"] .catalog-hero::before,
+html[data-dsh1024-embed="true"] .catalog-hero::after {
+  content: none;
+}
+
+html[data-dsh1024-embed="true"] .catalog-hero-inner {
+  padding: 10px 0;
+}
+
+html[data-dsh1024-embed="true"] .hero-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto;
+  grid-template-areas: "heading tally";
+  align-items: center;
+  gap: 12px;
+}
+
+html[data-dsh1024-embed="true"] .hero-lockup {
+  gap: 10px;
+}
+
+html[data-dsh1024-embed="true"] .hero-lockup-mark {
+  width: 42px;
+  height: 42px;
+}
+
+html[data-dsh1024-embed="true"] .hero-eyebrow {
+  display: none;
+}
+
+html[data-dsh1024-embed="true"] .hero-heading h1,
+html[data-dsh1024-embed="true"] .hero-heading h1 a {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 5px;
+  letter-spacing: 0;
+}
+
+html[data-dsh1024-embed="true"] .hero-heading h1 span,
+html[data-dsh1024-embed="true"] .hero-heading h1 em {
+  font-size: 17px;
+  letter-spacing: 0;
+}
+
+html[data-dsh1024-embed="true"] .hero-tally {
+  display: flex;
+  min-height: 0;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+html[data-dsh1024-embed="true"] .hero-tally::before,
+html[data-dsh1024-embed="true"] .hero-tally-count {
+  display: none;
+}
+
+html[data-dsh1024-embed="true"] .hero-live,
+html[data-dsh1024-embed="true"] .hero-updated {
+  position: static;
+}
+
+html[data-dsh1024-embed="true"] .hero-updated {
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+html[data-dsh1024-embed="true"] .page-container {
+  width: min(100% - 24px, 1120px);
+}
+
+html[data-dsh1024-embed="true"] .catalog-content {
+  padding-top: 12px;
+  padding-bottom: 32px;
+}
+
+/* Only the embedded bridge renders a text command here. Keep the public
+   website's compact copy control and its denser columns unchanged. */
+@media (min-width: 1081px) {
+  html[data-dsh1024-embed="true"] .package-row {
+    grid-template-columns: 38px 36px minmax(240px, 1fr) 120px 244px 108px 30px;
+  }
+
+  html[data-dsh1024-embed="true"] .ranking-row {
+    grid-template-columns: 38px 36px minmax(270px, 1fr) 120px 244px 108px 30px;
+  }
+
+  html[data-dsh1024-embed="true"] .row-repo-panel .package-row {
+    grid-template-columns: 30px minmax(200px, 1fr) 120px 244px 108px 30px;
+  }
+}
+
+@media (min-width: 861px) and (max-width: 1080px) {
+  html[data-dsh1024-embed="true"] .package-row {
+    grid-template-columns: 32px 36px minmax(210px, 1fr) 110px 200px 108px 30px;
+  }
+
+  html[data-dsh1024-embed="true"] .ranking-row {
+    grid-template-columns: 32px 36px minmax(220px, 1fr) 110px 200px 108px 30px;
+  }
+}
+
+@media (min-width: 681px) and (max-width: 860px) {
+  html[data-dsh1024-embed="true"] .package-row,
+  html[data-dsh1024-embed="true"] .ranking-row {
+    grid-template-columns: 30px 36px minmax(190px, 1fr) 180px 108px 30px;
+  }
+}
+
+.bridge-install-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.bridge-install-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.button.is-busy svg {
+  animation: bridge-install-spin 800ms linear infinite;
+}
+
+@keyframes bridge-install-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  html[data-dsh1024-embed="true"] .page-container {
+    width: min(100% - 16px, 1120px);
+  }
+
+  html[data-dsh1024-embed="true"] .catalog-hero-inner {
+    padding: 8px 0;
+  }
+
+  html[data-dsh1024-embed="true"] .hero-stage {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "heading"
+      "tally";
+    gap: 6px;
+  }
+
+  html[data-dsh1024-embed="true"] .hero-tally {
+    flex-wrap: wrap;
+    padding-left: 52px;
+  }
+
+  html[data-dsh1024-embed="true"] .category-filter {
+    margin-right: -4px;
+    padding-right: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button.is-busy svg {
+    animation-duration: 1600ms;
   }
 }
 

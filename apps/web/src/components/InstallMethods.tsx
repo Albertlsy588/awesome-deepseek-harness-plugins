@@ -3,6 +3,8 @@ import { normalizePluginId } from '../../worker/lib/plugin-id'
 import { SELF_OFFICIAL_COMMAND, SELF_PLUGIN_ID, SELF_TRACKED_COMMAND } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { InstallCommand } from './InstallCommand'
+import { BridgeInstallButton } from './BridgeInstallButton'
+import { useEmbedBridge } from '../lib/embedBridge'
 
 /**
  * The install methods a plugin offers, each with what the catalog actually
@@ -23,10 +25,26 @@ export function InstallMethods({ methods, pluginId }: {
   pluginId: string
 }) {
   const { t } = useI18n()
+  const { connected } = useEmbedBridge()
   if (methods.length === 0) return null
   // The store's own entry installs from its published package, not from a spec
   // pointing at this catalog repository.
   const isSelf = normalizePluginId(pluginId) === SELF_PLUGIN_ID
+
+  if (connected) {
+    const preferred = methods[0]!
+    const status = preferred.verification === 'verified'
+      ? t('installVerified')
+      : preferred.verification === 'unverified'
+        ? t('installUnverified')
+        : t('installChecking')
+    return (
+      <div className="bridge-install-panel">
+        <BridgeInstallButton pluginId={pluginId} />
+        <p>{preferred.kind === 'npm' ? 'npm' : 'GitHub'} · {status}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="install-methods">

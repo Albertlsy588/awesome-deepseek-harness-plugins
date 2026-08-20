@@ -181,6 +181,21 @@ export function metadataForPath(
     return collectionMetadata('catalog', '/plugins', catalog, language)
   }
 
+  if (pathname === '/embed/store') {
+    const title = language === 'zh' ? `嵌入式插件商店 | ${SITE_NAME}` : `Embedded plugin store | ${SITE_NAME}`
+    const description = language === 'zh'
+      ? '供本地 dsh1024 插件壳嵌入的 DeepSeek Harness 社区插件目录。'
+      : 'The DeepSeek Harness community plugin catalog embedded by the local dsh1024 shell.'
+    return {
+      title,
+      description,
+      canonical: null,
+      robots: 'noindex,follow',
+      schema: graph(siteNodes()),
+      status: 200,
+    }
+  }
+
   if (pathname === '/docs/api') {
     const copy = collectionCopy('apiDocs', language, catalog.plugins.length)
     const url = absoluteUrl('/docs/api')

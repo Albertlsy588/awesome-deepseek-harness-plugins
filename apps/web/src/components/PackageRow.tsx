@@ -15,6 +15,7 @@ import { packagePath, pluginListIdentity, repositoryInstallTarget } from '../lib
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { ROW_LINK_TARGET } from '../lib/link-target'
+import { useEmbedBridge } from '../lib/embedBridge'
 import { CategoryTag } from './CategoryTag'
 import { OwnerAvatar } from './OwnerAvatar'
 import { SplitInstallButton } from './SplitInstallButton'
@@ -52,6 +53,7 @@ export const PackageRow = memo(function PackageRow({
   repositoryPlugins,
 }: PackageRowProps) {
   const { language, t } = useI18n()
+  const { embedded } = useEmbedBridge()
   const [expanded, setExpanded] = useState(false)
   const panelId = useId()
   const growth = ranking === 'growth24h'
@@ -99,6 +101,7 @@ export const PackageRow = memo(function PackageRow({
       ? plugin.latestReleaseAt ?? plugin.added
       : plugin.pushedAt ?? plugin.added
   const listIdentity = pluginListIdentity(plugin)
+  const linkTarget = embedded ? undefined : ROW_LINK_TARGET
 
   return (
     <article
@@ -140,8 +143,8 @@ export const PackageRow = memo(function PackageRow({
               <Link
                 className="row-link"
                 to={packagePath(plugin)}
-                target={ROW_LINK_TARGET}
-                rel={ROW_LINK_TARGET ? 'noreferrer' : undefined}
+                target={linkTarget}
+                rel={linkTarget ? 'noreferrer' : undefined}
               >
                 {listIdentity.displayName}
               </Link>

@@ -40,14 +40,26 @@ dsh plugin --profile web add dsh1024
 
 Restart DeepSeek Harness after installation.
 
-The in-app store queries the live `/api/v1/registry` catalog, checks its own
-version automatically, and supports catalog search, category filters,
-installed-state detection, confirmed installs, uninstall, and operation
-progress. The installer only accepts repository URLs present in the validated
-1024 Store registry. It derives `github:owner/repository` itself instead of
-executing the registry's display command. Mutating routes require same-origin
-POST requests and serialize plugin operations. Plugin changes take effect after
-restarting DeepSeek Harness.
+The in-app store is a small local shell around the live
+`https://deepseek1024.com/embed/store` page. Catalog presentation can therefore
+ship with the website without requiring a new npm release. The title bar,
+version check, one-click self-update, install bridge, and failure screen remain
+local and keep working even when the remote page cannot be framed.
+
+The embedded page has no shell access. Its versioned `MessageChannel` bridge
+accepts only an `install` intent containing a catalog `pluginId` and a
+parameter-free `installed` read; it cannot send a command, URL, path, or arbitrary
+arguments. The local backend asks the trusted `/api/v1/registry` endpoint for
+that id and derives the official DSH CLI argument array itself. The installed
+view receives only matching catalog ids and their already-public catalog
+summaries, never local dependency names, versions, specs, or paths. Every install
+still requires local confirmation, same-origin POST requests, and the shared
+operation mutex. Plugin changes take effect after restarting DeepSeek Harness.
+
+Self-update checks prefer `/api/v1/self/update` on deepseek1024.com, then fall
+back to the npm registry and the repository package manifest. The update button
+runs the fixed target `dsh plugin --profile <profile> add dsh1024@<version>`;
+remote content cannot select the package or version.
 
 The store is reachable from three places: the sidebar footer (with a live
 catalog count, and a popover it opens itself), the Settings navigation, and the
@@ -232,6 +244,19 @@ Install the built package into an isolated profile:
 ```sh
 DSH_HOME=/tmp/dsh-store-test dsh plugin --profile market-test add ./packages/dsh1024
 DSH_HOME=/tmp/dsh-store-test dsh --profile market-test --port 14567
+```
+
+To test the local website inside the local shell, add an overlay and pass it at
+boot (plain HTTP is accepted only for loopback hosts):
+
+```yaml
+- id: dsh1024
+  config:
+    embedUrl: http://127.0.0.1:14568/embed/store?bridge=dsh1024-v1
+```
+
+```sh
+DSH_HOME=/tmp/dsh-store-test dsh --profile market-test --patch ./local-store.yml --port 14567
 ```
 
 Inside `packages/dsh1024`:

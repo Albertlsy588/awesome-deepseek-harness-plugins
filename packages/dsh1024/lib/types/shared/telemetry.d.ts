@@ -15,7 +15,7 @@ export interface InstallEvent {
     clientId: string;
     pluginId: string;
     profile: string;
-    operation: 'install' | 'reinstall' | 'remove';
+    operation: 'install' | 'reinstall' | 'update' | 'remove';
     status: 'success' | 'failed';
     clientStartedAt: string;
     clientCompletedAt: string;

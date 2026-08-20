@@ -558,6 +558,49 @@ describe('market API', () => {
     })
   })
 
+  it('serves the store client update manifest from the cached catalog snapshot', async () => {
+    const result = testCatalogResult()
+    result.snapshot.plugins = [...result.snapshot.plugins, {
+      ...result.snapshot.plugins[0]!,
+      id: 'imsai-sh/awesome-deepseek-harness-plugins',
+      name: 'dsh1024',
+      owner: 'imsai-sh',
+      repository: 'awesome-deepseek-harness-plugins',
+      url: 'https://github.com/imsai-sh/awesome-deepseek-harness-plugins',
+      install: 'dsh plugin --profile web add dsh1024',
+      installMethods: [{
+        kind: 'npm',
+        spec: 'dsh1024',
+        command: 'dsh plugin --profile web add dsh1024',
+        verification: 'verified',
+        code: 'published_package',
+        requiresBuildAllowance: false,
+        buildPackage: null,
+        revision: '4.5.6',
+        checkedAt: '2026-08-20T08:00:00Z',
+      }],
+    }]
+    const app = createApp({ catalogLoader: vi.fn(async () => result) })
+
+    const response = await app.request('/api/v1/self/update')
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toContain('stale-while-revalidate=')
+    await expect(response.json()).resolves.toEqual({
+      package: 'dsh1024',
+      version: '4.5.6',
+      releaseUrl: 'https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh1024',
+      checkedAt: '2026-08-20T08:00:00Z',
+    })
+  })
+
+  it('fails closed when the store client version is absent from the snapshot', async () => {
+    const response = await testApp().request('/api/v1/self/update')
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+
   it('rejects catalog sync when the token is missing or wrong', async () => {
     const { app, curatedSyncer } = syncApp()
 

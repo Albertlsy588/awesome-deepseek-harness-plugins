@@ -6,11 +6,13 @@ export declare const TELEMETRY_SOURCE_CHANNEL = "dsh-1024store-plugin";
 export interface InstallEventInput {
     pluginId: string;
     profile: string;
-    operation: 'install' | 'remove';
+    operation: 'install' | 'update' | 'remove';
     status: 'success' | 'failed';
     startedAt: Date;
     completedAt: Date;
     errorCode: string | null;
+    beforeVersion?: string | null;
+    afterVersion?: string | null;
 }
 export interface TelemetryContext {
     env?: NodeJS.ProcessEnv;

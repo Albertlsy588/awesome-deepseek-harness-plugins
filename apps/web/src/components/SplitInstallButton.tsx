@@ -10,6 +10,8 @@ import {
 import { createPortal } from 'react-dom'
 import { officialInstallCommand, trackedInstallCommand, type RegistryPlugin } from '../lib/api'
 import { useI18n } from '../lib/i18n'
+import { useEmbedBridge } from '../lib/embedBridge'
+import { BridgeInstallButton } from './BridgeInstallButton'
 
 type Kind = 'tracked' | 'official'
 
@@ -25,6 +27,7 @@ const ANCHOR_OVERLAP = 6
 
 export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'id' | 'install'> }) {
   const { t } = useI18n()
+  const { connected } = useEmbedBridge()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState<Kind | null>(null)
   const [placement, setPlacement] = useState<Placement | null>(null)
@@ -149,6 +152,14 @@ export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'i
     </div>,
     document.body,
   ) : null
+
+  if (connected) {
+    return (
+      <div className="split-install">
+        <BridgeInstallButton pluginId={plugin.id} className="split-install-main bridge-local-install" />
+      </div>
+    )
+  }
 
   return (
     <div className="split-install" ref={rootRef}>

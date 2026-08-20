@@ -105,6 +105,29 @@ test('a structured npm target is preferred without requiring a repository backli
   assert.deepEqual(installExtraArgs(plugin), [])
 })
 
+test('structured targets survive repository renames without becoming arbitrary commands', () => {
+  const renamedNpm = {
+    ...registry.plugins[0],
+    url: 'https://github.com/new-owner/new-repository',
+    target: '@scope/published-plugin',
+  }
+  assert.equal(installTarget(renamedNpm), '@scope/published-plugin')
+
+  const renamedSource = {
+    ...registry.plugins[0],
+    url: 'https://github.com/new-owner/new-repository',
+    target: 'github:owner/repo',
+  }
+  assert.equal(installTarget(renamedSource), 'github:owner/repo')
+  assert.throws(
+    () => installTarget({ ...renamedSource, target: 'github:attacker/other' }),
+    /does not match plugin id/,
+  )
+
+  const { target: _target, ...legacy } = renamedSource
+  assert.throws(() => installTarget(legacy), /does not match its repository URL/)
+})
+
 test('a source build grant is passed as a separate safe CLI argument', () => {
   const plugin = { ...registry.plugins[0], allowBuild: '@scope/source-plugin' }
   assert.equal(installTarget(plugin), 'github:owner/repo')

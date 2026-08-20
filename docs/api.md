@@ -188,6 +188,27 @@ payload (`installCount`, `installerCount`, `firstInstallCount`, `reinstallCount`
 header. All-zero metrics are returned when the analytics database is unavailable; the
 endpoint never exposes client hashes or raw events.
 
+## GET /api/v1/self/update
+
+Small update manifest for the in-DSH `dsh1024` shell. It is projected from the
+same cached catalog snapshot as the registry, using the verified npm install
+method for the catalog's own plugin entry:
+
+```json
+{
+  "package": "dsh1024",
+  "version": "0.4.0",
+  "releaseUrl": "https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh1024",
+  "checkedAt": "<ISO 8601>"
+}
+```
+
+The endpoint returns `503` with `Cache-Control: no-store` when no strict semver
+can be obtained. The local shell falls back to the public npm manifest and then
+the repository package manifest, so an unavailable site API does not disable
+its recovery UI. This endpoint only reports a version; the local backend owns
+the fixed self-update package name and executes the official DSH CLI.
+
 ## POST /api/v1/catalog/sync
 
 Full-catalog reconciliation from GitHub CI — one of exactly two catalog write paths (the

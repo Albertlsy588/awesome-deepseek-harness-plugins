@@ -1,6 +1,7 @@
 /** Local HTTP routes for browsing and managing 1024 Store plugins. */
 
 import { readFileSync } from 'node:fs'
+import { isIP } from 'node:net'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -25,6 +26,7 @@ export interface MarketRouteConfig {
   profile: string
   registryUrl: string
   updateUrl: string
+  embedUrl: string
 }
 
 interface CommandResult {
@@ -36,7 +38,7 @@ interface CommandResult {
 
 interface Progress {
   active: boolean
-  action: 'install' | 'uninstall' | null
+  action: 'install' | 'update' | 'uninstall' | null
   target: string
   startedAt: number
   lastLine: string
@@ -69,6 +71,37 @@ export function readInstalled(profile: string): Record<string, string> {
   }
 }
 
+function installedPackageName(
+  plugin: RegistryPlugin,
+  installed: Record<string, string>,
+): string | null {
+  const target = installTarget(plugin)
+  if (!target.startsWith('github:') && installed[target] !== undefined) return target
+
+  const repository = parseGitHubSource(plugin.url)
+  if (repository === null) return null
+  const wantedPath = plugin.id.split('/').slice(2).join('/').toLowerCase()
+  const repositoryNeedle = `github:${repository}`.toLowerCase()
+  for (const [name, spec] of Object.entries(installed)) {
+    const normalized = spec.toLowerCase()
+    if (!normalized.includes(repositoryNeedle)) continue
+    const match = /[#&]path:\/*([^&]*)/.exec(normalized)
+    const installedPath = (match?.[1] ?? '').replace(/\/+$/, '')
+    if (installedPath === wantedPath) return name
+  }
+  return null
+}
+
+/** Map local dependencies to public catalog ids without exposing package specs. */
+export function installedPluginIds(
+  installed: Record<string, string>,
+  plugins: RegistryPlugin[],
+): string[] {
+  return plugins
+    .filter(plugin => installedPackageName(plugin, installed) !== null)
+    .map(plugin => plugin.id)
+}
+
 function cliInvocation(): InstallInvocation {
   const entry = process.argv[1]
   if (entry !== undefined && /[\\/](?:bin\.(?:js|ts)|dsh)$/.test(entry)) {
@@ -98,7 +131,7 @@ function pluginEventId(plugin: RegistryPlugin): string {
 /** Run one plugin mutation through the shared async runner, tracking progress. */
 async function runTrackedPluginCommand(
   profile: string,
-  action: 'install' | 'uninstall',
+  action: 'install' | 'update' | 'uninstall',
   target: string,
   progress: Progress,
   extraArgs: string[] = [],
@@ -111,7 +144,7 @@ async function runTrackedPluginCommand(
   try {
     const result = await runPluginCommand({
       invocation: cliInvocation(),
-      action: action === 'install' ? 'add' : 'remove',
+      action: action === 'uninstall' ? 'remove' : 'add',
       profile,
       target,
       extraArgs,
@@ -133,24 +166,26 @@ async function runTrackedPluginCommand(
 /** Run one plugin mutation and report its outcome anonymously (fire-and-forget). */
 async function runReportedPluginCommand(
   profile: string,
-  plugin: RegistryPlugin,
-  action: 'install' | 'uninstall',
+  pluginId: string,
+  action: 'install' | 'update' | 'uninstall',
   target: string,
   progress: Progress,
   extraArgs: string[] = [],
+  versions: { beforeVersion?: string | null; afterVersion?: string | null } = {},
 ): Promise<CommandResult> {
   const startedAt = new Date()
   const result = await runTrackedPluginCommand(profile, action, target, progress, extraArgs)
   const completedAt = new Date()
   const succeeded = result.exitCode === 0 && !result.timedOut
   void reportInstallEvent({
-    pluginId: pluginEventId(plugin),
+    pluginId,
     profile,
-    operation: action === 'install' ? 'install' : 'remove',
+    operation: action === 'uninstall' ? 'remove' : action,
     status: succeeded ? 'success' : 'failed',
     startedAt,
     completedAt,
     errorCode: succeeded ? null : failureCode(result),
+    ...versions,
   })
   return result
 }
@@ -163,17 +198,41 @@ function sendJson(response: ServerResponse, status: number, value: unknown): voi
   response.end(JSON.stringify(value))
 }
 
-function isSameOrigin(request: IncomingMessage): boolean {
-  const origin = request.headers.origin
-  const host = request.headers.host
+function isPrivateNetworkHostname(hostname: string): boolean {
+  const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase()
+  if (normalized === 'localhost' || normalized.endsWith('.local')) return true
+  const family = isIP(normalized)
+  if (family === 4) {
+    const octets = normalized.split('.').map(Number)
+    return octets[0] === 10
+      || octets[0] === 127
+      || (octets[0] === 169 && octets[1] === 254)
+      || (octets[0] === 172 && (octets[1] ?? 0) >= 16 && (octets[1] ?? 0) <= 31)
+      || (octets[0] === 192 && octets[1] === 168)
+  }
+  if (family === 6) {
+    return normalized === '::1'
+      || normalized.startsWith('fc')
+      || normalized.startsWith('fd')
+      || /^fe[89ab]/.test(normalized)
+  }
+  return false
+}
+
+export function isTrustedSameOrigin(origin: string | undefined, host: string | undefined): boolean {
   if (origin === undefined || host === undefined) return false
   try {
     const url = new URL(origin)
-    const localHostnames = new Set(['localhost', '127.0.0.1', '[::1]'])
-    return url.host === host && localHostnames.has(url.hostname)
+    return url.host === host && isPrivateNetworkHostname(url.hostname)
   } catch {
     return false
   }
+}
+
+function isSameOrigin(request: IncomingMessage): boolean {
+  const origin = request.headers.origin
+  const host = request.headers.host
+  return isTrustedSameOrigin(origin, host)
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<unknown> {
@@ -214,10 +273,27 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
   if (registryUrl.protocol !== 'https:') throw new Error('registry API URL must use HTTPS')
   const updateUrl = new URL(config.updateUrl)
   if (updateUrl.protocol !== 'https:') throw new Error('update API URL must use HTTPS')
+  const embedUrl = new URL(config.embedUrl)
+  const loopbackEmbed = embedUrl.protocol === 'http:'
+    && new Set(['localhost', '127.0.0.1', '[::1]']).has(embedUrl.hostname)
+  if (embedUrl.username !== '' || embedUrl.password !== '') {
+    throw new Error('embed URL cannot contain credentials')
+  }
+  if (embedUrl.protocol !== 'https:' && !loopbackEmbed) {
+    throw new Error('embed URL must use HTTPS (loopback HTTP is allowed for development)')
+  }
 
   let mutating = false
   const progress: Progress = { active: false, action: null, target: '', startedAt: 0, lastLine: '' }
   const disposers = [
+    webServer.register({
+      kind: 'exact',
+      path: '/dsh1024/embed-config',
+      handler: (request, response) => {
+        if (!requireMethod(request, response, 'GET')) return
+        sendJson(response, 200, { url: embedUrl.href, origin: embedUrl.origin })
+      },
+    }),
     webServer.register({
       kind: 'exact',
       path: '/dsh1024/registry',
@@ -245,9 +321,34 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
     webServer.register({
       kind: 'exact',
       path: '/dsh1024/installed',
-      handler: (request, response) => {
+      handler: async (request, response) => {
         if (!requireMethod(request, response, 'GET')) return
-        sendJson(response, 200, { profile: config.profile, installed: readInstalled(config.profile) })
+        try {
+          const installed = readInstalled(config.profile)
+          const { registry } = await loadRegistry(config.registryUrl)
+          const pluginIds = installedPluginIds(installed, registry.plugins)
+          const idSet = new Set(pluginIds)
+          const categoryLabels = new Map(registry.categories.map(category => [category.id, category.label]))
+          sendJson(response, 200, {
+            profile: config.profile,
+            installed,
+            pluginIds,
+            plugins: registry.plugins.filter(plugin => idSet.has(plugin.id)).map(plugin => ({
+              id: plugin.id,
+              name: plugin.name,
+              owner: plugin.owner,
+              url: plugin.url,
+              category: plugin.category,
+              categoryLabel: categoryLabels.get(plugin.category) ?? {},
+              description: plugin.description,
+              install: plugin.install,
+              added: plugin.added,
+              stars: plugin.stars ?? null,
+            })),
+          })
+        } catch (error) {
+          sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) })
+        }
       },
     }),
     webServer.register({
@@ -260,6 +361,46 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
           seconds: progress.active ? Math.round((Date.now() - progress.startedAt) / 1000) : 0,
           installed: readInstalled(config.profile),
         })
+      },
+    }),
+    webServer.register({
+      kind: 'exact',
+      path: '/dsh1024/self-update',
+      handler: async (request, response) => {
+        if (!requireTrustedPost(request, response)) return
+        if (mutating) {
+          sendJson(response, 409, { error: 'another plugin operation is already running' })
+          return
+        }
+        try {
+          const update = await checkForUpdate(config.updateUrl)
+          if (!update.checked || update.latestVersion === null) {
+            sendJson(response, 503, { error: update.error ?? 'update service unavailable', update })
+            return
+          }
+          if (!update.updateAvailable) {
+            sendJson(response, 200, { ok: true, updated: false, update })
+            return
+          }
+          mutating = true
+          try {
+            const result = await runReportedPluginCommand(
+              config.profile,
+              'imsai-sh/awesome-deepseek-harness-plugins',
+              'update',
+              `dsh1024@${update.latestVersion}`,
+              progress,
+              [],
+              { beforeVersion: update.currentVersion, afterVersion: update.latestVersion },
+            )
+            const ok = result.exitCode === 0 && !result.timedOut
+            sendJson(response, ok ? 200 : 502, { ok, updated: ok, update, ...result })
+          } finally {
+            mutating = false
+          }
+        } catch (error) {
+          sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+        }
       },
     }),
     webServer.register({
@@ -287,7 +428,7 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
           try {
             const result = await runReportedPluginCommand(
               config.profile,
-              plugin,
+              pluginEventId(plugin),
               'install',
               target,
               progress,
@@ -343,7 +484,13 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
           }
           mutating = true
           try {
-            const result = await runReportedPluginCommand(config.profile, cataloged, 'uninstall', name, progress)
+            const result = await runReportedPluginCommand(
+              config.profile,
+              pluginEventId(cataloged),
+              'uninstall',
+              name,
+              progress,
+            )
             const ok = result.exitCode === 0 && !result.timedOut
             sendJson(response, ok ? 200 : 502, {
               ok,

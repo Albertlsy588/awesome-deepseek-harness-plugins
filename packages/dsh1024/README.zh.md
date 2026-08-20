@@ -35,11 +35,21 @@ dsh plugin --profile web add dsh1024
 
 安装完成后重启 DeepSeek Harness。
 
-店内插件通过 `/api/v1/registry` 动态查询目录，启动后自动检查自身版本，并支持
-目录搜索、分类筛选、已安装识别、安装确认、卸载和操作进度。安装器只接受已通过
-校验且出现在 1024 Store 目录中的 GitHub 仓库 URL。它会自行生成
-`github:owner/repository` 参数，不执行目录中的展示命令。所有写操作都要求同源
-POST，并且同一时间只允许一个插件操作。插件变更会在重启 DeepSeek Harness 后生效。
+店内插件现在是一个稳定的本地壳，内部嵌入
+`https://deepseek1024.com/embed/store` 实时页面。目录展示、搜索和详情可以随主站
+发布，不再要求每次更新 npm 包；标题栏、版本检查、一键自更新、安装桥和加载失败
+降级页仍在本地，即使远程页面无法嵌入也能工作。
+
+嵌入网页没有 Shell 权限。带版本号的 `MessageChannel` 桥只接受包含目录
+`pluginId` 的 `install` 意图，以及一个不带参数的 `installed` 只读意图；不接受命令、
+URL、路径或任意参数。本地后端会重新从可信 `/api/v1/registry` 查询该 ID，并自行生成
+官方 DSH CLI 参数数组。“已安装”视图只会收到匹配到的目录 ID 和本来就公开的目录摘要，
+不会收到本机依赖名、版本、spec 或路径。每次安装仍需本地确认，写接口仍要求同源 POST，
+且所有插件操作共用同一个互斥锁。插件变更会在重启 DeepSeek Harness 后生效。
+
+自身更新优先查询 deepseek1024.com 的 `/api/v1/self/update`，失败时依次回退 npm
+registry 和仓库中的 package manifest。一键更新只会执行固定目标
+`dsh plugin --profile <profile> add dsh1024@<版本>`，远程页面不能指定包名或版本。
 
 店内插件有三个入口：侧边栏底部（带实时目录总数徽标，点击自开浮层）、设置页
 左侧导航，以及设置 → 插件标签页。删掉任何一个都会让包的 preflight 失败。
@@ -158,6 +168,19 @@ npm run market:test
 ```sh
 DSH_HOME=/tmp/dsh-store-test dsh plugin --profile market-test add ./packages/dsh1024
 DSH_HOME=/tmp/dsh-store-test dsh --profile market-test --port 14567
+```
+
+要把本地主站嵌进本地插件壳，可创建下面的 overlay 并在启动时传入（明文 HTTP
+仅允许回环地址）：
+
+```yaml
+- id: dsh1024
+  config:
+    embedUrl: http://127.0.0.1:14568/embed/store?bridge=dsh1024-v1
+```
+
+```sh
+DSH_HOME=/tmp/dsh-store-test dsh --profile market-test --patch ./local-store.yml --port 14567
 ```
 
 在 `packages/dsh1024` 目录内：

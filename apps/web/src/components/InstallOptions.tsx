@@ -1,9 +1,14 @@
 import { officialInstallCommand, trackedInstallCommand, type RegistryPlugin } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { InstallCommand } from './InstallCommand'
+import { BridgeInstallButton } from './BridgeInstallButton'
+import { useEmbedBridge } from '../lib/embedBridge'
 
 export function InstallOptions({ plugin }: { plugin: Pick<RegistryPlugin, 'id' | 'install'> }) {
   const { t } = useI18n()
+  const { connected } = useEmbedBridge()
+
+  if (connected) return <BridgeInstallButton pluginId={plugin.id} />
   return (
     <div className="install-options">
       <div className="install-option install-option-recommended">

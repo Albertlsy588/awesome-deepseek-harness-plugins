@@ -1,7 +1,8 @@
 /** Automatic update checks for the 1024 Store plugin itself. */
 import { readFileSync } from 'node:fs';
-export const DEFAULT_UPDATE_URL = 'https://registry.npmjs.org/dsh1024/latest';
-export const DEFAULT_UPDATE_FALLBACK_URL = 'https://api.github.com/repos/imsai-sh/awesome-deepseek-harness-plugins/contents/package.json?ref=main';
+export const DEFAULT_UPDATE_URL = 'https://deepseek1024.com/api/v1/self/update';
+export const DEFAULT_UPDATE_FALLBACK_URL = 'https://registry.npmjs.org/dsh1024/latest';
+export const DEFAULT_UPDATE_LAST_RESORT_URL = 'https://api.github.com/repos/imsai-sh/awesome-deepseek-harness-plugins/contents/packages/dsh1024/package.json?ref=main';
 export const DEFAULT_RELEASE_URL = 'https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh1024';
 const FETCH_TIMEOUT_MS = 8_000;
 const localManifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -81,9 +82,9 @@ async function fetchManifest(url, fetcher) {
  * Query the npm registry for the published version and fall back to the repository API.
  * Failures are returned as state so an unavailable checker never blocks the market.
  */
-export async function checkForUpdate(updateUrl = DEFAULT_UPDATE_URL, fallbackUrl = DEFAULT_UPDATE_FALLBACK_URL, fetcher = fetch) {
+export async function checkForUpdate(updateUrl = DEFAULT_UPDATE_URL, fallbackUrl = DEFAULT_UPDATE_FALLBACK_URL, fetcher = fetch, lastResortUrl = DEFAULT_UPDATE_LAST_RESORT_URL) {
     const errors = [];
-    for (const url of new Set([updateUrl, fallbackUrl])) {
+    for (const url of new Set([updateUrl, fallbackUrl, lastResortUrl])) {
         try {
             const manifest = await fetchManifest(url, fetcher);
             return {

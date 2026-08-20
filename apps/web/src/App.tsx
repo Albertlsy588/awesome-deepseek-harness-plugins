@@ -31,6 +31,7 @@ function LegacyPackageRedirect() {
 export function App() {
   return (
     <Routes>
+      <Route path="/embed/store" element={<CatalogPage view="catalog" />} />
       <Route element={<AppShell />}>
         <Route index element={<CatalogPage view="rankings" />} />
         <Route path="/plugins" element={<CatalogPage view="catalog" />} />

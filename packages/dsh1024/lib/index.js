@@ -3,6 +3,7 @@ import { DEFAULT_REGISTRY_URL } from './registry.js';
 import { mountMarketRoutes } from './routes.js';
 import { DEFAULT_UPDATE_URL } from './update.js';
 export const name = 'dsh1024';
+export const DEFAULT_EMBED_URL = 'https://deepseek1024.com/embed/store?bridge=dsh1024-v1';
 function argvProfile() {
     const index = process.argv.indexOf('--profile');
     const candidate = index >= 0 ? process.argv[index + 1] : undefined;
@@ -18,6 +19,7 @@ export function apply(ctx, config = {}) {
         profile: config.profile ?? argvProfile() ?? 'web',
         registryUrl: config.registryUrl ?? DEFAULT_REGISTRY_URL,
         updateUrl: config.updateUrl ?? DEFAULT_UPDATE_URL,
+        embedUrl: config.embedUrl ?? DEFAULT_EMBED_URL,
     };
     ctx.inject(['webServer'], hostContext => {
         const host = hostContext;

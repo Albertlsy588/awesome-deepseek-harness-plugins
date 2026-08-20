@@ -4,14 +4,16 @@ import {
   CURRENT_VERSION,
   DEFAULT_RELEASE_URL,
   DEFAULT_UPDATE_FALLBACK_URL,
+  DEFAULT_UPDATE_LAST_RESORT_URL,
   DEFAULT_UPDATE_URL,
   checkForUpdate,
   compareVersions,
 } from '../lib/update.js'
 
-test('the npm registry is the preferred update source', () => {
-  assert.equal(DEFAULT_UPDATE_URL, 'https://registry.npmjs.org/dsh1024/latest')
-  assert.match(DEFAULT_UPDATE_FALLBACK_URL, /^https:\/\/api\.github\.com\//)
+test('the 1024 Store API is preferred over public registry fallbacks', () => {
+  assert.equal(DEFAULT_UPDATE_URL, 'https://deepseek1024.com/api/v1/self/update')
+  assert.equal(DEFAULT_UPDATE_FALLBACK_URL, 'https://registry.npmjs.org/dsh1024/latest')
+  assert.match(DEFAULT_UPDATE_LAST_RESORT_URL, /contents\/packages\/dsh1024\/package\.json/)
   assert.match(DEFAULT_RELEASE_URL, /\/packages\/dsh1024$/)
 })
 
@@ -22,7 +24,7 @@ test('semantic version comparison handles releases and prereleases', () => {
   assert.equal(compareVersions('1.0.0-rc.2', '1.0.0-rc.10') < 0, true)
 })
 
-test('automatic update check reads the published npm manifest first', async () => {
+test('automatic update check reads the configured primary manifest first', async () => {
   const requested = []
   const fetcher = async (url) => {
     requested.push(String(url))
@@ -33,18 +35,18 @@ test('automatic update check reads the published npm manifest first', async () =
     }), { status: 200 })
   }
   const result = await checkForUpdate(
-    'https://registry.npmjs.org/dsh1024/latest',
+    'https://deepseek1024.com/api/v1/self/update',
     'https://fallback.example/package.json',
     fetcher,
   )
-  assert.deepEqual(requested, ['https://registry.npmjs.org/dsh1024/latest'])
+  assert.deepEqual(requested, ['https://deepseek1024.com/api/v1/self/update'])
   assert.equal(result.currentVersion, CURRENT_VERSION)
   assert.equal(result.latestVersion, '99.0.0')
   assert.equal(result.updateAvailable, true)
   assert.equal(result.releaseUrl, DEFAULT_RELEASE_URL)
 })
 
-test('update check falls back to the repository API', async () => {
+test('update check falls back when the primary source is unavailable', async () => {
   let calls = 0
   const fetcher = async () => {
     calls += 1
@@ -53,7 +55,7 @@ test('update check falls back to the repository API', async () => {
       : new Response(JSON.stringify({ version: CURRENT_VERSION }), { status: 200 })
   }
   const result = await checkForUpdate(
-    'https://registry.npmjs.org/dsh1024/latest',
+    'https://deepseek1024.com/api/v1/self/update',
     'https://fallback.example/package.json',
     fetcher,
   )
@@ -65,7 +67,7 @@ test('update check falls back to the repository API', async () => {
 test('an unavailable update service never blocks the market', async () => {
   const fetcher = async () => new Response('unavailable', { status: 503 })
   const result = await checkForUpdate(
-    'https://registry.npmjs.org/dsh1024/latest',
+    'https://deepseek1024.com/api/v1/self/update',
     'https://fallback.example/package.json',
     fetcher,
   )

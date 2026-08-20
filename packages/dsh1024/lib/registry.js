@@ -114,17 +114,31 @@ function githubInstallTarget(plugin) {
     const subPath = pluginSubPath(plugin.id, repository);
     return subPath === '' ? `github:${repository}` : `github:${repository}#path:${subPath}`;
 }
+/** Derive a structured GitHub target from the catalog id itself. */
+function githubInstallTargetFromId(id) {
+    const segments = id.split('/');
+    if (segments.length < 2 || !segments.every(segment => ID_SEGMENT.test(segment) && segment !== '.' && segment !== '..')) {
+        throw new Error('unsupported plugin id');
+    }
+    const repository = segments.slice(0, 2).join('/');
+    const subPath = segments.slice(2).join('/');
+    return subPath === '' ? `github:${repository}` : `github:${repository}#path:${subPath}`;
+}
 function validatedInstallTarget(plugin) {
-    const github = githubInstallTarget(plugin);
     if (plugin.target !== undefined && typeof plugin.target !== 'string') {
         throw new Error('install target must be a string');
     }
-    const target = plugin.target ?? github;
+    // Older registry responses have no structured target, so their safe
+    // fallback still comes from the repository URL cross-checked against id.
+    if (plugin.target === undefined)
+        return githubInstallTarget(plugin);
+    const target = plugin.target;
     if (target.startsWith('github:')) {
+        const expected = githubInstallTargetFromId(plugin.id);
         const [targetRepository, targetPath = ''] = target.slice('github:'.length).split('#path:');
-        const [githubRepository, githubPath = ''] = github.slice('github:'.length).split('#path:');
-        if (targetRepository?.toLowerCase() !== githubRepository?.toLowerCase() || targetPath !== githubPath) {
-            throw new Error('install target does not match plugin source');
+        const [expectedRepository, expectedPath = ''] = expected.slice('github:'.length).split('#path:');
+        if (targetRepository?.toLowerCase() !== expectedRepository?.toLowerCase() || targetPath !== expectedPath) {
+            throw new Error('install target does not match plugin id');
         }
         return target;
     }

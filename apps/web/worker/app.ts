@@ -58,6 +58,9 @@ interface AppDependencies {
 
 const CACHE_HEADER = 'public, max-age=30, s-maxage=300, stale-while-revalidate=3600'
 const SELF_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins'
+const SELF_PACKAGE_NAME = 'dsh1024'
+const SELF_RELEASE_URL = 'https://github.com/imsai-sh/awesome-deepseek-harness-plugins/tree/main/packages/dsh1024'
+const SEMVER_RELEASE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 // The catalog listing is a snapshot projection that only moves when the KV
 // snapshot does; the detail endpoint carries live install counters and keeps
 // the shorter TTL above.
@@ -542,6 +545,31 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
     context.header('Cache-Control', CACHE_HEADER)
     context.header('X-Robots-Tag', 'noindex')
     return context.json(metrics)
+  })
+
+  app.get('/api/v1/self/update', async (context) => {
+    const { snapshot } = await dependencies.catalogLoader(
+      context.env,
+      executionContext(context),
+    )
+    const self = snapshot.plugins.find((plugin) => normalizePluginId(plugin.id) === SELF_PLUGIN_ID)
+    const published = self?.installMethods?.find((method) =>
+      method.kind === 'npm' && method.spec === SELF_PACKAGE_NAME,
+    )
+    const version = published?.revision
+    if (typeof version !== 'string' || !SEMVER_RELEASE.test(version)) {
+      context.header('Cache-Control', 'no-store')
+      context.header('X-Robots-Tag', 'noindex')
+      return context.json({ error: 'The published dsh1024 version is not available.' }, 503)
+    }
+    context.header('Cache-Control', CACHE_HEADER)
+    context.header('X-Robots-Tag', 'noindex')
+    return context.json({
+      package: SELF_PACKAGE_NAME,
+      version,
+      releaseUrl: SELF_RELEASE_URL,
+      checkedAt: published?.checkedAt ?? snapshot.generatedAt,
+    })
   })
 
   app.get('/api/v1/registry', async (context) => {

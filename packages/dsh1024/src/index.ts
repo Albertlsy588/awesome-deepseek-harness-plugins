@@ -6,6 +6,7 @@ import { mountMarketRoutes, type WebServerService } from './routes.ts'
 import { DEFAULT_UPDATE_URL } from './update.ts'
 
 export const name = 'dsh1024'
+export const DEFAULT_EMBED_URL = 'https://deepseek1024.com/embed/store?bridge=dsh1024-v1'
 
 export interface Config {
   /** DSH profile that owns plugin mutations. Defaults to the booted profile. */
@@ -14,6 +15,8 @@ export interface Config {
   registryUrl?: string
   /** HTTPS endpoint that reports the latest dsh1024 version. */
   updateUrl?: string
+  /** Store page embedded by the local shell. HTTP is accepted only on loopback for development. */
+  embedUrl?: string
 }
 
 interface MarketContext extends Context {
@@ -36,6 +39,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     profile: config.profile ?? argvProfile() ?? 'web',
     registryUrl: config.registryUrl ?? DEFAULT_REGISTRY_URL,
     updateUrl: config.updateUrl ?? DEFAULT_UPDATE_URL,
+    embedUrl: config.embedUrl ?? DEFAULT_EMBED_URL,
   }
   ctx.inject(['webServer'], hostContext => {
     const host = hostContext as MarketContext

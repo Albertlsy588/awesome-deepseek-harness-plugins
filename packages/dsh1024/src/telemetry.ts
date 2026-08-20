@@ -39,11 +39,13 @@ const PRIVACY_NOTICE = 'DSH 1024Store records anonymous plugin install outcomes 
 export interface InstallEventInput {
   pluginId: string
   profile: string
-  operation: 'install' | 'remove'
+  operation: 'install' | 'update' | 'remove'
   status: 'success' | 'failed'
   startedAt: Date
   completedAt: Date
   errorCode: string | null
+  beforeVersion?: string | null
+  afterVersion?: string | null
 }
 
 export interface TelemetryContext {
@@ -96,8 +98,8 @@ export async function reportInstallEvent(input: InstallEventInput, context: Tele
       clientStartedAt: input.startedAt.toISOString(),
       clientCompletedAt: input.completedAt.toISOString(),
       durationMs: boundedDuration(input.startedAt, input.completedAt),
-      beforeVersion: null,
-      afterVersion: null,
+      beforeVersion: input.beforeVersion ?? null,
+      afterVersion: input.afterVersion ?? null,
       requestedRef: null,
       cliVersion: CLI_VERSION,
       dshVersion: null,

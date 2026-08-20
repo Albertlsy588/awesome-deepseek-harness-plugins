@@ -8,6 +8,7 @@ import {
 } from '../lib/api'
 import { formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
+import { useEmbedBridge } from '../lib/embedBridge'
 import { InstallCommand } from './InstallCommand'
 
 // Module-level cache so the catalog's 5-minute auto reload (which remounts the
@@ -15,11 +16,12 @@ import { InstallCommand } from './InstallCommand'
 let cachedStats: InstallMetrics | null | undefined
 
 export function SelfInstallBanner() {
+  const { embedded } = useEmbedBridge()
   const { language, t } = useI18n()
   const [stats, setStats] = useState<InstallMetrics | null>(cachedStats ?? null)
 
   useEffect(() => {
-    if (cachedStats !== undefined) return
+    if (embedded || cachedStats !== undefined) return
     const controller = new AbortController()
     getSelfInstallStats(controller.signal)
       .then((value) => {
@@ -30,10 +32,12 @@ export function SelfInstallBanner() {
       // showing the "--" placeholder.
       .catch(() => {})
     return () => controller.abort()
-  }, [])
+  }, [embedded])
 
   // Compact hero strip: a one-line invitation with both install commands and a
   // small install-count badge; the hero stays the shared home of both views.
+  if (embedded) return null
+
   return (
     <aside className="self-install-banner" aria-labelledby="self-install-heading">
       <div className="self-install-copy">

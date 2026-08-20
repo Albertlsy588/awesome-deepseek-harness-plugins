@@ -3,6 +3,7 @@ import {
   ArrowUpRight,
   Code,
   ListFilter,
+  PackageCheck,
   PackagePlus,
   Search,
   Trophy,
@@ -12,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { LoadingState } from '../components/LoadingState'
 import { LanguageSwitch } from '../components/LanguageSwitch'
+import { InstalledPackages } from '../components/InstalledPackages'
 import { PackageRow } from '../components/PackageRow'
 import { SelfInstallBanner } from '../components/SelfInstallBanner'
 import type {
@@ -33,6 +35,7 @@ import {
 import { publicAsset } from '../lib/assets'
 import { formatDateTime, formatNumber, formatRelativeUpdate } from '../lib/format'
 import { useI18n } from '../lib/i18n'
+import { useEmbedBridge } from '../lib/embedBridge'
 import { useLiveStats } from '../lib/useLiveStats'
 import {
   collectionCopy,
@@ -175,10 +178,12 @@ interface CatalogPageProps {
 
 export function CatalogPage({ view }: CatalogPageProps) {
   const { language, t } = useI18n()
+  const { embedded, installedPluginIds } = useEmbedBridge()
   const { stats, connected } = useLiveStats()
   const [searchParams, setSearchParams] = useSearchParams()
   const query = searchParams.get('q') ?? ''
   const category = searchParams.get('category') ?? ''
+  const showInstalled = embedded && searchParams.get('local') === 'installed'
   const requestedSort = searchParams.get('sort')
   const sort: CatalogSort = view === 'catalog' && SORT_MODES.includes(requestedSort as CatalogSort)
     ? requestedSort as CatalogSort
@@ -358,7 +363,9 @@ export function CatalogPage({ view }: CatalogPageProps) {
   // The search box's match count: the directory's filtered total on the catalog
   // view, the search total when searching the rankings, the whole catalog
   // otherwise. Null until the relevant response has arrived.
-  const resultCount: number | null = view === 'catalog'
+  const resultCount: number | null = showInstalled
+    ? null
+    : view === 'catalog'
     ? (directoryReady ? directoryTotal : null)
     : (query ? rankingSearch?.total ?? null : catalogTotal)
 
@@ -372,6 +379,14 @@ export function CatalogPage({ view }: CatalogPageProps) {
   function resetFilters() {
     setDraftQuery('')
     setSearchParams({})
+  }
+
+  function showInstalledPlugins() {
+    const next = new URLSearchParams(searchParams)
+    next.set('local', 'installed')
+    next.delete('category')
+    next.delete('sort')
+    setSearchParams(next)
   }
 
   const ranking = useMemo(() => {
@@ -393,7 +408,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
     language,
     catalogTotal ?? 0,
   )
-  const hasIndexableFilters = Boolean(query || category || requestedSort)
+  const hasIndexableFilters = Boolean(query || category || requestedSort || embedded)
   const rankedForSchema = useMemo(
     () => (view === 'catalog'
       ? directory?.plugins ?? []
@@ -548,20 +563,33 @@ export function CatalogPage({ view }: CatalogPageProps) {
           </section>
 
           <nav className="catalog-view-tabs" aria-label={`${t('catalog')} / ${t('rankings')}`}>
-            <Link to={rankingsHref} className={view === 'rankings' ? 'selected' : undefined} aria-current={view === 'rankings' ? 'page' : undefined}>
+            <Link to={rankingsHref} className={!showInstalled && view === 'rankings' ? 'selected' : undefined} aria-current={!showInstalled && view === 'rankings' ? 'page' : undefined}>
               <Trophy size={16} aria-hidden="true" />
               {t('rankings')}
             </Link>
-            <Link to={catalogHref} className={view === 'catalog' ? 'selected' : undefined} aria-current={view === 'catalog' ? 'page' : undefined}>
+            <Link to={catalogHref} className={!showInstalled && view === 'catalog' ? 'selected' : undefined} aria-current={!showInstalled && view === 'catalog' ? 'page' : undefined}>
               <ListFilter size={16} aria-hidden="true" />
               <span>
                 {t('catalog')}{catalogTotal !== null ? ` (${formatNumber(catalogTotal, language)})` : ''}
               </span>
             </Link>
+            {embedded && (
+              <button
+                type="button"
+                className={showInstalled ? 'selected' : undefined}
+                aria-current={showInstalled ? 'page' : undefined}
+                onClick={showInstalledPlugins}
+              >
+                <PackageCheck size={16} aria-hidden="true" />
+                <span>
+                  {t('installed')}{installedPluginIds !== null ? ` (${formatNumber(installedPluginIds.length, language)})` : ''}
+                </span>
+              </button>
+            )}
           </nav>
         </section>
 
-        {view === 'catalog' && (
+        {!showInstalled && view === 'catalog' && (
           <section className="category-section" aria-labelledby="categories-heading">
             <div className="section-heading compact-heading">
               <h2 id="categories-heading">{t('categories')}</h2>
@@ -592,7 +620,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
           </section>
         )}
 
-        {view === 'rankings' && (
+        {!showInstalled && view === 'rankings' && (
           <section className="catalog-section ranking-section" aria-labelledby="rankings-heading">
             <h2 id="rankings-heading" className="visually-hidden">{copy.listHeading}</h2>
             <div className="view-controls">
@@ -670,7 +698,7 @@ export function CatalogPage({ view }: CatalogPageProps) {
           </section>
         )}
 
-        {view === 'catalog' && (
+        {!showInstalled && view === 'catalog' && (
           <section className="catalog-section directory-section" aria-labelledby="directory-heading">
             <h2 id="directory-heading" className="section-title">{copy.listHeading}</h2>
             <div className="view-controls">
@@ -749,6 +777,16 @@ export function CatalogPage({ view }: CatalogPageProps) {
                 )}
               </>
             )}
+          </section>
+        )}
+
+        {showInstalled && (
+          <section className="catalog-section installed-section" aria-labelledby="installed-heading">
+            <div className="section-heading compact-heading">
+              <h2 id="installed-heading">{t('installedPlugins')}</h2>
+              <span>{installedPluginIds?.length ?? '--'}</span>
+            </div>
+            <InstalledPackages query={query} />
           </section>
         )}
       </div>

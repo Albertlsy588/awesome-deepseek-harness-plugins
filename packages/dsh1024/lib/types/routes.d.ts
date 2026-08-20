@@ -1,5 +1,6 @@
 /** Local HTTP routes for browsing and managing 1024 Store plugins. */
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { RegistryPlugin } from './registry.ts';
 export interface WebRoute {
     kind: 'exact';
     path: string;
@@ -12,6 +13,7 @@ export interface MarketRouteConfig {
     profile: string;
     registryUrl: string;
     updateUrl: string;
+    embedUrl: string;
 }
 /**
  * Read non-official dependencies installed into one profile.
@@ -19,6 +21,9 @@ export interface MarketRouteConfig {
  * @returns package names mapped to their manifest specs.
  */
 export declare function readInstalled(profile: string): Record<string, string>;
+/** Map local dependencies to public catalog ids without exposing package specs. */
+export declare function installedPluginIds(installed: Record<string, string>, plugins: RegistryPlugin[]): string[];
+export declare function isTrustedSameOrigin(origin: string | undefined, host: string | undefined): boolean;
 /**
  * Register the local market API and return a disposer for every route.
  * @param webServer - DSH web server service.

@@ -41,6 +41,13 @@ function danglingReferences(schema: object): string[] {
 }
 
 describe('SEO metadata', () => {
+  it('serves the dedicated embed route as a noindex 200 page', () => {
+    const metadata = metadataForPath('/embed/store', testSeoCatalog())
+    expect(metadata.status).toBe(200)
+    expect(metadata.robots).toBe('noindex,follow')
+    expect(metadata.canonical).toBeNull()
+  })
+
   it('builds unique canonical metadata for collection and plugin pages', () => {
     const catalogPages = testSeoCatalog()
     const catalog = metadataForPath('/plugins', catalogPages)
