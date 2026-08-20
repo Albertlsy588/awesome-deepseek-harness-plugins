@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "infosave2007/cortiq-router/packages/dsh-llm-cortiq-router",
+  "name": "cortiq-dsh-llm-router",
+  "repository": "https://github.com/infosave2007/cortiq-router",
+  "category": "model",
+  "description": {
+    "en": "Smart LLM request router. Classifies prompts by task type (code, math, translation, etc.) and complexity (low/medium/high) via the allaigate semantic router, then dispatches to the best-suited model. Configurable routing rules, complexity thresholds, 7 UI languages.",
+    "zh": "智能LLM请求路由器。通过allaigate语义路由器按任务类型（代码、数学、翻译等）和复杂度（低/中/高）对提示词分类，然后分发到最合适的模型。可配置路由规则、复杂度阈值，支持7种界面语言。"
+  },
+  "added": "2026-08-20"
+}
