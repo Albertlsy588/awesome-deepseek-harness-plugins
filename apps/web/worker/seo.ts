@@ -165,6 +165,28 @@ export function detailRedirectForPath(pathname: string, catalog: SeoCatalog): st
   const successors = findPluginsUnder(catalog.plugins, requestedId)
   if (successors.length === 1) return pluginDetailPath(successors[0]!.id)
   if (successors.length > 1) return `/plugins?q=${encodeURIComponent(requestedId)}`
+
+  // A GitHub repository can be renamed while the plugin id deliberately keeps
+  // its published canonical path. Google and GitHub still discover the new
+  // repository-level address, so resolve that address back to the stable id
+  // instead of serving a 404 for a plugin that still exists.
+  if (segments.length === 2) {
+    const wantedRepository = requestedId.toLocaleLowerCase('en-US')
+    const aliases = catalog.plugins.filter((plugin) => {
+      try {
+        const url = new URL(plugin.url)
+        if (url.protocol !== 'https:' || url.hostname.toLocaleLowerCase('en-US') !== 'github.com') return false
+        const [owner, repository, ...rest] = url.pathname.split('/').filter(Boolean)
+        if (!owner || !repository || rest.length > 0) return false
+        const currentRepository = `${owner}/${repository.replace(/\.git$/, '')}`.toLocaleLowerCase('en-US')
+        return currentRepository === wantedRepository
+      } catch {
+        return false
+      }
+    })
+    if (aliases.length === 1) return pluginDetailPath(aliases[0]!.id)
+    if (aliases.length > 1) return `/plugins?q=${encodeURIComponent(requestedId)}`
+  }
   return null
 }
 
@@ -380,6 +402,9 @@ function degradedPluginMetadata(id: string, language: Language): PageMetadata {
   const canonical = absoluteUrl(pluginDetailPath(id))
   const title = pluginTitle(displayName, owner, language)
   const description = pluginDescription(displayName, owner, '', '', language)
+  const unavailable = language === 'zh'
+    ? '插件目录暂时不可用，请稍后重试。'
+    : 'The plugin catalog is temporarily unavailable. Please try again later.'
   return {
     title,
     description,
@@ -395,7 +420,8 @@ function degradedPluginMetadata(id: string, language: Language): PageMetadata {
         isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
       },
     ]),
-    status: 200,
+    status: 503,
+    shell: renderSimpleShell(displayName, unavailable),
   }
 }
 
@@ -603,12 +629,17 @@ export function rewriteHtmlResponse(response: Response, metadata: PageMetadata):
 
   const transformed = rewriter.transform(response)
   const headers = new Headers(transformed.headers)
-  headers.set(
-    'Cache-Control',
-    metadata.status === 200
-      ? 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600'
-      : 'public, max-age=60, s-maxage=300',
-  )
+  if (metadata.status === 503) {
+    headers.set('Cache-Control', 'no-store')
+    headers.set('Retry-After', '300')
+  } else {
+    headers.set(
+      'Cache-Control',
+      metadata.status === 200
+        ? 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600'
+        : 'public, max-age=60, s-maxage=300',
+    )
+  }
   headers.set('X-Robots-Tag', metadata.robots)
   return new Response(transformed.body, {
     status: metadata.status,
