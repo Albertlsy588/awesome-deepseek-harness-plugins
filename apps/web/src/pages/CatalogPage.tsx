@@ -1,7 +1,6 @@
 import {
   AlertCircle,
   ArrowUpRight,
-  Code,
   ListFilter,
   PackageCheck,
   PackagePlus,
@@ -498,14 +497,6 @@ export function CatalogPage({ view }: CatalogPageProps) {
         <div className="page-container catalog-hero-inner">
           <header className="hero-stage">
             <div className="hero-actions" aria-label={t('siteActions')}>
-              <Link
-                className="hero-action-link hero-api"
-                to="/docs/api"
-                aria-label={collectionCopy('apiDocs', language).heading}
-              >
-                <Code size={16} aria-hidden="true" />
-                <span>{t('navApi')}</span>
-              </Link>
               <a
                 className="hero-action-link hero-author"
                 href="https://www.imsai.cc/"
@@ -555,7 +546,18 @@ export function CatalogPage({ view }: CatalogPageProps) {
                   </h1>
                 </div>
               </div>
-              <p>{copy.intro}</p>
+              <p className="hero-description">{copy.intro}</p>
+              <a
+                className="hero-link-exchange"
+                href="https://www.imsai.cc/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span className="hero-link-exchange-dot" aria-hidden="true" />
+                <strong>{t('linkExchangeTitle')}</strong>
+                <span>{t('linkExchangeBody')}</span>
+                <ArrowUpRight size={12} aria-hidden="true" />
+              </a>
             </div>
 
             <dl className="hero-tally">
