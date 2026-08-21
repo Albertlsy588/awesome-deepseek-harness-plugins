@@ -64,14 +64,8 @@
     }
   ],
   "triggers": {
-    "crons": [
-      "*/15 * * * *",
-      "7 * * * *",
-      "37 * * * *",
-      "17 3 * * SUN",
-      "2,12,22,32,42,52 * * * *",
-      "*/5 * * * *"
-    ]
+    // Collection schedules are intentionally disabled for this Worker.
+    "crons": []
   },
   "limits": {
     "cpu_ms": 300000,
