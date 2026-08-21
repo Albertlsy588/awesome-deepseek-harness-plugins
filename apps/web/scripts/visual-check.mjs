@@ -58,6 +58,18 @@ async function assertNoHorizontalOverflow(page, label) {
   if (overflow) throw new Error(`${label} has horizontal overflow`)
 }
 
+// The hero clips decorative overflow, so document-level overflow alone cannot
+// detect an action row whose right edge was pushed outside the viewport.
+async function assertActionsWithinViewport(page, label) {
+  const box = await page.locator('.catalog-hero .hero-actions').evaluate((node) => {
+    const rect = node.getBoundingClientRect()
+    return { left: Math.round(rect.left), right: Math.round(rect.right), viewport: window.innerWidth }
+  })
+  if (box.left < -1 || box.right > box.viewport + 1) {
+    throw new Error(`${label} action row is clipped by the viewport: ${JSON.stringify(box)}`)
+  }
+}
+
 async function assertVisibleSubdirectorySiblingsHaveDistinctTitles(page, label) {
   const duplicateTitles = await page.locator('.package-row').evaluateAll((rows) => {
     const siblings = new Map()
@@ -566,6 +578,19 @@ try {
   if ((await rankings.locator('.catalog-hero .hero-api').textContent())?.trim() !== '免费API') {
     throw new Error('free API action uses the wrong Chinese label')
   }
+  if ((await rankings.locator('.catalog-hero .hero-wechat[href="/wechat-group.jpg"][target="_blank"]').count()) !== 1) {
+    throw new Error('WeChat group QR link is missing from the catalog banner')
+  }
+  if ((await rankings.locator('.catalog-hero .hero-wechat span').textContent())?.trim() !== '微信群') {
+    throw new Error('WeChat group action uses the wrong Chinese label')
+  }
+  const firstActionClass = await rankings
+    .locator('.catalog-hero .hero-actions > *')
+    .first()
+    .evaluate((node) => node.className)
+  if (!firstActionClass.includes('hero-wechat')) {
+    throw new Error(`WeChat group action is not the leftmost action: ${firstActionClass}`)
+  }
   if ((await rankings.locator('.catalog-hero .github-link span').textContent())?.trim() !== '插件市场开源') {
     throw new Error('market source action uses the wrong Chinese label')
   }
@@ -717,8 +742,11 @@ try {
   await mobile.waitForURL((url) => !url.searchParams.has('category'))
   await assertMobileEnvironment(mobile, 'mobile catalog')
   await assertNoHorizontalOverflow(mobile, 'mobile catalog')
+  await assertActionsWithinViewport(mobile, 'mobile catalog')
   await assertVisibleSubdirectorySiblingsHaveDistinctTitles(mobile, 'mobile catalog')
   await assertMinTouchTargets(mobile, 'mobile catalog', [
+    '.catalog-hero .hero-wechat',
+    '.catalog-hero .hero-api',
     '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
@@ -970,10 +998,13 @@ try {
   const compactMobile = await openPage({ width: 320, height: 568 }, '/rankings', { touch: true })
   await waitForRankingList(compactMobile)
   await assertNoHorizontalOverflow(compactMobile, 'compact mobile rankings')
+  await assertActionsWithinViewport(compactMobile, 'compact mobile rankings')
   if (await compactMobile.locator('.catalog-hero .hero-language').isVisible()) {
     throw new Error('compact mobile header did not hide the secondary language control')
   }
   await assertMinTouchTargets(compactMobile, 'compact mobile header', [
+    '.catalog-hero .hero-wechat',
+    '.catalog-hero .hero-api',
     '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',

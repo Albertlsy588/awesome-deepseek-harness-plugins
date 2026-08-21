@@ -710,6 +710,20 @@ body {
   }
 }
 
+/* Five 44px action targets fit on the narrowest supported screen once the
+   secondary language switch is hidden. Collapse the API label at the same
+   breakpoint so adding the WeChat entry cannot clip the rightmost action. */
+@media (max-width: 400px) {
+  .hero-api {
+    width: 44px;
+    padding: 0;
+  }
+
+  .hero-api span {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .live-dot.is-connected::after {
     animation: none;
@@ -3654,6 +3668,7 @@ main {
 
   .hero-action-link {
     width: 44px;
+    min-width: 44px;
     min-height: 44px;
   }
 
