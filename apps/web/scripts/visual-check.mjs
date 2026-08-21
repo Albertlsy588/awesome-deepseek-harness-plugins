@@ -581,18 +581,14 @@ try {
   if ((await rankings.locator('.catalog-hero .hero-wechat').count()) !== 0) {
     throw new Error('WeChat group entry should no longer be hidden in the catalog banner')
   }
-  if ((await rankings.locator('.floating-nav > .floating-wechat[href="/wechat-group.jpg"][target="_blank"]').count()) !== 1) {
-    throw new Error('WeChat group QR is missing from the left navigation')
+  if ((await rankings.locator('.floating-wechat[href="/wechat-group.jpg"][target="_blank"]').count()) !== 1) {
+    throw new Error('WeChat group QR floating card is missing')
   }
-  if ((await rankings.locator('.floating-wechat-copy').textContent())?.replace(/\s+/g, '') !== '微信群扫码加入') {
-    throw new Error('WeChat group card uses the wrong Chinese copy')
+  if ((await rankings.locator('.floating-wechat-copy').textContent())?.trim() !== 'DSH插件社区') {
+    throw new Error('WeChat group card must only say DSH插件社区')
   }
-  const firstNavClass = await rankings
-    .locator('.floating-nav > *')
-    .first()
-    .evaluate((node) => node.className)
-  if (!firstNavClass.includes('floating-wechat')) {
-    throw new Error(`WeChat group QR is not the first navigation item: ${firstNavClass}`)
+  if ((await rankings.locator('.floating-nav .floating-wechat').count()) !== 0) {
+    throw new Error('WeChat group card is still nested inside navigation')
   }
   const desktopQr = await rankings.locator('.floating-wechat-qr').evaluate((node) => {
     const box = node.getBoundingClientRect()

@@ -31,28 +31,29 @@ export function FloatingNav() {
   const destinations = DESTINATIONS.filter(({ to }) => !(HIDE_COMMUNITY && to === '/community'))
 
   return (
-    <nav className="floating-nav" aria-label={t('siteActions')}>
+    <>
+      <nav className="floating-nav" aria-label={t('siteActions')}>
+        {destinations.map(({ to, end, icon: Icon, label }) => (
+          <NavLink key={to} to={to} end={end} className="floating-nav-item">
+            <Icon size={16} aria-hidden="true" />
+            <span>{t(label)}</span>
+          </NavLink>
+        ))}
+      </nav>
       <a
         className="floating-wechat"
         href={publicAsset('wechat-group.jpg')}
         target="_blank"
         rel="noreferrer"
-        aria-label={`${t('navWechat')} · ${t('wechatScan')}`}
+        aria-label="DSH插件社区"
       >
         <span className="floating-wechat-qr" aria-hidden="true">
           <img src={publicAsset('wechat-group.jpg')} alt="" />
         </span>
         <span className="floating-wechat-copy">
-          <strong>{t('navWechat')}</strong>
-          <small>{t('wechatScan')}</small>
+          <strong>DSH插件社区</strong>
         </span>
       </a>
-      {destinations.map(({ to, end, icon: Icon, label }) => (
-        <NavLink key={to} to={to} end={end} className="floating-nav-item">
-          <Icon size={16} aria-hidden="true" />
-          <span>{t(label)}</span>
-        </NavLink>
-      ))}
-    </nav>
+    </>
   )
 }
