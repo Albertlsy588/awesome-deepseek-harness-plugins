@@ -456,10 +456,28 @@ try {
   // 宽屏下它停在内容列左侧的余量里，不能压住内容。
   const clearance = await shell.evaluate(() => {
     const nav = document.querySelector('.floating-nav')?.getBoundingClientRect()
+    const card = document.querySelector('.floating-wechat')?.getBoundingClientRect()
     const content = document.querySelector('.community')?.getBoundingClientRect()
-    return nav && content ? { navRight: Math.round(nav.right), contentLeft: Math.round(content.left) } : null
+    return nav && card && content ? {
+      cardLeft: Math.round(card.left),
+      cardTop: Math.round(card.top),
+      cardWidth: Math.round(card.width),
+      contentLeft: Math.round(content.left),
+      expectedLeft: Math.round(Math.max(16, window.innerWidth / 2 - 744)),
+      navBottom: Math.round(nav.bottom),
+      navLeft: Math.round(nav.left),
+      navRight: Math.round(nav.right),
+      navWidth: Math.round(nav.width),
+    } : null
   })
-  if (!clearance || clearance.navRight > clearance.contentLeft) {
+  if (
+    !clearance
+    || clearance.navRight > clearance.contentLeft
+    || clearance.navLeft !== clearance.expectedLeft
+    || clearance.cardLeft !== clearance.navLeft
+    || clearance.cardWidth !== clearance.navWidth
+    || clearance.cardTop < clearance.navBottom + 12
+  ) {
     throw new Error(`the floating nav overlaps the content column: ${JSON.stringify(clearance)}`)
   }
   // 社区内部链接必须带板块前缀，否则会落到目录站的路由上。
@@ -653,10 +671,17 @@ try {
       height: Math.round(box.height),
       imageLoaded: Boolean(image?.complete && image.naturalWidth > 0),
       copyVisible: getComputedStyle(node.nextElementSibling).display !== 'none',
+      borderRadius: getComputedStyle(node).borderRadius,
     }
   })
-  if (desktopQr.width < 100 || desktopQr.height !== desktopQr.width || !desktopQr.imageLoaded || !desktopQr.copyVisible) {
-    throw new Error(`desktop WeChat QR is not directly visible in the left navigation: ${JSON.stringify(desktopQr)}`)
+  if (
+    desktopQr.width < 68
+    || desktopQr.height !== desktopQr.width
+    || !desktopQr.imageLoaded
+    || !desktopQr.copyVisible
+    || desktopQr.borderRadius !== '0px'
+  ) {
+    throw new Error(`WeChat QR floating card is not directly visible or scan-safe: ${JSON.stringify(desktopQr)}`)
   }
   const linkExchange = rankings.locator('.hero-link-exchange[href="https://www.imsai.cc/"][target="_blank"]')
   if ((await linkExchange.count()) !== 1 || !(await linkExchange.textContent())?.includes('欢迎互链')) {

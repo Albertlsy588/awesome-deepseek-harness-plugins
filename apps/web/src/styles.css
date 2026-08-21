@@ -4711,15 +4711,15 @@ main {
   height: 68px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 0;
   background: #fff;
 }
 
 .floating-wechat-qr img {
   position: absolute;
-  top: -24%;
-  left: -11%;
-  width: 122%;
+  top: -16%;
+  left: -5%;
+  width: 110%;
   max-width: none;
 }
 
@@ -4981,19 +4981,18 @@ html[data-dsh1024-embed="true"] .catalog-content {
   }
 }
 
-/* 常见 1440px 桌面宽度已经应当读作「左侧菜单」。菜单宽度跟随正文
-   左边余量收放：1400px 时仍留 12px 间隔，1480px 后达到完整 152px；
-   再窄则回到底部胶囊，避免覆盖正文。 */
-@media (min-width: 1400px) {
+/* 宽屏下恢复原有的内容列锚点和 32px 间距。二维码卡片只跟随菜单，
+   不能改变菜单相对正文的位置；不足 1480px 时两者都回到底部形态。 */
+@media (min-width: 1480px) {
   .floating-nav {
     flex-direction: column;
     gap: 2px;
-    left: 12px;
+    left: max(16px, calc(50% - 744px));
     bottom: auto;
     top: 132px;
     border-radius: 18px;
     padding: 10px;
-    width: clamp(116px, calc((100vw - 1120px) / 2 - 24px), 152px);
+    width: 152px;
   }
 
   .floating-nav-item {
@@ -5009,10 +5008,10 @@ html[data-dsh1024-embed="true"] .catalog-content {
   }
 
   .floating-wechat {
-    left: 12px;
+    left: max(16px, calc(50% - 744px));
     top: 300px;
     bottom: auto;
-    width: clamp(116px, calc((100vw - 1120px) / 2 - 24px), 152px);
+    width: 152px;
     gap: 8px;
     padding: 9px 9px 11px;
     border-radius: 18px;
@@ -5022,7 +5021,6 @@ html[data-dsh1024-embed="true"] .catalog-content {
     width: 100%;
     height: auto;
     aspect-ratio: 1;
-    border-radius: 10px;
   }
 
   .floating-wechat-copy {
