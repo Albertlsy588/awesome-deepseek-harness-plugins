@@ -124,7 +124,9 @@ function route(
 const worker = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
-    const cacheKey = request.method === 'GET' ? edgeCacheKey(url) : null
+    const cacheKey = request.method === 'GET'
+      ? edgeCacheKey(url, env.CF_VERSION_METADATA.id)
+      : null
     if (!cacheKey) return browserRevalidated(await route(request, env, ctx))
 
     const hit = await caches.default.match(cacheKey)
