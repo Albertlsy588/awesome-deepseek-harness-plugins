@@ -143,12 +143,12 @@ body {
    tally sits below the actions. List controls live in the content area. */
 .hero-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(310px, max-content);
+  grid-template-columns: minmax(370px, 0.82fr) minmax(0, 1.18fr);
   grid-template-rows: auto 1fr auto;
   grid-template-areas:
     "heading actions"
     "heading tally"
-    "self    .";
+    "self    self";
   column-gap: clamp(24px, 4vw, 56px);
   row-gap: 14px;
 }
@@ -223,12 +223,63 @@ body {
   letter-spacing: -0.045em;
 }
 
-.hero-heading > p:last-child {
+.hero-description {
   max-width: 720px;
   margin: 18px 0 0;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.7;
+}
+
+.hero-link-exchange {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 6px 10px 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-translucent);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease),
+    transform var(--duration-fast) var(--ease);
+}
+
+.hero-link-exchange:hover {
+  border-color: var(--brand);
+  background: var(--surface);
+  color: var(--ink);
+  transform: var(--lift);
+}
+
+.hero-link-exchange strong {
+  flex: none;
+  color: var(--brand-dark);
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.hero-link-exchange > span:not(.hero-link-exchange-dot) {
+  min-width: 0;
+}
+
+.hero-link-exchange-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-teal);
+  box-shadow: 0 0 0 3px var(--live-ring);
+}
+
+.hero-link-exchange svg {
+  flex: none;
 }
 
 .hero-tally {
@@ -365,7 +416,8 @@ body {
 @media (prefers-reduced-motion: no-preference) {
   .hero-eyebrow,
   .hero-heading h1,
-  .hero-heading > p:last-child,
+  .hero-description,
+  .hero-link-exchange,
   .hero-tally,
   .self-install-banner,
   .catalog-navigation {
@@ -376,8 +428,12 @@ body {
     animation-delay: 50ms;
   }
 
-  .hero-heading > p:last-child {
+  .hero-description {
     animation-delay: 100ms;
+  }
+
+  .hero-link-exchange {
+    animation-delay: 125ms;
   }
 
   .hero-tally {
@@ -404,7 +460,8 @@ body {
    instead of replaying the entrance. */
 .hero-static .hero-eyebrow,
 .hero-static .hero-heading h1,
-.hero-static .hero-heading > p:last-child,
+.hero-static .hero-description,
+.hero-static .hero-link-exchange,
 .hero-static .hero-tally,
 .hero-static .self-install-banner,
 .hero-static .catalog-navigation {
@@ -557,12 +614,7 @@ body {
     padding: 0;
   }
 
-  .hero-api {
-    width: auto;
-    padding: 0 10px;
-  }
-
-  .hero-action-link:not(.hero-api) span,
+  .hero-action-link span,
   .hero-action-link svg:last-child {
     display: none;
   }
@@ -606,7 +658,7 @@ body {
     font-size: 27px;
   }
 
-  .hero-heading > p:last-child {
+  .hero-description {
     max-width: 340px;
     margin-top: 14px;
     font-size: 12px;
@@ -706,20 +758,6 @@ body {
 
 @media (max-width: 380px) {
   .hero-language {
-    display: none;
-  }
-}
-
-/* Five 44px action targets fit on the narrowest supported screen once the
-   secondary language switch is hidden. Collapse the API label at the same
-   breakpoint so adding the WeChat entry cannot clip the rightmost action. */
-@media (max-width: 400px) {
-  .hero-api {
-    width: 44px;
-    padding: 0;
-  }
-
-  .hero-api span {
     display: none;
   }
 }
@@ -1825,15 +1863,17 @@ main {
   font-weight: 640;
 }
 
-/* One shared grid for all three rows (the row wrappers collapse via
-   display: contents) so the label column is as wide as the widest label in the
-   active language and every command box starts and ends on the same pixel. */
+/* One shared grid for both rows (the wrappers collapse via display: contents).
+   A stable label track keeps Chinese and English on the same skeleton, while
+   every command box starts and ends on the same pixel. */
 .self-install-commands {
   display: grid;
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
   align-items: center;
   gap: 5px 8px;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: 124px minmax(0, auto);
 }
 
 .self-install-recommended,
@@ -1875,6 +1915,7 @@ main {
   }
 
   .self-install-commands {
+    width: 100%;
     align-items: stretch;
     gap: 4px;
     grid-template-columns: minmax(0, 1fr);
@@ -3672,19 +3713,20 @@ main {
     min-height: 44px;
   }
 
-  .hero-api {
-    width: auto;
-    padding: 0 12px;
-  }
-
   .hero-language button {
     min-width: 44px;
     height: 44px;
     font-size: 12px;
   }
 
-  .hero-heading > p:last-child {
+  .hero-description {
     font-size: 14px;
+  }
+
+  .hero-link-exchange {
+    align-items: flex-start;
+    border-radius: 12px;
+    font-size: 11px;
   }
 
   .hero-tally-label {
@@ -4681,7 +4723,8 @@ html[data-dsh1024-embed="true"] .floating-nav,
 html[data-dsh1024-embed="true"] .kanban-girl-root,
 html[data-dsh1024-embed="true"] .catalog-hero,
 html[data-dsh1024-embed="true"] .hero-actions,
-html[data-dsh1024-embed="true"] .hero-heading > p:last-child,
+html[data-dsh1024-embed="true"] .hero-description,
+html[data-dsh1024-embed="true"] .hero-link-exchange,
 html[data-dsh1024-embed="true"] .self-install-banner {
   display: none;
 }
