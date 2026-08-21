@@ -4,7 +4,6 @@ import {
   ListFilter,
   PackageCheck,
   PackagePlus,
-  QrCode,
   Search,
   Trophy,
   UserRound,
@@ -498,16 +497,6 @@ export function CatalogPage({ view }: CatalogPageProps) {
         <div className="page-container catalog-hero-inner">
           <header className="hero-stage">
             <div className="hero-actions" aria-label={t('siteActions')}>
-              <a
-                className="hero-action-link hero-wechat"
-                href={publicAsset('wechat-group.jpg')}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={t('navWechat')}
-              >
-                <QrCode size={16} aria-hidden="true" />
-                <span>{t('navWechat')}</span>
-              </a>
               <a
                 className="hero-action-link hero-author"
                 href="https://www.imsai.cc/"

@@ -4671,6 +4671,69 @@ main {
   transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
 }
 
+/* The community card is deliberately independent from navigation: its only
+   job is to expose the QR immediately, so it gets its own silhouette and a
+   single, literal label. The source image contains a large heading and expiry
+   note; this frame crops into the QR while the link opens the complete image. */
+.floating-wechat {
+  position: fixed;
+  z-index: 34;
+  left: 16px;
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  display: flex;
+  width: 82px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    transform var(--duration-fast) var(--ease);
+}
+
+.floating-wechat:hover {
+  border-color: var(--brand);
+  transform: translateY(-1px);
+}
+
+.floating-wechat:focus-visible {
+  outline-offset: 3px;
+}
+
+.floating-wechat-qr {
+  position: relative;
+  display: block;
+  width: 68px;
+  height: 68px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: #fff;
+}
+
+.floating-wechat-qr img {
+  position: absolute;
+  top: -16%;
+  left: -5%;
+  width: 110%;
+  max-width: none;
+}
+
+.floating-wechat-copy {
+  display: block;
+  width: 100%;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.25;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .floating-nav-item:hover {
   background: var(--surface-hover);
   color: var(--ink);
@@ -4720,6 +4783,7 @@ html[data-dsh1024-embed="true"] .embedded-site-shell {
 
 html[data-dsh1024-embed="true"] .site-bottom-link,
 html[data-dsh1024-embed="true"] .floating-nav,
+html[data-dsh1024-embed="true"] .floating-wechat,
 html[data-dsh1024-embed="true"] .kanban-girl-root,
 html[data-dsh1024-embed="true"] .catalog-hero,
 html[data-dsh1024-embed="true"] .hero-actions,
@@ -4917,17 +4981,12 @@ html[data-dsh1024-embed="true"] .catalog-content {
   }
 }
 
-/* 宽屏：竖排浮层，锚在内容列左侧。
-   要装下 16（视口边距）+ 152（卡片）+ 12（最小间距）= 180 的余量，
-   即正文左缘 50% - 560 ≥ 180，视口 ≥ 1480。窄于此走左下角胶囊。 */
+/* 宽屏下恢复原有的内容列锚点和 32px 间距。二维码卡片只跟随菜单，
+   不能改变菜单相对正文的位置；不足 1480px 时两者都回到底部形态。 */
 @media (min-width: 1480px) {
   .floating-nav {
     flex-direction: column;
     gap: 2px;
-    /* 锚在正文左缘，固定留 32px —— 屏幕再宽这个距离都不变，卡片始终读作
-       「贴着这一页的东西」，而不是浮在屏幕角落的独立控件。
-       内容列左缘 = 50% - 560；560 + 32 + 152（卡片宽）= 744。
-       max() 兜住下限：余量不够时最多贴到视口 16px，不再往里挤。 */
     left: max(16px, calc(50% - 744px));
     bottom: auto;
     top: 132px;
@@ -4946,6 +5005,31 @@ html[data-dsh1024-embed="true"] .catalog-content {
 
   .floating-nav-item span {
     display: inline;
+  }
+
+  .floating-wechat {
+    left: max(16px, calc(50% - 744px));
+    top: 300px;
+    bottom: auto;
+    width: 152px;
+    gap: 8px;
+    padding: 9px 9px 11px;
+    border-radius: 18px;
+  }
+
+  .floating-wechat-qr {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+  }
+
+  .floating-wechat-copy {
+    font-size: 12px;
+  }
+
+  .floating-wechat-copy strong {
+    font: inherit;
+    line-height: 1.2;
   }
 }
 

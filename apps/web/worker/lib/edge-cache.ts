@@ -53,19 +53,25 @@ export function edgeCacheablePath(pathname: string): boolean {
  * request. Filling `caches.default` explicitly collapses that to once per POP
  * per `s-maxage`.
  *
- * The key is the request URL. Every cacheable response here is a function of
- * the URL alone: the catalog endpoints take no credentials, and the HTML is the
- * SPA shell with SEO metadata rewritten into it — sign-in state arrives later
- * from `/api/v1/auth/me`, so no cookie can change what is stored.
+ * API keys are stable across deploys and carry explicit compatibility
+ * revisions where needed. Document keys also include the Worker version: an
+ * old POP-local HTML entry may reference hashed assets that are absent from a
+ * new version's ASSETS manifest, otherwise turning an ordinary deploy or
+ * rollback into a transient blank page. Sign-in state arrives later from
+ * `/api/v1/auth/me`, so no cookie changes either response.
  */
-export function edgeCacheKey(url: URL): Request | null {
+export function edgeCacheKey(url: URL, workerVersionId: string): Request | null {
   const pathname = isPublicApiHost(url) ? rewritePublicApiUrl(url)?.pathname : url.pathname
   if (pathname === undefined || !edgeCacheablePath(pathname)) return null
   const significant = pathname.startsWith('/api/') ? cacheableApiParams(pathname) : undefined
   if (significant === undefined) {
-    // HTML routes: the whole URL matters — a filtered permutation carries
-    // different SEO metadata (noindex, canonical) than the bare page.
-    return new Request(url.toString(), { method: 'GET' })
+    // The whole URL still matters — a filtered permutation carries different
+    // SEO metadata than the bare page. Put the version in the pathname rather
+    // than a query parameter because some zones ignore queries in cache keys.
+    // This synthetic URL is only a Cache API key and is never fetched.
+    const canonical = new URL(url)
+    canonical.pathname = `/__edge_cache/html/${encodeURIComponent(workerVersionId)}${pathname}`
+    return new Request(canonical.toString(), { method: 'GET' })
   }
   // Keep only the params that change the body, in a fixed order, so equivalent
   // requests share one cached entry regardless of extra or reordered params.

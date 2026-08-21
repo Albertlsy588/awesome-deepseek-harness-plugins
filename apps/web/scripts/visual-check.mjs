@@ -1,7 +1,7 @@
 import { chromium } from 'playwright'
 
 const baseUrl = process.env.BASE_URL ?? 'http://127.0.0.1:5173'
-const browser = await chromium.launch({ channel: 'chrome', headless: true })
+const browser = await chromium.launch({ headless: true })
 const desktopContext = await browser.newContext({ locale: 'zh-CN' })
 const mobileContext = await browser.newContext({
   locale: 'zh-CN',
@@ -456,10 +456,28 @@ try {
   // 宽屏下它停在内容列左侧的余量里，不能压住内容。
   const clearance = await shell.evaluate(() => {
     const nav = document.querySelector('.floating-nav')?.getBoundingClientRect()
+    const card = document.querySelector('.floating-wechat')?.getBoundingClientRect()
     const content = document.querySelector('.community')?.getBoundingClientRect()
-    return nav && content ? { navRight: Math.round(nav.right), contentLeft: Math.round(content.left) } : null
+    return nav && card && content ? {
+      cardLeft: Math.round(card.left),
+      cardTop: Math.round(card.top),
+      cardWidth: Math.round(card.width),
+      contentLeft: Math.round(content.left),
+      expectedLeft: Math.round(Math.max(16, window.innerWidth / 2 - 744)),
+      navBottom: Math.round(nav.bottom),
+      navLeft: Math.round(nav.left),
+      navRight: Math.round(nav.right),
+      navWidth: Math.round(nav.width),
+    } : null
   })
-  if (!clearance || clearance.navRight > clearance.contentLeft) {
+  if (
+    !clearance
+    || clearance.navRight > clearance.contentLeft
+    || clearance.navLeft !== clearance.expectedLeft
+    || clearance.cardLeft !== clearance.navLeft
+    || clearance.cardWidth !== clearance.navWidth
+    || clearance.cardTop < clearance.navBottom + 12
+  ) {
     throw new Error(`the floating nav overlaps the content column: ${JSON.stringify(clearance)}`)
   }
   // 社区内部链接必须带板块前缀，否则会落到目录站的路由上。
@@ -480,7 +498,7 @@ try {
   await mobileShell.locator('.community-head').waitFor()
   await assertNoHorizontalOverflow(mobileShell, 'mobile community')
   await assertMinTouchTargets(mobileShell, 'mobile community actions', [
-    '.floating-nav-item', '.tab', '.post-action',
+    '.floating-wechat', '.floating-nav-item', '.tab', '.post-action',
   ])
   // 窄屏下它收成左下角的横排胶囊，仍然常驻且不能撑破页面。
   const pill = await mobileShell.evaluate(() => {
@@ -633,18 +651,37 @@ try {
   if ((await rankings.locator('.floating-nav a[href="/docs/api"]').count()) !== 1) {
     throw new Error('floating navigation is missing the sole API entry')
   }
-  if ((await rankings.locator('.catalog-hero .hero-wechat[href="/wechat-group.jpg"][target="_blank"]').count()) !== 1) {
-    throw new Error('WeChat group QR link is missing from the catalog banner')
+  if ((await rankings.locator('.catalog-hero .hero-wechat').count()) !== 0) {
+    throw new Error('WeChat group entry should no longer be hidden in the catalog banner')
   }
-  if ((await rankings.locator('.catalog-hero .hero-wechat span').textContent())?.trim() !== '微信群') {
-    throw new Error('WeChat group action uses the wrong Chinese label')
+  if ((await rankings.locator('.floating-wechat[href="/wechat-group.jpg"][target="_blank"]').count()) !== 1) {
+    throw new Error('WeChat group QR floating card is missing')
   }
-  const firstActionClass = await rankings
-    .locator('.catalog-hero .hero-actions > *')
-    .first()
-    .evaluate((node) => node.className)
-  if (!firstActionClass.includes('hero-wechat')) {
-    throw new Error(`WeChat group action is not the leftmost action: ${firstActionClass}`)
+  if ((await rankings.locator('.floating-wechat-copy').textContent())?.trim() !== 'DSH插件社区') {
+    throw new Error('WeChat group card must only say DSH插件社区')
+  }
+  if ((await rankings.locator('.floating-nav .floating-wechat').count()) !== 0) {
+    throw new Error('WeChat group card is still nested inside navigation')
+  }
+  const desktopQr = await rankings.locator('.floating-wechat-qr').evaluate((node) => {
+    const box = node.getBoundingClientRect()
+    const image = node.querySelector('img')
+    return {
+      width: Math.round(box.width),
+      height: Math.round(box.height),
+      imageLoaded: Boolean(image?.complete && image.naturalWidth > 0),
+      copyVisible: getComputedStyle(node.nextElementSibling).display !== 'none',
+      borderRadius: getComputedStyle(node).borderRadius,
+    }
+  })
+  if (
+    desktopQr.width < 68
+    || desktopQr.height !== desktopQr.width
+    || !desktopQr.imageLoaded
+    || !desktopQr.copyVisible
+    || desktopQr.borderRadius !== '0px'
+  ) {
+    throw new Error(`WeChat QR floating card is not directly visible or scan-safe: ${JSON.stringify(desktopQr)}`)
   }
   const linkExchange = rankings.locator('.hero-link-exchange[href="https://www.imsai.cc/"][target="_blank"]')
   if ((await linkExchange.count()) !== 1 || !(await linkExchange.textContent())?.includes('欢迎互链')) {
@@ -804,7 +841,7 @@ try {
   await assertActionsWithinViewport(mobile, 'mobile catalog')
   await assertVisibleSubdirectorySiblingsHaveDistinctTitles(mobile, 'mobile catalog')
   await assertMinTouchTargets(mobile, 'mobile catalog', [
-    '.catalog-hero .hero-wechat',
+    '.floating-wechat',
     '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
@@ -890,6 +927,7 @@ try {
   await assertMobileEnvironment(mobileRankings, 'mobile rankings')
   await assertNoHorizontalOverflow(mobileRankings, 'mobile rankings')
   await assertMinTouchTargets(mobileRankings, 'mobile rankings', [
+    '.floating-wechat',
     '.catalog-view-tabs a',
     '.segmented-control button',
     '.package-row .row-link',
@@ -1062,7 +1100,7 @@ try {
     throw new Error('compact mobile header did not hide the secondary language control')
   }
   await assertMinTouchTargets(compactMobile, 'compact mobile header', [
-    '.catalog-hero .hero-wechat',
+    '.floating-wechat',
     '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
