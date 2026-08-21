@@ -1,4 +1,4 @@
-import { repositoryName } from './lib/catalog'
+import { pluginDetailPath } from './lib/plugin-id'
 import { BRAND_HEADING } from './seo-templates'
 import type { CatalogPlugin, Language, RegistryCategory } from './types'
 
@@ -53,7 +53,7 @@ function safeExternalHref(url: string): string | null {
 }
 
 function pluginHref(plugin: CatalogPlugin): string {
-  return `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(repositoryName(plugin))}`
+  return pluginDetailPath(plugin.id)
 }
 
 function labelFor(

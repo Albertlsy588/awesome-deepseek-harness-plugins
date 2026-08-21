@@ -10,6 +10,7 @@ import {
   type SeoCatalog,
 } from '../worker/seo'
 import { TEST_PLUGINS, testCatalogResult } from './fixtures'
+import { pluginDetailPath } from '../worker/lib/plugin-id'
 
 function testSeoCatalog(): SeoCatalog {
   return seoCatalog(testCatalogResult().snapshot)
@@ -111,7 +112,8 @@ describe('SEO metadata', () => {
 
     const website = JSON.stringify(metadataForPath('/', catalogPages).schema)
     expect(website).toContain('"name":"DSH 1024Store"')
-    expect(website).toContain('SearchAction')
+    expect(website).not.toContain('SearchAction')
+    expect(website).not.toContain('search_term_string')
     expect(website).toContain('"DeepSeek Harness Plugin Store"')
     expect(website).toContain('"DSH"')
   })
@@ -158,14 +160,15 @@ describe('SEO metadata', () => {
     expect(missing.canonical).toBeNull()
   })
 
-  it('keeps plugin pages indexable when the catalog itself is unavailable', () => {
+  it('returns a retryable response instead of a soft 404 when the catalog is unavailable', () => {
     const degraded: SeoCatalog = { ...testSeoCatalog(), plugins: [], degraded: true }
     const page = metadataForPath('/plugins/acme/widget', degraded)
 
-    expect(page.status).toBe(200)
+    expect(page.status).toBe(503)
     expect(page.robots).toBe('index,follow')
     expect(page.canonical).toBe('https://deepseek1024.com/plugins/acme/widget')
     expect(page.title).toContain('widget')
+    expect(page.shell).toContain('temporarily unavailable')
   })
 
   it('strips control characters out of URL-derived titles', () => {
@@ -195,7 +198,7 @@ describe('crawlable shell', () => {
   it('links the catalog pages to plugin detail pages', () => {
     const shell = metadataForPath('/plugins', testSeoCatalog()).shell ?? ''
     for (const plugin of TEST_PLUGINS) {
-      expect(shell).toContain(`href="/plugins/${plugin.owner}/${plugin.repository}"`)
+      expect(shell).toContain(`href="${pluginDetailPath(plugin.id)}"`)
     }
     expect(shell).toContain('<h1>')
     expect(shell).toContain('<h2>')
@@ -205,7 +208,7 @@ describe('crawlable shell', () => {
     const catalog = testSeoCatalog()
     const linked = new Set<string>()
     for (const plugin of TEST_PLUGINS) {
-      const shell = metadataForPath(`/plugins/${plugin.owner}/${plugin.repository}`, catalog).shell ?? ''
+      const shell = metadataForPath(pluginDetailPath(plugin.id), catalog).shell ?? ''
       for (const match of shell.matchAll(/href="(\/plugins\/[^"]+)"/g)) {
         linked.add(match[1] as string)
       }
@@ -213,7 +216,7 @@ describe('crawlable shell', () => {
     // Ranking related plugins by stars alone would link the same handful from
     // every page and strand the tail of the catalog with no inbound link.
     for (const plugin of TEST_PLUGINS) {
-      const path = `/plugins/${encodeURIComponent(plugin.owner)}/${encodeURIComponent(plugin.repository)}`
+      const path = pluginDetailPath(plugin.id)
       expect(linked.has(path), `no page links to ${path}`).toBe(true)
     }
   })
@@ -332,6 +335,22 @@ describe('crawler directives', () => {
       .toBe('/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector')
     expect(detailRedirectForPath('/plugins/omdsh-dev/dsh-suite/', single))
       .toBe('/plugins/omdsh-dev/dsh-suite/packages/dsh-inspector')
+
+    // A repository rename must not strand the new GitHub slug at a 404 while
+    // the stable, previously published plugin id remains canonical.
+    const renamed: SeoCatalog = {
+      ...catalog,
+      plugins: [{
+        ...catalog.plugins[0]!,
+        id: 'Fishquito7/dsh-skill-viewer',
+        owner: 'Fishquito7',
+        name: 'dsh-skill-mcp-panel',
+        repository: 'dsh-skill-mcp-panel',
+        url: 'https://github.com/Fishquito7/dsh-skill-mcp-panel',
+      }],
+    }
+    expect(detailRedirectForPath('/plugins/Fishquito7/dsh-skill-mcp-panel', renamed))
+      .toBe('/plugins/Fishquito7/dsh-skill-viewer')
 
     // An address that resolves to a real plugin is never redirected, and one
     // with no successors keeps its 404.
