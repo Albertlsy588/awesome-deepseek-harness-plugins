@@ -710,9 +710,9 @@ body {
   }
 }
 
-/* Five 44px action targets fit on the narrowest supported screen once the
+/* Four 44px action targets fit on the narrowest supported screen once the
    secondary language switch is hidden. Collapse the API label at the same
-   breakpoint so adding the WeChat entry cannot clip the rightmost action. */
+   breakpoint so the utility row cannot clip the rightmost action. */
 @media (max-width: 400px) {
   .hero-api {
     width: 44px;
@@ -4629,6 +4629,58 @@ main {
   transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
 }
 
+/* The group QR is deliberately a picture, not another icon-only destination:
+   it is the fastest route into the community and should be recognisable before
+   the menu is touched. The source image contains a large heading and expiry
+   note, so the frame crops into its QR region; opening the link still shows the
+   complete original image. */
+.floating-wechat {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  flex: none;
+  place-items: center;
+  padding: 3px;
+  border: 1px solid rgb(var(--p-brand-rgb) / 24%);
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--brand-soft);
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    transform var(--duration-fast) var(--ease);
+}
+
+.floating-wechat:hover {
+  border-color: var(--brand);
+  transform: translateY(-1px);
+}
+
+.floating-wechat:focus-visible {
+  outline-offset: 3px;
+}
+
+.floating-wechat-qr {
+  position: relative;
+  display: block;
+  width: 46px;
+  height: 46px;
+  overflow: hidden;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.floating-wechat-qr img {
+  position: absolute;
+  top: -24%;
+  left: -11%;
+  width: 122%;
+  max-width: none;
+}
+
+.floating-wechat-copy {
+  display: none;
+}
+
 .floating-nav-item:hover {
   background: var(--surface-hover);
   color: var(--ink);
@@ -4874,23 +4926,19 @@ html[data-dsh1024-embed="true"] .catalog-content {
   }
 }
 
-/* 宽屏：竖排浮层，锚在内容列左侧。
-   要装下 16（视口边距）+ 152（卡片）+ 12（最小间距）= 180 的余量，
-   即正文左缘 50% - 560 ≥ 180，视口 ≥ 1480。窄于此走左下角胶囊。 */
-@media (min-width: 1480px) {
+/* 常见 1440px 桌面宽度已经应当读作「左侧菜单」。菜单宽度跟随正文
+   左边余量收放：1400px 时仍留 12px 间隔，1480px 后达到完整 152px；
+   再窄则回到底部胶囊，避免覆盖正文。 */
+@media (min-width: 1400px) {
   .floating-nav {
     flex-direction: column;
     gap: 2px;
-    /* 锚在正文左缘，固定留 32px —— 屏幕再宽这个距离都不变，卡片始终读作
-       「贴着这一页的东西」，而不是浮在屏幕角落的独立控件。
-       内容列左缘 = 50% - 560；560 + 32 + 152（卡片宽）= 744。
-       max() 兜住下限：余量不够时最多贴到视口 16px，不再往里挤。 */
-    left: max(16px, calc(50% - 744px));
+    left: 12px;
     bottom: auto;
     top: 132px;
     border-radius: 18px;
     padding: 10px;
-    width: 152px;
+    width: clamp(116px, calc((100vw - 1120px) / 2 - 24px), 152px);
   }
 
   .floating-nav-item {
@@ -4903,6 +4951,47 @@ html[data-dsh1024-embed="true"] .catalog-content {
 
   .floating-nav-item span {
     display: inline;
+  }
+
+  .floating-wechat {
+    display: flex;
+    width: 100%;
+    height: auto;
+    flex-direction: column;
+    gap: 8px;
+    padding: 6px 6px 9px;
+    border-radius: 14px;
+    box-shadow: none;
+  }
+
+  .floating-wechat-qr {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    border-radius: 10px;
+  }
+
+  .floating-wechat-copy {
+    display: flex;
+    width: 100%;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 0 2px;
+  }
+
+  .floating-wechat-copy strong {
+    color: var(--ink);
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .floating-wechat-copy small {
+    color: var(--brand-dark);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
   }
 }
 

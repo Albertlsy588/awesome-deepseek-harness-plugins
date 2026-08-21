@@ -1,7 +1,7 @@
 import { chromium } from 'playwright'
 
 const baseUrl = process.env.BASE_URL ?? 'http://127.0.0.1:5173'
-const browser = await chromium.launch({ channel: 'chrome', headless: true })
+const browser = await chromium.launch({ headless: true })
 const desktopContext = await browser.newContext({ locale: 'zh-CN' })
 const mobileContext = await browser.newContext({
   locale: 'zh-CN',
@@ -450,7 +450,7 @@ try {
   await mobileShell.locator('.community-head').waitFor()
   await assertNoHorizontalOverflow(mobileShell, 'mobile community')
   await assertMinTouchTargets(mobileShell, 'mobile community actions', [
-    '.floating-nav-item', '.tab', '.post-action',
+    '.floating-wechat', '.floating-nav-item', '.tab', '.post-action',
   ])
   // 窄屏下它收成左下角的横排胶囊，仍然常驻且不能撑破页面。
   const pill = await mobileShell.evaluate(() => {
@@ -578,18 +578,34 @@ try {
   if ((await rankings.locator('.catalog-hero .hero-api').textContent())?.trim() !== '免费API') {
     throw new Error('free API action uses the wrong Chinese label')
   }
-  if ((await rankings.locator('.catalog-hero .hero-wechat[href="/wechat-group.jpg"][target="_blank"]').count()) !== 1) {
-    throw new Error('WeChat group QR link is missing from the catalog banner')
+  if ((await rankings.locator('.catalog-hero .hero-wechat').count()) !== 0) {
+    throw new Error('WeChat group entry should no longer be hidden in the catalog banner')
   }
-  if ((await rankings.locator('.catalog-hero .hero-wechat span').textContent())?.trim() !== '微信群') {
-    throw new Error('WeChat group action uses the wrong Chinese label')
+  if ((await rankings.locator('.floating-nav > .floating-wechat[href="/wechat-group.jpg"][target="_blank"]').count()) !== 1) {
+    throw new Error('WeChat group QR is missing from the left navigation')
   }
-  const firstActionClass = await rankings
-    .locator('.catalog-hero .hero-actions > *')
+  if ((await rankings.locator('.floating-wechat-copy').textContent())?.replace(/\s+/g, '') !== '微信群扫码加入') {
+    throw new Error('WeChat group card uses the wrong Chinese copy')
+  }
+  const firstNavClass = await rankings
+    .locator('.floating-nav > *')
     .first()
     .evaluate((node) => node.className)
-  if (!firstActionClass.includes('hero-wechat')) {
-    throw new Error(`WeChat group action is not the leftmost action: ${firstActionClass}`)
+  if (!firstNavClass.includes('floating-wechat')) {
+    throw new Error(`WeChat group QR is not the first navigation item: ${firstNavClass}`)
+  }
+  const desktopQr = await rankings.locator('.floating-wechat-qr').evaluate((node) => {
+    const box = node.getBoundingClientRect()
+    const image = node.querySelector('img')
+    return {
+      width: Math.round(box.width),
+      height: Math.round(box.height),
+      imageLoaded: Boolean(image?.complete && image.naturalWidth > 0),
+      copyVisible: getComputedStyle(node.nextElementSibling).display !== 'none',
+    }
+  })
+  if (desktopQr.width < 100 || desktopQr.height !== desktopQr.width || !desktopQr.imageLoaded || !desktopQr.copyVisible) {
+    throw new Error(`desktop WeChat QR is not directly visible in the left navigation: ${JSON.stringify(desktopQr)}`)
   }
   if ((await rankings.locator('.catalog-hero .github-link span').textContent())?.trim() !== '插件市场开源') {
     throw new Error('market source action uses the wrong Chinese label')
@@ -745,7 +761,7 @@ try {
   await assertActionsWithinViewport(mobile, 'mobile catalog')
   await assertVisibleSubdirectorySiblingsHaveDistinctTitles(mobile, 'mobile catalog')
   await assertMinTouchTargets(mobile, 'mobile catalog', [
-    '.catalog-hero .hero-wechat',
+    '.floating-wechat',
     '.catalog-hero .hero-api',
     '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
@@ -831,6 +847,7 @@ try {
   await assertMobileEnvironment(mobileRankings, 'mobile rankings')
   await assertNoHorizontalOverflow(mobileRankings, 'mobile rankings')
   await assertMinTouchTargets(mobileRankings, 'mobile rankings', [
+    '.floating-wechat',
     '.catalog-view-tabs a',
     '.segmented-control button',
     '.package-row .row-link',
@@ -1003,7 +1020,7 @@ try {
     throw new Error('compact mobile header did not hide the secondary language control')
   }
   await assertMinTouchTargets(compactMobile, 'compact mobile header', [
-    '.catalog-hero .hero-wechat',
+    '.floating-wechat',
     '.catalog-hero .hero-api',
     '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
