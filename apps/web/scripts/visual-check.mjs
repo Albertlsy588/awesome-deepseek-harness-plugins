@@ -280,6 +280,36 @@ async function assertHeroCommandsAligned(page, label) {
   }
 }
 
+async function heroLanguageGeometry(page) {
+  return page.evaluate(() => {
+    const heading = document.querySelector('.hero-heading')?.getBoundingClientRect()
+    const tally = document.querySelector('.hero-tally')?.getBoundingClientRect()
+    const banner = document.querySelector('.self-install-banner')?.getBoundingClientRect()
+    const commands = [...document.querySelectorAll('.self-install-banner .install-command')]
+      .map((node) => node.getBoundingClientRect())
+    const commandLines = [...document.querySelectorAll('.self-install-banner .install-command code')]
+      .map((node) => {
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        return range.getClientRects().length
+      })
+    const actionBoxes = [...document.querySelectorAll('.hero-actions > *')]
+      .map((node) => node.getBoundingClientRect())
+    const actionSpan = actionBoxes.length > 0
+      ? Math.max(...actionBoxes.map((box) => box.bottom)) - Math.min(...actionBoxes.map((box) => box.top))
+      : 0
+    const tallestAction = Math.max(0, ...actionBoxes.map((box) => box.height))
+    return {
+      actionRows: actionSpan > tallestAction + 6 ? 2 : 1,
+      bannerWidth: banner ? Math.round(banner.width) : null,
+      commandLines,
+      commandWidths: commands.map((box) => Math.round(box.width)),
+      headingWidth: heading ? Math.round(heading.width) : null,
+      tallyWidth: tally ? Math.round(tally.width) : null,
+    }
+  })
+}
+
 // The menu is portaled to document.body, so nothing in the list should be able
 // to paint over it. Hit-test its four corners and confirm the topmost element
 // at each point still belongs to the menu, and that it fits inside the viewport.
@@ -494,6 +524,28 @@ try {
   }
   await assertHeroCommandsAligned(desktop, 'desktop directory hero')
   await assertInstallCommandsReadable(desktop, 'desktop directory hero', '.catalog-hero')
+  const chineseGeometry = await heroLanguageGeometry(desktop)
+  await desktop.locator('.hero-language button').filter({ hasText: 'EN' }).click()
+  await desktop.waitForFunction(() => document.documentElement.lang === 'en')
+  const englishGeometry = await heroLanguageGeometry(desktop)
+  await assertHeroCommandsAligned(desktop, 'English desktop directory hero')
+  await assertInstallCommandsReadable(desktop, 'English desktop directory hero', '.catalog-hero')
+  if (
+    chineseGeometry.headingWidth !== englishGeometry.headingWidth
+    || chineseGeometry.tallyWidth !== englishGeometry.tallyWidth
+    || englishGeometry.actionRows !== 1
+    || chineseGeometry.commandLines.some((lines) => lines !== 1)
+    || englishGeometry.commandLines.some((lines) => lines !== 1)
+    || chineseGeometry.commandWidths.some((width) => width < 520 || width > (chineseGeometry.bannerWidth ?? 0) - 200)
+    || englishGeometry.commandWidths.some((width) => width < 520 || width > (englishGeometry.bannerWidth ?? 0) - 200)
+  ) {
+    throw new Error(`language switch changes the hero skeleton or crushes commands: ${JSON.stringify({ chineseGeometry, englishGeometry })}`)
+  }
+  if (!(await desktop.locator('.hero-link-exchange').textContent())?.includes('Open to link exchanges')) {
+    throw new Error('English link exchange invitation uses the wrong copy')
+  }
+  await desktop.locator('.hero-language button').filter({ hasText: '中' }).click()
+  await desktop.waitForFunction(() => document.documentElement.lang === 'zh-CN')
   if ((await desktop.locator('.directory-section .package-row .split-install-main').count()) === 0) {
     throw new Error('directory rows are missing the split install button')
   }
@@ -504,7 +556,7 @@ try {
   if (await desktop.locator('.hero-heading h1 a[href="https://deepseek1024.com/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
     throw new Error('catalog hero does not show the linked DeepSeek Harness Plugin 1024Store title')
   }
-  if (!(await desktop.locator('.hero-heading > p:last-child').textContent())?.includes('收录插件均先经 DSH 插件规范检查与过滤')) {
+  if (!(await desktop.locator('.hero-description').textContent())?.includes('收录插件均先经 DSH 插件规范检查与过滤')) {
     throw new Error('catalog hero does not keep the shared plugin screening description')
   }
   if (!/^\d+ (秒|分钟|小时|天)前更新$/.test((await desktop.locator('.hero-updated').textContent())?.trim() ?? '')) {
@@ -575,8 +627,11 @@ try {
   if ((await rankings.locator('.catalog-hero .hero-author[href="https://www.imsai.cc/"][target="_blank"]').count()) !== 1) {
     throw new Error('author homepage link is missing from the catalog banner')
   }
-  if ((await rankings.locator('.catalog-hero .hero-api').textContent())?.trim() !== '免费API') {
-    throw new Error('free API action uses the wrong Chinese label')
+  if ((await rankings.locator('.catalog-hero .hero-api').count()) !== 0) {
+    throw new Error('catalog banner duplicates the API entry from the floating navigation')
+  }
+  if ((await rankings.locator('.floating-nav a[href="/docs/api"]').count()) !== 1) {
+    throw new Error('floating navigation is missing the sole API entry')
   }
   if ((await rankings.locator('.catalog-hero .hero-wechat[href="/wechat-group.jpg"][target="_blank"]').count()) !== 1) {
     throw new Error('WeChat group QR link is missing from the catalog banner')
@@ -590,6 +645,10 @@ try {
     .evaluate((node) => node.className)
   if (!firstActionClass.includes('hero-wechat')) {
     throw new Error(`WeChat group action is not the leftmost action: ${firstActionClass}`)
+  }
+  const linkExchange = rankings.locator('.hero-link-exchange[href="https://www.imsai.cc/"][target="_blank"]')
+  if ((await linkExchange.count()) !== 1 || !(await linkExchange.textContent())?.includes('欢迎互链')) {
+    throw new Error('link exchange invitation is missing from the catalog hero')
   }
   if ((await rankings.locator('.catalog-hero .github-link span').textContent())?.trim() !== '插件市场开源') {
     throw new Error('market source action uses the wrong Chinese label')
@@ -621,7 +680,7 @@ try {
   if (await rankings.locator('.hero-heading h1 a[href="https://deepseek1024.com/"]').getAttribute('aria-label') !== 'DeepSeek Harness Plugin 1024Store') {
     throw new Error('ranking hero does not keep the shared store title')
   }
-  if (!(await rankings.locator('.hero-heading > p:last-child').textContent())?.includes('收录插件均先经 DSH 插件规范检查与过滤')) {
+  if (!(await rankings.locator('.hero-description').textContent())?.includes('收录插件均先经 DSH 插件规范检查与过滤')) {
     throw new Error('ranking hero does not keep the shared plugin screening description')
   }
   if ((await rankings.locator('.catalog-hero .hero-lockup-mark img[src="/deepseek1024.png"]').count()) !== 1) {
@@ -746,11 +805,11 @@ try {
   await assertVisibleSubdirectorySiblingsHaveDistinctTitles(mobile, 'mobile catalog')
   await assertMinTouchTargets(mobile, 'mobile catalog', [
     '.catalog-hero .hero-wechat',
-    '.catalog-hero .hero-api',
     '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
     '.catalog-hero .hero-language button',
+    '.catalog-hero .hero-link-exchange',
     '.catalog-view-tabs a',
     '.category-filter button',
     '.segmented-control button',
@@ -766,7 +825,7 @@ try {
   await assertMinFontSize(mobile, 'mobile package title', '.row-title', 14)
   await assertMinFontSize(mobile, 'mobile package description', '.row-identity p', 12)
   await assertMinFontSize(mobile, 'mobile package metrics', '.row-metrics > span', 11)
-  await assertMinFontSize(mobile, 'mobile hero description', '.hero-heading > p:last-child', 14)
+  await assertMinFontSize(mobile, 'mobile hero description', '.hero-description', 14)
   await assertMinFontSize(mobile, 'mobile hero tally label', '.hero-tally-label', 11)
   await assertWrappedControls(mobile, 'mobile category filters', '.category-filter')
   await assertWrappedControls(mobile, 'mobile directory sort modes', '.sort-segments')
@@ -1004,10 +1063,10 @@ try {
   }
   await assertMinTouchTargets(compactMobile, 'compact mobile header', [
     '.catalog-hero .hero-wechat',
-    '.catalog-hero .hero-api',
     '.catalog-hero .hero-author',
     '.catalog-hero .github-link',
     '.catalog-hero .hero-submit',
+    '.catalog-hero .hero-link-exchange',
     '.catalog-view-tabs a',
     '.self-install-banner .install-command .icon-button',
     '.package-row .split-install-main',
