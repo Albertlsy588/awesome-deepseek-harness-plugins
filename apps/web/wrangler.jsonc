@@ -76,6 +76,9 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": true
   },
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
   "observability": {
     "enabled": true,
     // 2000 万事件/月含在套餐内，本站量级远低于此，所以采样不是为了省钱，

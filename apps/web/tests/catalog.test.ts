@@ -352,8 +352,8 @@ describe('edge cache allowlist', () => {
 })
 
 describe('edge cache key normalization', () => {
-  function key(url: string): string | null {
-    return edgeCacheKey(new URL(url))?.url ?? null
+  function key(url: string, workerVersionId = 'worker-version-a'): string | null {
+    return edgeCacheKey(new URL(url), workerVersionId)?.url ?? null
   }
 
   it('keeps only the params that shape the body, in a fixed order', () => {
@@ -394,11 +394,19 @@ describe('edge cache key normalization', () => {
       .toBe('https://deepseek1024.com/__edge_cache/v1/api/v3/rankings')
   })
 
-  it('leaves HTML routes keyed by their whole URL', () => {
+  it('isolates HTML routes by Worker version while preserving their whole URL', () => {
     // A filtered permutation carries different SEO metadata than the bare page,
-    // so its query must stay in the key.
+    // so its query must stay in the key. A deploy or rollback must move the
+    // namespace so stale HTML cannot reference another version's asset hashes.
     expect(key('https://deepseek1024.com/plugins?category=ui'))
-      .toBe('https://deepseek1024.com/plugins?category=ui')
+      .toBe('https://deepseek1024.com/__edge_cache/html/worker-version-a/plugins?category=ui')
+    expect(key('https://deepseek1024.com/plugins?category=ui', 'worker-version-b'))
+      .toBe('https://deepseek1024.com/__edge_cache/html/worker-version-b/plugins?category=ui')
+  })
+
+  it('keeps API cache keys stable across Worker versions', () => {
+    expect(key('https://deepseek1024.com/api/v3/rankings', 'worker-version-a'))
+      .toBe(key('https://deepseek1024.com/api/v3/rankings', 'worker-version-b'))
   })
 
   it('does not cache an off-allowlist api path', () => {
