@@ -12,6 +12,11 @@
 
 [![GitHub Stars](https://img.shields.io/github/stars/imsai-sh/awesome-deepseek-harness-plugins?style=social)](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)
 
+<div align="center">
+  <strong>DSH插件社区</strong><br><br>
+  <img src="apps/web/public/wechat-group.jpg" alt="DSH插件社区微信二维码" width="280">
+</div>
+
 ## 项目亮点
 
 ### 在线插件市场（开源 · 可一键自部署）

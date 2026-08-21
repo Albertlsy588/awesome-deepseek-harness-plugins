@@ -163,6 +163,13 @@ function heroImage(registry, locale) {
   return `[![${alt}](${source})](https://deepseek1024.com/)`
 }
 
+function communityQr() {
+  return `<div align="center">
+  <strong>DSH插件社区</strong><br><br>
+  <img src="apps/web/public/wechat-group.jpg" alt="DSH插件社区微信二维码" width="280">
+</div>`
+}
+
 // GitHub stops rendering Markdown at 500 KiB and gives no truncation notice: every
 // entry past that byte offset simply does not exist for readers. Measured against the
 // live catalog on 2026-08-16, an uncapped projection was 594 KB and silently dropped
@@ -332,6 +339,8 @@ ${heroImage(registry, 'zh')}
 [在线网站](https://deepseek1024.com/) · [API 文档](docs/api.md) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md)
 
 [![GitHub Stars](https://img.shields.io/github/stars/imsai-sh/awesome-deepseek-harness-plugins?style=social)](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)
+
+${communityQr()}
 
 ## 项目亮点
 

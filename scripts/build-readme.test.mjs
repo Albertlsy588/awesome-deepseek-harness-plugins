@@ -162,6 +162,9 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   assert.match(zh, /- \[ui-thing\]\(https:\/\/github\.com\/owner\/ui-thing\) — 界面 增强。/)
   assert.match(zh, /<summary><strong>待分类<\/strong> · 1 个插件<\/summary>/)
   assert.doesNotMatch(zh, /stars?:? \d/i)
+  assert.match(zh, /<strong>DSH插件社区<\/strong>/)
+  assert.match(zh, /<img src="apps\/web\/public\/wechat-group\.jpg" alt="DSH插件社区微信二维码" width="280">/)
+  assert.ok(zh.indexOf('DSH插件社区') < zh.indexOf('## 项目亮点'), 'community QR must be visible before the project details')
 
   assert.match(en, /DSH 1024Store/)
   assert.match(en, /\*\*5\*\* plugins, updated 2026-08-15/)
