@@ -212,4 +212,4 @@ repeated runs that stop at the 500-call GitHub reserve.
 The API reads a fresh KV snapshot first, refreshes it from D1 when stale, and serves the last
 KV value during D1/GitHub failures. Stale KV is the only degradation mode; there is no bundled
 registry fallback. External consumers read the same D1-backed catalog through
-`GET /api/v1/registry` (see [API reference](api.md)).
+`GET /api/v1/registry` — capped at its install-ranked head — see the [API reference](api.md).

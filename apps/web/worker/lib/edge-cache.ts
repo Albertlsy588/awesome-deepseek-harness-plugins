@@ -30,6 +30,10 @@ function cacheableApiParams(pathname: string): readonly string[] | undefined {
 // do not wait out the previous entry's s-maxage before seeing the fix.
 const CACHE_KEY_REVISIONS: Readonly<Record<string, string>> = {
   '/api/v1/plugins': '2',
+  // 1: the registry narrowed from the full catalog to its install-ranked head,
+  // and stale-while-revalidate could otherwise serve the old multi-megabyte
+  // body for up to an hour after the deploy.
+  '/api/v1/registry': '1',
   '/api/v2/plugins': '1',
   '/api/v3/rankings': '1',
 }

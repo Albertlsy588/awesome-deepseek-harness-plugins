@@ -49,6 +49,15 @@ function normalizePlugin(plugin, id, stars) {
 
 export function normalizeRegistry(data) {
   assert(isObject(data) && Array.isArray(data.plugins), 'Registry response must contain a plugins array')
+  // A capped /api/v1/registry response advertises the full catalog size in
+  // `total` while serving only its install-ranked head. Regenerating from it —
+  // over the network or via --from-file — would silently shrink the README to
+  // the cap, so it is refused here, in the one place every registry-shaped
+  // payload passes through.
+  assert(
+    typeof data.total !== 'number' || data.total <= data.plugins.length,
+    'The registry payload is capped and cannot rebuild the README; use a full-catalog source such as /api/v2/plugins',
+  )
   return {
     updated: updatedDate(data.updated),
     plugins: data.plugins.map(plugin => {
@@ -78,12 +87,85 @@ function detectRegistryShape(data) {
   return normalizeRegistry(data)
 }
 
+const v2PageLimit = 200
+// One sort per attempt. Membership does not depend on the sort, but the edge
+// cache keys on it, so a retry under a different real sort value reads fresh
+// origin pages instead of replaying whichever mixed cached copies just failed
+// the consistency check. (The edge cache deliberately strips unknown params,
+// so a synthetic cache-buster would not work.)
+const v2SweepSorts = ['name', 'active', 'newest']
+const v2SweepRetryDelayMs = 10_000
+
+function v2PageUrl(base, sort, page) {
+  return `${base}/api/v2/plugins?sort=${sort}&limit=${v2PageLimit}&page=${page}`
+}
+
+// The README needs the whole catalog, and /api/v1/registry no longer serves it
+// (the endpoint caps at its install-ranked head), so the projections page
+// through /api/v2/plugins instead. A page sweep is not atomic — the 15-minute
+// KV snapshot can rotate mid-sweep, the edge can hold pages cached from
+// different snapshots, and a single page can hit a transient 5xx — so a sweep
+// only counts when every page arrives, reports the same generatedAt, and the
+// pages add up to the advertised total; anything else retries under the next
+// sort, and a persistent failure fails the build rather than publishing a
+// partial listing.
+async function loadPagedCatalog(fetchImplementation, base, retryDelayMs = v2SweepRetryDelayMs) {
+  let lastError = null
+  for (const [attempt, sort] of v2SweepSorts.entries()) {
+    if (attempt > 0 && retryDelayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs))
+    }
+    const firstResponse = await fetchImplementation(v2PageUrl(base, sort, 1))
+    if (firstResponse.status === 404) return null
+    if (!firstResponse.ok) {
+      lastError = new Error(`GET ${base}/api/v2/plugins failed: HTTP ${firstResponse.status}`)
+      continue
+    }
+    const first = JSON.parse(await firstResponse.text())
+    assert(
+      isObject(first) && Array.isArray(first.plugins)
+        && Number.isInteger(first.totalPages) && first.totalPages >= 1
+        && Number.isInteger(first.total) && typeof first.generatedAt === 'string',
+      'The /api/v2/plugins response is missing its pagination metadata',
+    )
+    const plugins = [...first.plugins]
+    let attemptError = null
+    for (let page = 2; page <= first.totalPages; page += 1) {
+      const response = await fetchImplementation(v2PageUrl(base, sort, page))
+      if (!response.ok) {
+        attemptError = new Error(`GET ${base}/api/v2/plugins page ${page} failed: HTTP ${response.status}`)
+        break
+      }
+      const body = JSON.parse(await response.text())
+      if (!isObject(body) || !Array.isArray(body.plugins) || body.generatedAt !== first.generatedAt) {
+        attemptError = new Error('The catalog snapshot rotated while paging /api/v2/plugins; the sweep was inconsistent')
+        break
+      }
+      plugins.push(...body.plugins)
+    }
+    if (attemptError === null) {
+      const ids = new Set(plugins.map(plugin => (isObject(plugin) ? plugin.id : undefined)))
+      if (plugins.length === first.total && ids.size === plugins.length) {
+        return normalizeRegistry({ updated: first.generatedAt, plugins })
+      }
+      attemptError = new Error('The /api/v2/plugins sweep did not add up to the advertised catalog total')
+    }
+    lastError = attemptError
+  }
+  throw lastError
+}
+
 export async function loadRegistry(options = {}) {
   if (options.fromFile !== undefined) {
     return detectRegistryShape(JSON.parse(await readFile(options.fromFile, 'utf8')))
   }
   const fetchImplementation = options.fetchImplementation ?? globalThis.fetch
   const base = (options.base ?? defaultBase).replace(/\/+$/, '')
+  const paged = await loadPagedCatalog(fetchImplementation, base, options.retryDelayMs)
+  if (paged !== null) return paged
+  // v2 not deployed yet: the original bootstrap chain. normalizeRegistry
+  // refuses a capped registry response (total larger than the entries served)
+  // instead of silently shrinking the README to the cap.
   const registryResponse = await fetchImplementation(`${base}/api/v1/registry`)
   if (registryResponse.ok) {
     return normalizeRegistry(JSON.parse(await registryResponse.text()))
@@ -378,7 +460,7 @@ dsh plugin --profile web add dsh1024@latest
 curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'
 \`\`\`
 
-匿名调用每天 50 次、每分钟 10 次；用 GitHub 账号登录网站创建 API Key 后提升到每天 500 次、每分钟 30 次。另有 \`/api/v1/registry\` 返回全量目录快照——本 README 就是由它生成的。完整端点、参数与错误码见 [API 参考](docs/api.md)。
+匿名调用每天 50 次、每分钟 10 次；用 GitHub 账号登录网站创建 API Key 后提升到每天 500 次、每分钟 30 次。另有 \`/api/v1/registry\` 返回按安装热度排序的精简目录快照（至多 500 条）。完整端点、参数与错误码见 [API 参考](docs/api.md)。
 
 ## 参与进来
 
@@ -525,7 +607,7 @@ ${heroImage(registry, 'en')}
 - **Hosted plugin marketplace, one fork away.** [deepseek1024.com](https://deepseek1024.com/) offers search, category filters, install rankings, plugin detail pages, and GitHub activity data on Cloudflare Workers + D1 + KV ([\`apps/web\`](../apps/web)). To self-host: fork the repository, point \`routes\` in \`apps/web/wrangler.jsonc\` at your own domain, create the D1 database and KV namespace, set the Worker secrets listed under \`secrets.required\`, and add \`CLOUDFLARE_API_TOKEN\` and \`CLOUDFLARE_ACCOUNT_ID\` as repository secrets. From then on every push to \`main\` runs the D1 migrations and deploys the Worker for you.
 - **The marketplace as a \`dsh\` plugin.** \`dsh plugin --profile web add dsh1024@latest\` installs or upgrades a **1024 Store** entry in Settings and a **1024 Store (count)** tab under Settings → Plugins, with search, filters, installed-state detection, install, and uninstall ([\`packages/dsh1024\`](../packages/dsh1024)).
 - **Scheduled collection with format validation.** Cron scans GitHub for \`dsh-plugin\` topic repositories every 30 minutes and reconciles the full set weekly. Every candidate is statically validated — the default-branch Git tree, \`package.json\`, \`dsh.bundle.patch\`, and the patch blob must exist — by reading files only, never installing dependencies or executing repository code ([\`docs/plugin-discovery.md\`](../docs/plugin-discovery.md)).
-- **Free query API.** \`curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'\` works anonymously at 50 requests/day (10/minute); a GitHub-login API key raises that to 500/day (30/minute). \`/api/v1/registry\` returns the full catalog snapshot that generates this file ([\`docs/api.md\`](../docs/api.md)).
+- **Free query API.** \`curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'\` works anonymously at 50 requests/day (10/minute); a GitHub-login API key raises that to 500/day (30/minute). \`/api/v1/registry\` serves a compact, install-ranked snapshot of the catalog (at most 500 entries) — see [\`docs/api.md\`](../docs/api.md).
 
 ## Get involved
 
@@ -591,8 +673,9 @@ function usage() {
   return `Usage: npm run readme:build [-- options]
 
 Regenerates README.md (Chinese) and catalog/README.md (English) from the full
-DSH 1024Store catalog: GET <base>/api/v1/registry, falling back to the legacy
-<base>/plugins.json shape when the v1 endpoint is not deployed yet.
+DSH 1024Store catalog: paged GET <base>/api/v2/plugins sweeps, falling back to
+the uncapped-era <base>/api/v1/registry and then the legacy <base>/plugins.json
+shape when newer endpoints are not deployed yet.
 
 Options:
   --base <url>        Catalog API origin (default: ${defaultBase})
