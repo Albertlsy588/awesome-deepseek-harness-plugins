@@ -126,6 +126,7 @@ function validBridgeRequest(message) {
     && message.requestId.length <= 128
   if (!base) return false
   if (message.action === 'installed') return message.pluginId === undefined
+  if (message.action === 'status') return message.pluginId === undefined
   if (message.action === 'catalog-cache-read') return message.catalogPage === undefined
   if (message.action === 'catalog-cache-write') {
     return message.catalogPage !== null && typeof message.catalogPage === 'object'
@@ -238,9 +239,21 @@ function MarketShell({ locale, onClose, activation }) {
     })
       .then(responseJson)
       .then(({ status, body }) => {
-        if (status !== 200 || !body.ok) throw new Error(body.error || body.stderr || body.stdout || ('HTTP ' + status))
+        // The full command output travels back to the page either way, so the
+        // store can show the user exactly what ran and what it printed.
+        const output = {
+          stdout: typeof body.stdout === 'string' ? body.stdout.slice(-8192) : '',
+          stderr: typeof body.stderr === 'string' ? body.stderr.slice(-8192) : '',
+          exitCode: typeof body.exitCode === 'number' ? body.exitCode : null,
+        }
+        if (status !== 200 || !body.ok) {
+          const detail = String(body.error || body.stderr || body.stdout || ('HTTP ' + status)).trim().slice(-800)
+          setOperationMessage(copy.operationFailed + ': ' + detail)
+          reply({ ok: false, error: detail, ...output })
+          return
+        }
         setOperationMessage(copy.installed)
-        reply({ ok: true })
+        reply({ ok: true, ...output })
       })
       .catch(error => {
         const detail = String(error).trim().slice(-800)
@@ -251,6 +264,32 @@ function MarketShell({ locale, onClose, activation }) {
         operationBusyRef.current = false
       })
   }, [copy])
+
+  const readStatus = useCallback((message, port) => {
+    const reply = payload => port.postMessage({
+      protocol: BRIDGE_PROTOCOL,
+      version: BRIDGE_VERSION,
+      type: 'result',
+      requestId: message.requestId,
+      ...payload,
+    })
+    fetch('/dsh1024/status', { cache: 'no-store' })
+      .then(responseJson)
+      .then(({ status, body }) => {
+        if (status !== 200) throw new Error('HTTP ' + status)
+        reply({
+          ok: true,
+          status: {
+            active: body.active === true,
+            action: typeof body.action === 'string' ? body.action : null,
+            target: typeof body.target === 'string' ? body.target : '',
+            seconds: typeof body.seconds === 'number' ? body.seconds : 0,
+            lastLine: typeof body.lastLine === 'string' ? body.lastLine : '',
+          },
+        })
+      })
+      .catch(error => reply({ ok: false, error: String(error).trim().slice(-300) }))
+  }, [])
 
   const readInstalled = useCallback((message, port) => {
     const reply = payload => port.postMessage({
@@ -335,9 +374,24 @@ function MarketShell({ locale, onClose, activation }) {
         setConnection('connected')
         return
       }
-      if (!validBridgeRequest(message)) return
+      if (!validBridgeRequest(message)) {
+        // Never drop a request silently: an unanswered request leaves the
+        // page's install button spinning until its own timeout fires.
+        if (message.type === 'request' && typeof message.requestId === 'string') {
+          channel.port1.postMessage({
+            protocol: BRIDGE_PROTOCOL,
+            version: BRIDGE_VERSION,
+            type: 'result',
+            requestId: message.requestId,
+            ok: false,
+            error: 'unsupported bridge request',
+          })
+        }
+        return
+      }
       if (message.action === 'install') runInstall(message, channel.port1)
       else if (message.action === 'installed') readInstalled(message, channel.port1)
+      else if (message.action === 'status') readStatus(message, channel.port1)
       else if (message.action === 'catalog-cache-read') readCatalogPageCache(message, channel.port1)
       else writeCatalogPageCache(message, channel.port1)
     }
@@ -351,7 +405,7 @@ function MarketShell({ locale, onClose, activation }) {
       new URL(embedUrl).origin,
       [channel.port2],
     )
-  }, [closeBridge, embedUrl, readCatalogPageCache, readInstalled, runInstall, writeCatalogPageCache])
+  }, [closeBridge, embedUrl, readCatalogPageCache, readInstalled, readStatus, runInstall, writeCatalogPageCache])
 
   useEffect(() => {
     if (embedUrl === null) return undefined
@@ -460,6 +514,20 @@ function SidebarEntry({ wide, locale }) {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [activation, setActivation] = useState(0)
+  // Config `sidebarEntry: false` hides this entry; the settings tabs stay.
+  // The flag comes from the local endpoint, and any fetch failure keeps the
+  // entry visible.
+  const [hidden, setHidden] = useState(false)
+  useEffect(() => {
+    let active = true
+    fetch('/dsh1024/embed-config', { cache: 'no-store' })
+      .then(responseJson)
+      .then(({ status, body }) => {
+        if (active && status === 200 && body.sidebarEntry === false) setHidden(true)
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
   const label = t('tab')
   const formattedCount = count === null
     ? ''
@@ -486,6 +554,8 @@ function SidebarEntry({ wide, locale }) {
     }
     setOpen(value => !value)
   }, [open])
+
+  if (hidden) return null
 
   return h(React.Fragment, null,
     h('button', {

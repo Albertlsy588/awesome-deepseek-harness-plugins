@@ -80,7 +80,7 @@ describe('EmbedBridgeProvider', () => {
       protocol: EMBED_BRIDGE_PROTOCOL,
       version: EMBED_BRIDGE_VERSION,
       type: 'ready',
-      capabilities: ['install', 'installed', 'catalog-cache'],
+      capabilities: ['install', 'installed', 'catalog-cache', 'status'],
     })
 
     expect(port.postMessage).toHaveBeenLastCalledWith({

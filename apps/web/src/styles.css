@@ -4577,6 +4577,110 @@ main {
   border-left: 2px solid var(--line);
 }
 
+/* Live install console pinned to the embedded store's lower edge: the exact
+   command, its last output line while running, and the captured output after
+   it ends — a failed install must be debuggable from the page. */
+.install-console {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  bottom: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  left: 12px;
+  max-width: min(680px, calc(100vw - 24px));
+  padding: 10px 12px;
+  position: fixed;
+  right: 12px;
+  margin: 0 auto;
+  z-index: 60;
+}
+
+.install-console-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.install-console[data-state='ok'] .install-console-head svg { color: var(--success, #16a34a); }
+.install-console[data-state='failed'] .install-console-head svg { color: var(--danger, #dc2626); }
+
+.install-console-spin {
+  animation: install-console-spin 1s linear infinite;
+}
+
+@keyframes install-console-spin {
+  to { transform: rotate(360deg); }
+}
+
+.install-console-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.install-console-toggle,
+.install-console-close {
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  gap: 3px;
+  padding: 4px;
+}
+
+.install-console-command {
+  background: var(--surface-strong, rgba(0, 0, 0, 0.05));
+  border-radius: 6px;
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-x: auto;
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+.install-console-live {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.install-console-error {
+  color: var(--danger, #dc2626);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.install-console-log {
+  background: var(--surface-strong, rgba(0, 0, 0, 0.05));
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 /* Browse-only plugin: no npm package published, so no command is offered —
    only the pointer at the source repository. */
 .install-unavailable {

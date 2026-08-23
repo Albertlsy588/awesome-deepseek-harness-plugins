@@ -14,6 +14,7 @@ export interface MarketRouteConfig {
     registryUrl: string;
     updateUrl: string;
     embedUrl: string;
+    sidebarEntry: boolean;
 }
 /**
  * Parse the full official command the embedded page asks to run.

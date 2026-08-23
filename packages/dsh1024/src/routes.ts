@@ -29,6 +29,7 @@ export interface MarketRouteConfig {
   registryUrl: string
   updateUrl: string
   embedUrl: string
+  sidebarEntry: boolean
 }
 
 interface CommandResult {
@@ -427,7 +428,11 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
       path: '/dsh1024/embed-config',
       handler: (request, response) => {
         if (!requireMethod(request, response, 'GET')) return
-        sendJson(response, 200, { url: embedUrl.href, origin: embedUrl.origin })
+        sendJson(response, 200, {
+          url: embedUrl.href,
+          origin: embedUrl.origin,
+          sidebarEntry: config.sidebarEntry,
+        })
       },
     }),
     webServer.register({

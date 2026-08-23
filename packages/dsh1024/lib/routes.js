@@ -363,7 +363,11 @@ export function mountMarketRoutes(webServer, config) {
             handler: (request, response) => {
                 if (!requireMethod(request, response, 'GET'))
                     return;
-                sendJson(response, 200, { url: embedUrl.href, origin: embedUrl.origin });
+                sendJson(response, 200, {
+                    url: embedUrl.href,
+                    origin: embedUrl.origin,
+                    sidebarEntry: config.sidebarEntry,
+                });
             },
         }),
         webServer.register({
