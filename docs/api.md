@@ -107,7 +107,7 @@ in D1; API keys are shown once at creation and stored only as hashes.
 - `DELETE /api/v1/api-keys/:id` — revokes (soft-deletes) the key.
 
 Cookie-authenticated mutations reject mismatched `Origin` headers (`403`); expired
-sessions and stale rate counters are purged by the weekly cron.
+sessions and stale rate counters are purged by out-of-band maintenance.
 
 ## GET /api/v1/plugins/:owner/:name[/sub/dir…]
 
@@ -246,7 +246,7 @@ the fixed self-update package name and executes the official DSH CLI.
 ## POST /api/v1/catalog/sync
 
 Full-catalog reconciliation from GitHub CI — one of exactly two catalog write paths (the
-other is the Worker's own cron topic scan).
+other is the maintainer's out-of-band collection pipeline).
 
 Authentication: `Authorization: Bearer <CATALOG_SYNC_TOKEN>` where the token is a Cloudflare
 Worker secret of at least 32 bytes. The endpoint is not a public submission API: anonymous and

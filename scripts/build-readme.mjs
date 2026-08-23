@@ -446,11 +446,11 @@ dsh plugin --profile web add dsh1024@latest
 
 这是本目录与多数插件市场最大的区别：**目录不靠人肉维护，收录前一定过校验。**
 
-- **定时收集**：Cloudflare Cron 每 30 分钟做一次增量扫描，用 \`created:\` 与 \`pushed:\` 两路搜索抓取带 \`dsh-plugin\` topic 的 GitHub 仓库；每周日再做一次全量对账，长期不活跃的仓库不会被漏收，掉了 topic 也只在一次成功的全量扫描后才下架。
+- **定时收集**：自动收录带 \`dsh-plugin\` topic 的 GitHub 仓库，增量抓取新建与新推送的仓库，并定期全量对账——长期不活跃的仓库不会被漏收，掉了 topic 也只在一次成功的全量对账后才下架。
 - **格式校验**：每个候选仓库都要通过静态校验——读取默认分支的 Git tree，检查 \`package.json\`、\`dsh.bundle.patch\` 字段，以及 patch 文件在同一棵 tree 中确实存在。**全程只读文件，绝不安装依赖、绝不执行仓库代码。** 校验不通过就不进目录。
 - **自动同步**：PR 合并后由 CI 自动同步目录到网站数据库并刷新本 README，贡献者和维护者都不需要手工改任何生成文件。
 
-调度节奏、GitHub API 限额与失败行为见 [插件发现运维文档](docs/plugin-discovery.md)。
+数据来源与校验语义见 [目录数据来源文档](docs/plugin-discovery.md)。
 
 ### 免费查询 API
 
@@ -553,7 +553,7 @@ npx wrangler d1 migrations apply dsh-store-star-history --remote
 npx wrangler deploy --secrets-file .dev.vars
 \`\`\`
 
-\`wrangler.jsonc\` 已声明 KV、D1、Durable Object、Cron 定时任务和静态资源配置。生产环境要先执行 \`npm run db:migrate:remote\`，再部署 Worker；完整顺序、GitHub API 限额和费用估算见 [Cloudflare 插件发现运维文档](docs/plugin-discovery.md)，公开 API 见 [API 参考](docs/api.md)。请勿提交 \`.dev.vars\`。
+\`wrangler.jsonc\` 已声明 KV、D1、Durable Object 和静态资源配置。生产环境要先执行 \`npm run db:migrate:remote\`，再部署 Worker；完整顺序见 [目录数据来源文档](docs/plugin-discovery.md)，公开 API 见 [API 参考](docs/api.md)。请勿提交 \`.dev.vars\`。
 
 ## 致谢
 
@@ -606,7 +606,7 @@ ${heroImage(registry, 'en')}
 
 - **Hosted plugin marketplace, one fork away.** [deepseek1024.com](https://deepseek1024.com/) offers search, category filters, install rankings, plugin detail pages, and GitHub activity data on Cloudflare Workers + D1 + KV ([\`apps/web\`](../apps/web)). To self-host: fork the repository, point \`routes\` in \`apps/web/wrangler.jsonc\` at your own domain, create the D1 database and KV namespace, set the Worker secrets listed under \`secrets.required\`, and add \`CLOUDFLARE_API_TOKEN\` and \`CLOUDFLARE_ACCOUNT_ID\` as repository secrets. From then on every push to \`main\` runs the D1 migrations and deploys the Worker for you.
 - **The marketplace as a \`dsh\` plugin.** \`dsh plugin --profile web add dsh1024@latest\` installs or upgrades a **1024 Store** entry in Settings and a **1024 Store (count)** tab under Settings → Plugins, with search, filters, installed-state detection, install, and uninstall ([\`packages/dsh1024\`](../packages/dsh1024)).
-- **Scheduled collection with format validation.** Cron scans GitHub for \`dsh-plugin\` topic repositories every 30 minutes and reconciles the full set weekly. Every candidate is statically validated — the default-branch Git tree, \`package.json\`, \`dsh.bundle.patch\`, and the patch blob must exist — by reading files only, never installing dependencies or executing repository code ([\`docs/plugin-discovery.md\`](../docs/plugin-discovery.md)).
+- **Scheduled collection with format validation.** GitHub repositories carrying the \`dsh-plugin\` topic are collected automatically and periodically reconciled against the full set. Every candidate is statically validated — the default-branch Git tree, \`package.json\`, \`dsh.bundle.patch\`, and the patch blob must exist — by reading files only, never installing dependencies or executing repository code ([\`docs/plugin-discovery.md\`](../docs/plugin-discovery.md)).
 - **Free query API.** \`curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'\` works anonymously at 50 requests/day (10/minute); a GitHub-login API key raises that to 500/day (30/minute). \`/api/v1/registry\` serves a compact, install-ranked snapshot of the catalog (at most 500 entries) — see [\`docs/api.md\`](../docs/api.md).
 
 ## Get involved

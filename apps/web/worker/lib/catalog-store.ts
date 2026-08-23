@@ -276,23 +276,3 @@ export async function loadCatalogSnapshot(
   return coldStartSnapshot(env, fetcher)
 }
 
-export async function runScheduledCatalogRefresh(
-  env: Env,
-  capturedAt: number = Date.now(),
-): Promise<void> {
-  try {
-    const result = await refreshCatalogSnapshot(env, fetch, capturedAt)
-    console.log(
-      JSON.stringify({
-        message: 'catalog_refresh_completed',
-        source: result.source,
-        plugins: result.snapshot.plugins.length,
-        metricCoverage: result.snapshot.metricCoverage,
-        generatedAt: result.snapshot.generatedAt,
-      }),
-    )
-  } catch (error) {
-    logRefreshError(error)
-    throw error
-  }
-}
