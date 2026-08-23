@@ -268,9 +268,16 @@ export const PackageRow = memo(function PackageRow({
       {uninstallable
         // The store's own row keeps the installed state — the local endpoint
         // refuses to uninstall it, so a live trigger would only ever fail.
-        ? isSelfPlugin(plugin)
-          ? <BridgeInstallButton pluginId={plugin.id} className="split-install-main bridge-local-install" />
-          : <BridgeUninstallButton pluginId={plugin.id} />
+        // The .split-install wrapper is load-bearing: it lifts the button
+        // above the full-row .row-link overlay, or a real pointer click lands
+        // on the link and navigates to the detail page instead.
+        ? (
+          <div className="split-install">
+            {isSelfPlugin(plugin)
+              ? <BridgeInstallButton pluginId={plugin.id} className="split-install-main bridge-local-install" />
+              : <BridgeUninstallButton pluginId={plugin.id} />}
+          </div>
+        )
         : isRepository
           ? installableRoot === undefined
             // Nothing to copy: this repository publishes only subdirectories, and
