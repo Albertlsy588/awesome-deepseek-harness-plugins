@@ -1,3 +1,4 @@
+import { offeredInstallCommand } from './lib/install-methods'
 import { pluginDetailPath } from './lib/plugin-id'
 import { BRAND_HEADING } from './seo-templates'
 import type { CatalogPlugin, Language, RegistryCategory } from './types'
@@ -199,6 +200,7 @@ export function renderPluginShell(
     .join('')
   const stars = starCount(plugin)
   const repositoryLink = safeExternalHref(plugin.url)
+  const offeredCommand = offeredInstallCommand(plugin)
   const facts = [
     `<dt>${zh ? '作者' : 'Author'}</dt><dd><a href="https://github.com/${escapeHtml(plugin.owner)}" rel="noopener">${escapeHtml(plugin.owner)}</a></dd>`,
     `<dt>${zh ? '分类' : 'Category'}</dt><dd>${escapeHtml(categoryLabel)}</dd>`,
@@ -211,8 +213,14 @@ export function renderPluginShell(
     `<p>${escapeHtml(plugin.description[language])}</p>`,
     `<h2>${escapeHtml(zh ? `安装 ${plugin.name}` : `Install ${plugin.name}`)}</h2>`,
     // Always the official DSH CLI command: the registry `install` field is the
-    // contract, and wrapper commands stay display-layer only.
-    `<pre class="seo-shell-install"><code>${escapeHtml(plugin.install)}</code></pre>`,
+    // contract, and wrapper commands stay display-layer only. Only npm installs
+    // are offered — a plugin without a published npm package is browse-only,
+    // and the shell says so instead of printing a command nobody should run.
+    offeredCommand
+      ? `<pre class="seo-shell-install"><code>${escapeHtml(offeredCommand)}</code></pre>`
+      : `<p class="seo-shell-install-unavailable">${escapeHtml(zh
+          ? '该插件尚未发布 npm 包，1024 Store 暂不提供安装；可通过下方仓库链接查看源码。'
+          : 'This plugin has not published an npm package, so the store does not offer an install command yet. Use the repository link below to view the source.')}</p>`,
     `<h2>${escapeHtml(zh ? '插件信息' : 'Plugin details')}</h2>`,
     `<dl class="seo-shell-facts">${facts}</dl>`,
     repositoryLink

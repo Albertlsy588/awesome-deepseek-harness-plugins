@@ -80,8 +80,8 @@ from `plugin` onwards is forwarded to the official CLI exactly as written —
 nothing is added, removed, reordered, or defaulted:
 
 ```sh
-dsh1024 plugin --profile web add github:omdsh-dev/dsh-deep-research
-dsh plugin      --profile web add github:omdsh-dev/dsh-deep-research
+dsh1024 plugin --profile web add @scope/dsh-plugin
+dsh plugin      --profile web add @scope/dsh-plugin
 ```
 
 The two lines above run the same official operation. The wrapper's only job is
@@ -94,15 +94,15 @@ silently filled in, and `--`, refs, and every other official argument keep their
 official meaning:
 
 ```sh
-dsh1024 plugin --profile web add github:owner/repository#v1.2.0
-dsh1024 plugin --profile web add github:owner/repository -- \
+dsh1024 plugin --profile web add @scope/dsh-plugin@1.2.0
+dsh1024 plugin --profile web add @scope/dsh-plugin -- \
   --ignore-scripts --reporter append-only --config.confirmModulesPurge=false
 ```
 
 The wrapper executes the first example without a shell as:
 
 ```sh
-npx --yes @deepseek-ai/dsh plugin --profile web add github:owner/repository#v1.2.0
+npx --yes @deepseek-ai/dsh plugin --profile web add @scope/dsh-plugin@1.2.0
 ```
 
 When an official `dsh` is already on PATH the wrapper runs that binary directly

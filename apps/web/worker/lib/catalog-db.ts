@@ -1041,6 +1041,9 @@ export async function loadCatalogSnapshotFromD1(
         en: row.curated_description_en ?? row.ai_description_en ?? description,
         zh: row.curated_description_zh ?? row.ai_description_zh ?? description,
       },
+      // The frozen v1 surfaces require a non-empty official CLI command here.
+      // A plugin with no npm package records its source-install command as the
+      // value; user-facing surfaces offer only npm (offeredInstallCommand).
       install: installMethods[0]?.command ?? pluginInstallCommand(id),
       // Facts in, verdicts out: the badge is derived here rather than stored,
       // so changing how a fact is judged is a deploy, not a re-crawl.

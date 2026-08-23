@@ -503,6 +503,15 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
             return
           }
           const target = installTarget(plugin)
+          // Only npm packages are installable from the store. A github: target
+          // marks a browse-only entry — kept in the registry so an earlier
+          // source install is still recognized — and the store UI offers no
+          // install for it, so this refusal only fires for a stale or
+          // hand-crafted page.
+          if (target.startsWith('github:')) {
+            sendJson(response, 400, { error: 'this plugin has not published an npm package; source installs are not offered by the store' })
+            return
+          }
           mutating = true
           try {
             const result = await runReportedPluginCommand(

@@ -4,6 +4,7 @@ import {
   deriveInstallMethods,
   gitVerification,
   NO_ENTRY_DECLARED_VERIFICATION,
+  offeredInstallCommand,
   withLegacyNpmCodeAliases,
   type GitInstallCode,
 } from '../worker/lib/install-methods'
@@ -93,6 +94,27 @@ describe('install method verdicts', () => {
       expect(methods.map((method) => method.kind), binding).toEqual(['github'])
     }
     expect(deriveInstallMethods('owner/repo', git, GITHUB_ONLY).map((m) => m.kind)).toEqual(['github'])
+  })
+
+  it('offers only the npm method to user-facing surfaces', () => {
+    // The github method stays derived and recorded, but nothing offers it:
+    // its --allow-build grant quoted a repository-controlled name and one bad
+    // value poisoned the whole registry (issue #159).
+    const git = { code: 'entry_committed', hasPrepare: true, packageName: '@scope/plugin' } as const
+    const published = deriveInstallMethods('owner/repo', git, {
+      packageName: '@scope/plugin', binding: 'strict', bundleDeclared: true, version: '1.2.3',
+    })
+    expect(offeredInstallCommand({ install: published[0]!.command, installMethods: published }))
+      .toBe('dsh plugin --profile web add @scope/plugin')
+
+    const sourceOnly = deriveInstallMethods('owner/repo', git, null)
+    expect(offeredInstallCommand({ install: sourceOnly[0]!.command, installMethods: sourceOnly }))
+      .toBeNull()
+
+    // Pre-verification snapshots carry only the command string.
+    expect(offeredInstallCommand({ install: 'dsh plugin --profile web add github:owner/repo' })).toBeNull()
+    expect(offeredInstallCommand({ install: 'dsh plugin --profile web add @scope/plugin' }))
+      .toBe('dsh plugin --profile web add @scope/plugin')
   })
 
   it('makes the store package command cross pre-1.0 minor version ranges', () => {

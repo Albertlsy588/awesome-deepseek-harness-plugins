@@ -14,6 +14,36 @@ export interface TestRegistry {
   plugins: RegistryPlugin[]
 }
 
+// Mirrors the real catalog: some plugins publish an npm package (the only
+// offered install method), others are source-only and therefore browse-only
+// on every user-facing surface and absent from the v1 partner listing.
+function npmMethods(id: string, packageName: string): RegistryPlugin['installMethods'] {
+  return [
+    {
+      kind: 'npm',
+      spec: packageName,
+      command: `dsh plugin --profile web add ${packageName}`,
+      verification: 'verified',
+      code: 'published_package',
+      requiresBuildAllowance: false,
+      buildPackage: null,
+      revision: '1.0.0',
+      checkedAt: '2026-08-14T00:00:00Z',
+    },
+    {
+      kind: 'github',
+      spec: `github:${id}`,
+      command: `dsh plugin --profile web add github:${id}`,
+      verification: 'verified',
+      code: 'entry_committed',
+      requiresBuildAllowance: false,
+      buildPackage: null,
+      revision: null,
+      checkedAt: '2026-08-14T00:00:00Z',
+    },
+  ]
+}
+
 const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
   {
     id: 'openma-ai/deepseek-harness-tui',
@@ -25,7 +55,8 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
       en: 'A Rust/ratatui terminal client that speaks the DSH SDK JSON-RPC protocol directly and runs standalone or as a profile bundle.',
       zh: 'Rust/ratatui 终端客户端，直接使用 DSH SDK JSON-RPC 协议，支持独立运行或作为 profile bundle 加载。',
     },
-    install: 'dsh plugin --profile web add github:openma-ai/deepseek-harness-tui',
+    install: 'dsh plugin --profile web add @openma/deepseek-harness-tui',
+    installMethods: npmMethods('openma-ai/deepseek-harness-tui', '@openma/deepseek-harness-tui'),
     added: '2026-08-14',
   },
   {
@@ -38,7 +69,8 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
       en: 'Cross-session messaging for DSH: any session on the machine can list and message any other, Claude Code-style, via a local heartbeat registry and inbox.',
       zh: '跨会话消息：本机任意会话都可像 Claude Code 一样列出并互发消息，基于本地心跳注册表与收件箱。',
     },
-    install: 'dsh plugin --profile web add github:Jesse-njx/dsh-crosstalk',
+    install: 'dsh plugin --profile web add dsh-crosstalk',
+    installMethods: npmMethods('Jesse-njx/dsh-crosstalk', 'dsh-crosstalk'),
     added: '2026-08-14',
   },
   {
@@ -103,7 +135,8 @@ const TEST_REGISTRY_PLUGINS: RegistryPlugin[] = [
       en: 'Play Gomoku against the AI, or let two AIs battle it out.',
       zh: '与 AI 下五子棋，也可让 AI 对局比棋力。',
     },
-    install: 'dsh plugin --profile web add github:omdsh-dev/dsh-gomoku',
+    install: 'dsh plugin --profile web add dsh-gomoku',
+    installMethods: npmMethods('omdsh-dev/dsh-gomoku', 'dsh-gomoku'),
     added: '2026-08-13',
   },
   // A monorepo subpackage: its url is the repository root, its id carries the

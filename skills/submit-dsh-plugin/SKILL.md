@@ -25,7 +25,7 @@ description: 验证并提交 DeepSeek Harness 插件到 imsai-sh/awesome-deepsee
 - 客观的英文与中文简介
 - 作者实际执行的测试命令和结果
 
-ID 各段仅限 `A-Za-z0-9_.-` 字符，路径段不得是 `.` 或 `..`，总长不超过 201 字符。无论 ID 是否携带路径，条目的 `repository` 字段始终是由前两段推导的仓库根 URL `https://github.com/owner/repository`。目录会从 ID 推导安装规格：两段 ID 安装为 `github:owner/repository`，子目录 ID 安装为 `github:owner/repository#path:sub/dir`。
+ID 各段仅限 `A-Za-z0-9_.-` 字符，路径段不得是 `.` 或 `..`，总长不超过 201 字符。无论 ID 是否携带路径，条目的 `repository` 字段始终是由前两段推导的仓库根 URL `https://github.com/owner/repository`。ID 的路径段锁定插件源码位置：子目录 ID 的 `<sub/dir>/package.json` 必须恰好是插件的 manifest。安装入口只来自发布到 npm 的包（1024 Store 仅提供 npm 安装），目录条目本身只记录源码仓库。
 
 目录仓库固定使用 `https://github.com/imsai-sh/awesome-deepseek-harness-plugins`。创建文件前，读取其当前 checkout 中的 `CONTRIBUTING.md` 和 `catalog/categories.json`；如果线上仓库规范与本 Skill 不同，以线上规范为准。
 
@@ -37,16 +37,13 @@ ID 各段仅限 `A-Za-z0-9_.-` 字符，路径段不得是 `.` 或 `..`，总长
 
 1. 确认仓库公开且存在默认分支。
 2. 确认仓库包含 `dsh-plugin` GitHub topic。如果缺少 topic、用户拥有该仓库且已授权外部写入，才可执行 `gh repo edit owner/repository --add-topic dsh-plugin`。topic 作用于仓库本身：`gh repo edit` 的参数只取 ID 的前两段 `owner/repository`，子目录 ID 的路径段不参与。
-3. 定位插件的 manifest：两段 ID 可使用根目录或任意嵌套的 `package.json`（排除 `node_modules`）；子目录 ID 则必须在 `<sub/dir>/package.json` 恰好找到 manifest——ID 的路径就是安装规格 `github:owner/repository#path:sub/dir` 指向 pnpm 的位置，仓库里其他位置的 manifest 不算数。
+3. 定位插件的 manifest：两段 ID 可使用根目录或任意嵌套的 `package.json`（排除 `node_modules`）；子目录 ID 则必须在 `<sub/dir>/package.json` 恰好找到 manifest——ID 的路径就是插件在仓库中的位置，仓库里其他位置的 manifest 不算数。
 4. 确认其中声明了非空字符串 `dsh.bundle.patch`。
 5. 相对于声明该字段的 `package.json` 解析补丁路径；拒绝绝对路径、反斜杠以及跳出仓库的路径。
 6. 确认 manifest 和引用的补丁都存在于 GitHub 默认分支，而不只是尚未推送的本地提交。
-7. 确认该插件能**从 GitHub 安装**，作为 npm 之外的源码安装方式：git 安装会执行 `prepare`，除此之外只包含已提交的文件。
-   因此要么 `exports["."]` / `main` 指向的入口文件已提交，要么有一个自包含的 `prepare` 脚本在安装时构建它。
-   若入口是发布 npm 时才构建的产物，安装会成功但 `dsh` 启动时报 module-not-found。
-   **这不影响收录**：插件照常收录，但网站会把该安装方式标为 UNVERIFIED，PR 评论里也会给出修法
-   （提交构建产物、加自包含的 `prepare` 脚本，或把声明 `dsh.bundle` 的包发布到 npm）。如果源码包有 `prepare`，网站生成的命令必须带 `--allow-build=<package-name>`，让 pnpm 在首次安装时直接授权并执行构建，而不是先失败再让用户手改 YAML。
-   网站会单独探测 manifest 中声明的 npm 包名；只要 npm 上的 latest manifest 声明 `dsh.bundle`，npm 方式即为 VERIFIED 并优先推荐。`repository` 回链缺失或不一致不影响 npm 验证结果。
+7. 向作者说明**安装可用性**：1024 Store 只提供 npm 安装，不再提供 GitHub 源码安装。
+   网站会自动探测 manifest 中声明的 npm 包名；只要 npm 上的 latest manifest 声明 `dsh.bundle`，插件即可安装（`repository` 回链缺失或不一致不影响验证）。
+   **未发布 npm 包不影响收录**：插件照常收录，以浏览模式展示（有仓库链接，无安装命令），PR 评论会提示作者发布 npm 包后目录自动检测、无需追加 PR。
 8. 记录作者实际执行的兼容性测试。如果尚未测试，应停止并要求作者先测试；目录自动审查不会执行第三方代码。
 
 使用 GitHub 或 `gh` 获取远程默认分支证据。不得用仅存在于本地的文件作为证明。

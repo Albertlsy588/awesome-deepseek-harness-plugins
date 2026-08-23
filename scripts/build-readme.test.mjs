@@ -147,7 +147,10 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   assert.match(zh, /# DSH 1024Store/)
   assert.match(zh, /共收录 \*\*5\*\* 个插件/)
   assert.match(zh, /2026-08-15/)
-  assert.match(zh, /dsh1024 plugin --profile web add github:<owner>\/<repository>/)
+  // The store installs from npm only; the generated README must not teach the
+  // github: source form anywhere.
+  assert.match(zh, /dsh1024 plugin --profile web add <npm-package>/)
+  assert.doesNotMatch(zh, /add github:/)
   assert.doesNotMatch(zh, /npx @dsh-1024store\/cli add/)
   // A subdirectory plugin links to its own directory, not the repository root.
   // Once the crawler collects every package a monorepo publishes, one repository

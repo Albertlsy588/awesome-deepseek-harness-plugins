@@ -16,8 +16,8 @@
     "owner": "openma-ai",
     "url": "https://github.com/openma-ai/deepseek-harness-tui",
     "category": "ui",
-    "install": "dsh plugin --profile web add github:openma-ai/deepseek-harness-tui",
-    "target": "github:openma-ai/deepseek-harness-tui",
+    "install": "dsh plugin --profile web add @openma/deepseek-harness-tui",
+    "target": "@openma/deepseek-harness-tui",
     "allowBuild": null,
     "added": "2026-08-14",
     "stars": 42

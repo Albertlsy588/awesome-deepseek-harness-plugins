@@ -9,15 +9,15 @@ import { useEmbedBridge } from '../lib/embedBridge'
  * The install methods a plugin offers, each with what the catalog actually
  * knows about it, and under each one the two ways to run it.
  *
- * The method decides *what* gets installed (a git spec or a published
- * package); the two rows under it decide *how* you invoke the official CLI —
- * through the wrapper, which counts the install, or directly. The wrapper
- * forwards its arguments verbatim, so both rows install exactly the same thing.
+ * Only npm methods are offered: source installs are no longer an install
+ * method, so a github method still present in a pre-switch snapshot is
+ * filtered out here rather than rendered. The two rows under each method
+ * decide *how* you invoke the official CLI — through the wrapper, which
+ * counts the install, or directly. The wrapper forwards its arguments
+ * verbatim, so both rows install exactly the same thing.
  *
- * "Checking" is deliberately distinct from "unverified": a plugin the crawler
- * has not reached yet is unknown, and calling somebody else's project
- * unverified because our own queue is behind would be a false claim. The
- * badges describe installability only — never the plugin's quality or safety.
+ * The badges describe installability only — never the plugin's quality or
+ * safety.
  */
 export function InstallMethods({ methods, pluginId }: {
   methods: PluginInstallMethod[]
@@ -25,13 +25,19 @@ export function InstallMethods({ methods, pluginId }: {
 }) {
   const { t } = useI18n()
   const { connected } = useEmbedBridge()
-  if (methods.length === 0) return null
+  // npm only, one card per package: v1-shaped data may duplicate the npm
+  // method under both legacy verdict codes (withLegacyNpmCodeAliases), and a
+  // pre-switch snapshot may still carry a github method.
+  const offered = methods
+    .filter((method) => method.kind === 'npm')
+    .filter((method, index, list) => list.findIndex((other) => other.spec === method.spec) === index)
+  if (offered.length === 0) return null
   // The store's own entry installs from its published package, not from a spec
   // pointing at this catalog repository.
   const selfPlugin = isSelfPlugin({ id: pluginId })
 
   if (connected) {
-    const preferred = methods[0]!
+    const preferred = offered[0]!
     const status = preferred.verification === 'verified'
       ? t('installVerified')
       : preferred.verification === 'unverified'
@@ -40,14 +46,14 @@ export function InstallMethods({ methods, pluginId }: {
     return (
       <div className="bridge-install-panel">
         <BridgeInstallButton pluginId={pluginId} />
-        <p>{preferred.kind === 'npm' ? 'npm' : 'GitHub'} · {status}</p>
+        <p>npm · {status}</p>
       </div>
     )
   }
 
   return (
     <div className="install-methods">
-      {methods.map((method, index) => {
+      {offered.map((method, index) => {
         const preferred = index === 0
         const label = method.verification === 'verified'
           ? t('installVerified')
@@ -62,18 +68,13 @@ export function InstallMethods({ methods, pluginId }: {
         return (
           <div className="install-method" key={`${method.kind}-${method.spec}`}>
             <div className="install-method-head">
-              <span className="install-method-kind">{method.kind === 'npm' ? 'npm' : 'GitHub'}</span>
+              <span className="install-method-kind">npm</span>
               <span
                 className={`install-badge install-badge-${method.verification}`}
                 title={hint}
               >
                 {label}
               </span>
-              {method.requiresBuildAllowance && (
-                <span className="install-badge install-badge-allowance" title={t('installBuildAllowanceHint')}>
-                  {t('installNeedsBuildAllowance')}
-                </span>
-              )}
             </div>
             <div className="install-options">
               <div className={`install-option${preferred ? ' install-option-recommended' : ''}`}>

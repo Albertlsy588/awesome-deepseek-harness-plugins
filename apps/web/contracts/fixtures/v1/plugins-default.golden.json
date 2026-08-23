@@ -1,10 +1,10 @@
 {
-  "packageCount": 9,
+  "packageCount": 3,
   "firstPackageId": "Jesse-njx/dsh-crosstalk",
   "starsLeaderId": "Jesse-njx/dsh-crosstalk",
-  "categoryIds": ["tools", "dev", "fun", "notify", "session", "ui", "workflow"],
+  "categoryIds": ["fun", "session", "ui"],
   "meta": {
-    "total": 9,
+    "total": 3,
     "catalogTotal": 9,
     "updated": "2026-08-14",
     "generatedAt": "2026-08-14T12:00:00Z",

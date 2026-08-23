@@ -25,9 +25,10 @@ export function slugPart(value) {
 }
 
 // A plugin id is owner/repository plus optional in-repo path segments
-// (owner/repo/sub/dir for a monorepo subpackage). Path segments feed pnpm's
-// `github:owner/repo#path:sub/dir` install spec, so `.` and `..` segments are
-// rejected outright — the character class alone would admit them.
+// (owner/repo/sub/dir for a monorepo subpackage). Path segments locate the
+// plugin's manifest inside the repository and are compared against git tree
+// paths, so `.` and `..` segments are rejected outright — the character class
+// alone would admit them.
 const idSegmentPattern = /^[A-Za-z0-9_.-]+$/
 
 export function parsePluginId(id) {
@@ -65,13 +66,6 @@ export function sourceUrl(id) {
   const { owner, repository, subPath } = parsePluginId(id)
   const base = `https://github.com/${owner}/${repository}`
   return subPath.length === 0 ? base : `${base}/tree/HEAD/${subPath}`
-}
-
-export function installSpec(id) {
-  const { owner, repository, subPath } = parsePluginId(id)
-  return subPath.length === 0
-    ? `github:${owner}/${repository}`
-    : `github:${owner}/${repository}#path:${subPath}`
 }
 
 export function pluginFileName(id) {

@@ -473,7 +473,7 @@ describe('catalog snapshot', () => {
     database.close()
   })
 
-  it('publishes npm as preferred and makes prepare source installs first-run safe', async () => {
+  it('publishes npm as preferred and keeps the source method as a record', async () => {
     const database = catalogDatabase()
     seedRepository(database, { github_id: 13 })
     seedPlugin(database, 'scan/repo', { validation_status: 'accepted' })
@@ -491,6 +491,8 @@ describe('catalog snapshot', () => {
     const plugin = (await loadCatalogSnapshotFromD1(sqliteD1(database), NOW))?.plugins[0]
 
     expect(plugin?.install).toBe('dsh plugin --profile web add @scope/published-plugin')
+    // The github method stays derived and recorded; only npm is offered to
+    // user-facing surfaces (issue #159).
     expect(plugin?.installMethods?.map((method) => method.kind)).toEqual(['npm', 'github'])
     expect(plugin?.installMethods?.[0]).toMatchObject({
       verification: 'verified',

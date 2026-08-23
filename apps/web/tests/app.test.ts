@@ -145,7 +145,10 @@ describe('market API', () => {
     expect(response.headers.get('Cache-Control')).toContain('stale-while-revalidate=')
     const body = await response.text()
     expect(body).toContain(TEST_PLUGINS[0]!.name)
-    expect(body).toContain('dsh plugin --profile web add github:')
+    // Source installs are no longer offered anywhere: a plugin without a
+    // published npm package points crawlers at its repository instead.
+    expect(body).toContain('— source: https://github.com/')
+    expect(body).not.toContain('dsh plugin --profile web add github:')
   })
 
   it('withholds the sitemap during a catalog outage instead of shrinking it', async () => {
@@ -279,9 +282,11 @@ describe('market API', () => {
     expect(body.meta).toMatchObject({ total: 1, catalogTotal: TEST_PLUGINS.length })
   })
 
-  it('caps the compatibility catalog listing at 300 plugins while retaining full totals', async () => {
+  it('caps the compatibility catalog listing at 500 plugins while retaining full totals', async () => {
     const result = testCatalogResult()
-    const plugins = Array.from({ length: 305 }, (_, index) => {
+    // TEST_PLUGINS[0] is npm-published, so every clone stays in the
+    // installable v1 listing and only the cap trims the response.
+    const plugins = Array.from({ length: 505 }, (_, index) => {
       const suffix = String(index).padStart(3, '0')
       return {
         ...TEST_PLUGINS[0]!,
@@ -290,7 +295,6 @@ describe('market API', () => {
         owner: 'partner',
         repository: `plugin-${suffix}`,
         url: `https://github.com/partner/plugin-${suffix}`,
-        install: `dsh plugin --profile web add github:partner/plugin-${suffix}`,
       }
     })
     const app = createApp({
@@ -307,10 +311,31 @@ describe('market API', () => {
     }
 
     expect(response.status).toBe(200)
-    expect(body.packages).toHaveLength(300)
+    expect(body.packages).toHaveLength(500)
     expect(body.packages[0]?.name).toBe('plugin-000')
-    expect(body.packages.at(-1)?.name).toBe('plugin-299')
-    expect(body.meta).toMatchObject({ total: 305, catalogTotal: 305 })
+    expect(body.packages.at(-1)?.name).toBe('plugin-499')
+    expect(body.meta).toMatchObject({ total: 505, catalogTotal: 505 })
+  })
+
+  it('keeps browse-only plugins out of the v1 partner listing', async () => {
+    // The partner surface lists only installable plugins; the site keeps
+    // showing everything. TEST_PLUGINS mixes npm-published and source-only
+    // fixtures, so the split falls out of the default catalog.
+    const response = await testApp().request('/api/v1/plugins')
+    const body = await response.json() as {
+      packages: Array<{ id: string; install: string }>
+      meta: { total: number; catalogTotal: number }
+    }
+
+    expect(body.packages.map((plugin) => plugin.id).sort()).toEqual([
+      'Jesse-njx/dsh-crosstalk',
+      'omdsh-dev/dsh-gomoku',
+      'openma-ai/deepseek-harness-tui',
+    ])
+    for (const plugin of body.packages) {
+      expect(plugin.install).not.toContain('github:')
+    }
+    expect(body.meta).toMatchObject({ total: 3, catalogTotal: TEST_PLUGINS.length })
   })
 
   it('keeps published_package and repository_backlink together for old v1 installers', async () => {
@@ -551,11 +576,19 @@ describe('market API', () => {
       url: 'https://github.com/openma-ai/deepseek-harness-tui',
       category: 'ui',
       description: TEST_PLUGINS[0]!.description,
-      install: 'dsh plugin --profile web add github:openma-ai/deepseek-harness-tui',
-      target: 'github:openma-ai/deepseek-harness-tui',
+      install: 'dsh plugin --profile web add @openma/deepseek-harness-tui',
+      target: '@openma/deepseek-harness-tui',
       allowBuild: null,
       added: '2026-08-14',
       stars: 42,
+    })
+    // Registry entries keep browse-only plugins (installed-plugin recognition
+    // depends on them), with the source spec as target and never a build
+    // allowance (issue #159).
+    const browseOnly = body.plugins.find((plugin) => plugin.id === 'MAXeaglet/dsh-bash-terminal')
+    expect(browseOnly).toMatchObject({
+      target: 'github:MAXeaglet/dsh-bash-terminal',
+      allowBuild: null,
     })
   })
 

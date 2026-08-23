@@ -250,16 +250,21 @@ test('documents the subdirectory plugin id contract consistently', async () => {
 
   // CONTRIBUTING.md carries the canonical contract; the skill docs must agree.
   assert.match(contributing, /owner\/repository\/sub\/dir/)
-  assert.match(contributing, /github:owner\/repository#path:sub\/dir/)
+  assert.match(contributing, /<sub\/dir>\/package\.json/)
   assert.match(contributing, /owner--repository--packages--foo\.json/)
   assert.match(contributing, /may not be `\.` or `\.\.`/)
   assert.match(contributing, /one JSON file per plugin/)
   assert.doesNotMatch(contributing, /one JSON file per repository/i)
+  // Store installs come from npm only; the id no longer doubles as a source
+  // install spec, and no doc may teach the github: form again.
+  assert.match(contributing, /npm only/)
+  assert.doesNotMatch(contributing, /github:owner\/repository/)
 
-  // SKILL.md: extended id form, repo-root repository, install spec, filename
-  // slug, id-level uniqueness, and the path-aware branch/commit examples.
+  // SKILL.md: extended id form, repo-root repository, manifest location,
+  // filename slug, id-level uniqueness, and the path-aware branch/commit
+  // examples.
   assert.match(skill, /owner\/repository\/sub\/dir/)
-  assert.match(skill, /github:owner\/repository#path:sub\/dir/)
+  assert.match(skill, /<sub\/dir>\/package\.json/)
   assert.match(skill, /`https:\/\/github\.com\/owner\/repository`/)
   assert.match(skill, /owner--repository--packages--foo\.json/)
   assert.match(skill, /路径段不得是 `\.` 或 `\.\.`/)
@@ -267,16 +272,20 @@ test('documents the subdirectory plugin id contract consistently', async () => {
   assert.match(skill, /add-owner-repository-sub-dir/)
   assert.match(skill, /catalog: add owner\/repository\/packages\/foo/)
   assert.match(skill, /`gh repo edit` 的参数只取 ID 的前两段/)
+  assert.match(skill, /只提供 npm 安装/)
+  assert.doesNotMatch(skill, /github:owner\/repository/)
   assert.doesNotMatch(skill, /重复仓库|插件仓库 ID|插件 ID 或仓库已经存在/)
 
   // submission-reference.md: metadata rules and the PR body template.
   assert.match(reference, /owner\/repository\/sub\/dir/)
   assert.match(reference, /`https:\/\/github\.com\/<owner>\/<repository>`/)
-  assert.match(reference, /github:owner\/repository#path:sub\/dir/)
+  assert.match(reference, /<sub\/dir>\/package\.json/)
   assert.match(reference, /owner--repository--packages--foo\.json/)
   assert.match(reference, /路径段不得是 `\.` 或 `\.\.`/)
   assert.match(reference, /不区分大小写/)
   assert.match(reference, /子目录：`<sub\/dir>`/)
+  assert.match(reference, /只提供 npm 安装/)
+  assert.doesNotMatch(reference, /github:owner\/repository/)
   assert.doesNotMatch(reference, /将 `repository` 固定为 `https:\/\/github\.com\/<id>`/)
   assert.doesNotMatch(reference, /根据全小写 owner 和 repository 生成文件名/)
 })

@@ -391,15 +391,15 @@ curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'
 
 ## 安装插件并计入统计
 
-网站优先提供开源包装 CLI；它会调用官方 DeepSeek Harness 插件命令、校验 profile 的真实安装结果，并把匿名安装结果可靠地上报到排行榜：
+1024 Store 只提供 npm 安装：插件详情页展示的命令安装的是作者发布到 npm、声明 \`dsh.bundle\` 的包；尚未发布 npm 包的插件以浏览模式收录（有仓库链接，无安装命令）。网站优先提供开源包装 CLI；它会调用官方 DeepSeek Harness 插件命令、校验 profile 的真实安装结果，并把匿名安装结果可靠地上报到排行榜：
 
 \`\`\`bash
-dsh1024 plugin --profile web add github:<owner>/<repository>
+dsh1024 plugin --profile web add <npm-package>
 \`\`\`
 
 首次使用先一次性全局安装：\`npm install -g dsh1024\`。它与官方命令只差一个名字——\`plugin\` 之后的参数原样转发给官方 CLI，不增删、不改写、不重排，包装器只负责在结束后核对 profile 并记录一条匿名安装结果。参数不会写入遥测或本地 receipt。
 
-monorepo 子目录插件的标识形如 \`owner/repo/packages/foo\`，对应的安装 spec 是官方的 \`github:owner/repo#path:packages/foo\`，同仓库的兄弟插件各自独立计数。
+monorepo 子目录插件的标识形如 \`owner/repo/packages/foo\`，每个子包发布并安装自己的 npm 包，同仓库的兄弟插件各自独立计数。
 
 统计身份是保存在 \`$DSH_HOME/.dsh-1024store/\` 的随机安装实例 ID，不是实名用户或账号。CLI 不上传命令输出、路径、用户名、环境变量、会话内容或原始错误；可用 \`npx dsh1024 telemetry disable\`、\`DO_NOT_TRACK=1\` 或 \`DSH1024_TELEMETRY=0\`（旧变量名 \`DSH_1024STORE_TELEMETRY\` 仍兼容）关闭。直接使用官方 \`dsh plugin\` 命令仍然可用，但不会计入 DSH 1024Store 安装统计。详细字段、口径、存储和部署方式见 [安装统计设计](docs/install-analytics.md)，CLI 源码见 [\`packages/dsh1024\`](packages/dsh1024)。
 
@@ -425,7 +425,7 @@ npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plug
 
 欢迎把你的 DeepSeek Harness 插件提交到本目录。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，通过 PR 提交一个新的结构化插件文件；自动审查将验证提交范围和最基础的 DeepSeek Harness 插件配置，通过后自动合并，并由 CI 自动同步到网站与本 README。需要修正或下架既有条目时也可以发 PR，静态审查照常运行，但这类 PR 由维护者人工审核后合并。
 
-安装命令：\`dsh1024 plugin --profile web add github:<owner>/<repository>[#path:<sub/dir>]\`（首次使用先 \`npm install -g dsh1024\`）。
+安装命令以插件详情页展示的 npm 包为准：\`dsh1024 plugin --profile web add <npm-package>\`（首次使用先 \`npm install -g dsh1024\`）。
 
 ## 项目定位
 
@@ -534,14 +534,14 @@ ${heroImage(registry, 'en')}
 - **Send a [pull request](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/pulls)** — [submit your plugin](../CONTRIBUTING.md) or improve the website, CLI, marketplace plugin, or catalog pipeline.
 - **[Fork](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/fork)** it and run your own marketplace — see the self-hosting steps above.
 
-Install any plugin and count it on the leaderboard with:
+The 1024 Store installs plugins from npm only: each plugin's detail page shows the command for its published npm package, and a plugin without one is listed browse-only with its repository link. Install any published plugin and count it on the leaderboard with:
 
 \`\`\`bash
 npm install -g dsh1024   # once
-dsh1024 plugin --profile web add github:<owner>/<repository>
+dsh1024 plugin --profile web add <npm-package>
 \`\`\`
 
-Monorepo subpackage plugins add the subdirectory to the spec (for example \`github:owner/repo#path:packages/foo\`), and each sibling is counted on its own. A pull request that adds one new entry is merged automatically once static review passes; one that updates or removes an existing entry passes the same review but waits for maintainer approval. Merged submissions are synced to the website database and into this file automatically; no manual list editing is involved.
+Monorepo subpackage plugins publish and install their own npm packages, and each sibling is counted on its own. A pull request that adds one new entry is merged automatically once static review passes; one that updates or removes an existing entry passes the same review but waits for maintainer approval. Merged submissions are synced to the website database and into this file automatically; no manual list editing is involved.
 
 ## Categories
 

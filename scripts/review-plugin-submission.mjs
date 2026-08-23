@@ -17,8 +17,8 @@ const reviewCommentMarker = '<!-- dsh-plugin-submission-review -->'
 export { validateCatalogEntry }
 
 function repositoryParts(id) {
-  // subPath stays raw: it is compared against git tree paths and later feeds
-  // the pnpm `#path:` install spec; only owner/repository enter API URLs.
+  // subPath stays raw: it is compared against git tree paths, which are
+  // byte-exact; only owner/repository enter API URLs.
   const { owner, repository, subPath } = parsePluginId(id)
   return { owner: encodeURIComponent(owner), repository: encodeURIComponent(repository), subPath }
 }
@@ -66,19 +66,14 @@ export function declaredEntryPoint(manifest) {
  * Classifies whether a git install of this manifest yields a loadable package.
  *
  * pnpm runs `prepare` after a git install and otherwise ships only what is
- * committed. A plugin whose entry point is a build artifact that is neither
- * committed nor produced by `prepare` installs successfully and then fails at
- * profile boot with a module-not-found error — the failure surfaces far from
- * its cause, so the gate names it here.
+ * committed. The source method is collected as a record — no user-facing
+ * surface offers it while installs are npm-only — but the classification must
+ * keep reaching the same verdicts as the website's crawl
+ * (apps/web/worker/lib/install-methods.ts), or the recorded data diverges
+ * between the gate and the catalog.
  *
- * This is a LABEL, not an admission test: the submission is still accepted and
- * the plugin still gets catalogued. The website derives the same verdict from
- * its own crawl (apps/web/worker/lib/install-methods.ts); the two must agree,
- * or the pull-request advisory contradicts the published badge.
- *
- * A committed entry wins the loadability verdict, while the presence of a
- * prepare script independently determines whether the install command needs
- * pnpm's `--allow-build` option.
+ * This is a LABEL, not an admission test: the submission is still accepted
+ * and the plugin still gets catalogued.
  *
  * @returns `{ code, entryPoint, requiresBuildAllowance }`; never throws.
  */
@@ -105,31 +100,21 @@ export function classifyGitInstall(packagePath, manifest, files) {
   return { code: 'entry_missing_no_prepare', entryPoint: entry, requiresBuildAllowance }
 }
 
-/** The author-facing advisory for a classification, or undefined when clean. */
-export function gitInstallAdvisory(code, entryPoint, requiresBuildAllowance, packageName) {
-  const lines = []
-  if (code === 'entry_missing_no_prepare') {
-    lines.push(
-      `The GitHub install method will be published as UNVERIFIED: the entry point ${entryPoint} is not committed `
-      + 'and the package has no prepare script, so `dsh plugin add github:…` installs cleanly and then fails at '
-      + 'startup with ERR_MODULE_NOT_FOUND. Your plugin is catalogued either way. To clear the label, commit the '
-      + 'built entry point, add a self-contained prepare script, or publish a package with `dsh.bundle` to npm.',
-    )
-  }
-  if (code === 'entry_outside_repository') {
-    lines.push(`The entry point ${entryPoint} resolves outside the repository; the GitHub install method will be published as UNVERIFIED.`)
-  }
-  if (code === 'no_entry_declared') {
-    lines.push('This package declares no entry point. That is expected for a bundle whose patch only mounts other packages, but it cannot be confirmed statically, so the GitHub install method will be published as UNKNOWN.')
-  }
-  if (requiresBuildAllowance) {
-    lines.push(
-      packageName
-        ? `This package builds on source install. Use \`dsh plugin --profile web add --allow-build=${packageName} github:…\`; pnpm grants and persists the build permission during that first successful install. Publishing prebuilt code to npm avoids the source build.`
-        : 'This package builds on source install. The install command must pass pnpm’s `--allow-build=<package-name>` option so the first install can run the build script successfully.',
-    )
-  }
-  return lines.length === 0 ? undefined : lines.join('\n\n')
+/**
+ * The author-facing note on how the plugin becomes installable.
+ *
+ * The 1024 Store currently offers npm installs only — the github source
+ * method stays recorded but has no user-facing entry point. This is a LABEL,
+ * not an admission test: the submission is accepted and the plugin catalogued
+ * either way, listed browse-only until a published npm package with
+ * `dsh.bundle` appears.
+ */
+export function installAvailabilityAdvisory(packageName) {
+  const name = packageName === undefined ? 'your package' : `\`${packageName}\``
+  return 'The 1024 Store installs plugins from npm only. Until '
+    + `${name} (with its \`dsh.bundle\` declaration) is published to npm, this plugin is listed `
+    + 'browse-only — visitors see the repository link but no install command. The catalog '
+    + 'detects a newly published package automatically; no follow-up pull request is needed.'
 }
 
 export async function findHarnessBundle(tree, readBlob, subPath = '') {
@@ -184,10 +169,10 @@ export async function findHarnessBundle(tree, readBlob, subPath = '') {
         continue
       }
       // Classification never rejects: the entry point being unobtainable is a
-      // published label, not grounds for refusing the submission. Bundle
+      // recorded label, not grounds for refusing the submission. Bundle
       // selection therefore stays independent of the verdict — the first
-      // manifest declaring dsh.bundle wins, matching what the website's crawler
-      // picks for the same repository.
+      // manifest declaring dsh.bundle wins, matching what the website's
+      // crawler picks for the same repository.
       const gitInstall = classifyGitInstall(packageFile.path, manifest, files)
       return {
         packagePath: packageFile.path,
@@ -437,21 +422,22 @@ async function main() {
     // submission may claim, so it must not be attacker-controlled.
     const categories = JSON.parse(await readFile(path.join(scriptRoot, 'catalog/categories.json'), 'utf8'))
     const categoryIds = new Set(categories?.categories?.map(category => category?.id))
-    // Upstream's change-set loop stays; the install classification rides along
-    // per reviewed entry and is reported, never enforced.
+    // Upstream's change-set loop stays; the install-availability note rides
+    // along per reviewed entry and is reported, never enforced. The git
+    // classification is logged for the record — installs are npm-only, so it
+    // no longer reaches the author-facing comment.
     const advisories = []
     for (const target of submission.reviewables) {
       file = target
       const entry = await readCatalogEntry(root, target)
       validateCatalogEntry(entry, target, categoryIds)
       const result = await reviewRepository(entry, client)
-      const { code, entryPoint, requiresBuildAllowance } = result.gitInstall
+      const { code, requiresBuildAllowance } = result.gitInstall
       console.log(
         `PASS ${entry.id}: ${result.packagePath} -> ${result.patchPath}`
         + ` [git-install: ${code}${requiresBuildAllowance ? ', requires build allowance' : ''}]`,
       )
-      const advisory = gitInstallAdvisory(code, entryPoint, requiresBuildAllowance, result.packageName)
-      if (advisory !== undefined) advisories.push(`**${entry.id}** — ${advisory}`)
+      advisories.push(`**${entry.id}** — ${installAvailabilityAdvisory(result.packageName)}`)
     }
     for (const target of submission.deletions) {
       console.log(`PASS delete ${target}`)
@@ -468,7 +454,7 @@ async function main() {
         ].join('\n')
       const detail = [
         summary,
-        ...(advisories.length === 0 ? [] : ['', '### Install method advisory', '', ...advisories]),
+        ...(advisories.length === 0 ? [] : ['', '### Install availability', '', ...advisories]),
       ].join('\n')
       await upsertReviewComment(
         repository,

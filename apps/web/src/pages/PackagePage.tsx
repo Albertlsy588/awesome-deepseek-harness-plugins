@@ -28,6 +28,7 @@ import remarkGfm from 'remark-gfm'
 import { CategoryTag } from '../components/CategoryTag'
 import { InstallMethods } from '../components/InstallMethods'
 import { InstallOptions } from '../components/InstallOptions'
+import { InstallUnavailable } from '../components/InstallUnavailable'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { OwnerAvatar } from '../components/OwnerAvatar'
 import { pluginDetailPath, pluginSourceUrl } from '../../worker/lib/plugin-id'
@@ -35,6 +36,7 @@ import {
   ApiError,
   getPackage,
   getPackageSummary,
+  installOffered,
   npmPackageUrl,
   repositoryName,
   type PackageDetail,
@@ -343,11 +345,18 @@ export function PackagePage() {
         <div className="detail-primary">
           <section className="detail-section install-section" aria-labelledby="install-heading">
             <h2 id="install-heading">{t('install')}</h2>
-            {/* Verified methods when the crawler has reached this plugin; the
-                plain two-option form until then. */}
-            {summary.installMethods && summary.installMethods.length > 0
-              ? <InstallMethods methods={summary.installMethods} pluginId={summary.id} />
-              : <InstallOptions plugin={summary} />}
+            {/* Verified npm methods when the crawler has reached this plugin;
+                the plain two-option form until then. A plugin without a
+                published npm package is browse-only — the store no longer
+                offers source installs — so it gets the repository link
+                instead of a command. */}
+            {summary.installMethods
+              ? summary.installMethods.some((method) => method.kind === 'npm')
+                ? <InstallMethods methods={summary.installMethods} pluginId={summary.id} />
+                : <InstallUnavailable repositoryUrl={summary.url} />
+              : installOffered(summary)
+                ? <InstallOptions plugin={summary} />
+                : <InstallUnavailable repositoryUrl={summary.url} />}
           </section>
 
           <section className="detail-section install-activity-section" aria-labelledby="install-activity-heading">

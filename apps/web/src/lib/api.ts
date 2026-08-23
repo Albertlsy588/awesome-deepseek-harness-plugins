@@ -1,4 +1,4 @@
-import type { PluginInstallMethod } from '../../worker/lib/install-methods'
+import { offeredInstallCommand, type PluginInstallMethod } from '../../worker/lib/install-methods'
 import {
   normalizePluginId,
   parsePluginId,
@@ -363,6 +363,24 @@ export function trackedInstallCommand(plugin: InstallCommandPlugin): string {
 export function officialInstallCommand(plugin: InstallCommandPlugin): string {
   if (isSelfPlugin(plugin)) return SELF_OFFICIAL_COMMAND
   return plugin.install ?? `dsh plugin --profile web add ${installSpec(plugin)}`
+}
+
+/**
+ * Whether the site offers this plugin's install command at all.
+ *
+ * Only npm installs are offered; a plugin whose official command is still a
+ * `github:` source install is browse-only, and every surface (copy buttons,
+ * the detail page, the embedded store) hides the install affordance for it.
+ * The rule itself lives in worker/lib/install-methods.ts so the crawlable
+ * shell and the hydrated page can never disagree.
+ */
+export function installOffered(
+  plugin: InstallCommandPlugin & Partial<Pick<RegistryPlugin, 'installMethods'>>,
+): boolean {
+  return offeredInstallCommand({
+    install: officialInstallCommand(plugin),
+    installMethods: plugin.installMethods,
+  }) !== null
 }
 
 

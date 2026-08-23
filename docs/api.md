@@ -34,10 +34,15 @@ shims.
 
 Query parameters: `q` (search), `category`, `sort`.
 
-Returns the catalog listing used by the website: `packages`, `rankings`, `categories`, and
-`meta`. For compatibility, the response structure remains unchanged, but `packages` contains
-at most the first 300 entries after filtering and sorting. `meta.total` still reports the full
-number of matching plugins and `meta.catalogTotal` reports the full unfiltered catalog size.
+Returns the catalog listing for external consumers: `packages`, `rankings`, `categories`,
+and `meta`. For compatibility, the response structure remains unchanged, but the content is
+the installable view: only plugins with a published npm package (the `dsh.bundle`-declaring
+latest manifest) are listed, star-ranked by default, and `packages` contains at most the
+first 500 entries after filtering and sorting — every listed entry therefore carries a
+working npm install command. Browse-only plugins (no npm package) do not appear here; they
+remain on the website and in `/api/v1/registry`. `meta.total` reports the number of matching
+installable plugins and `meta.catalogTotal` reports the full catalog size, installable or
+not.
 For npm install methods, this frozen v1 projection emits both the current
 `published_package` code and its deprecated `repository_backlink` alias for the same
 `spec`/`revision`. Existing consumers may continue matching the old code; new integrations
@@ -162,19 +167,23 @@ Compact full-catalog registry for the `dsh1024` in-DSH marketplace plugin, the R
 ```
 
 `stars` is `null` when unknown. A monorepo subpackage plugin's `id` carries the in-repo
-path, its `url` stays the repository-root URL, its `name` conventionally is the last id
-segment, and its GitHub source spec gains `#path:<sub/dir>`; repository-level GitHub metrics
-such as `stars` are shared by all plugins of the same repository. The registry is projected
-from the same KV snapshot as the other read endpoints. The `install` field carries the
-preferred official DeepSeek Harness CLI command: a published npm package declaring
-`dsh.bundle` wins, otherwise it carries the GitHub source command. A source package with a
-`prepare` script includes `--allow-build=<package-name>` so its first install can build
-successfully. The website derives the tracked wrapper command at the presentation layer and
+path, its `url` stays the repository-root URL, and its `name` conventionally is the last id
+segment; repository-level GitHub metrics such as `stars` are shared by all plugins of the
+same repository. The registry is projected from the same KV snapshot as the other read
+endpoints. The `install` field carries the official DeepSeek Harness CLI command on record:
+the npm package command when the plugin has a published package declaring `dsh.bundle`,
+otherwise the GitHub source command as a historical record. Only the npm form is offered as
+an install method — the store and the website no longer offer source installs, so a plugin
+without a published npm package is browse-only. `allowBuild` is permanently `null`: the
+value used to quote a third-party package name, and one unvalidatable name invalidated the
+whole registry for every client (issue #159). The key itself stays for frozen-shape
+compatibility. The website derives the tracked wrapper command at the presentation layer and
 never stores it here; that command is the same official command under a different name
 (`dsh1024 plugin --profile web add <spec>`, after a one-off `npm install -g dsh1024`).
-`target` and `allowBuild` are the separately validated structured values consumed by the
-in-DSH installer; it never executes the display command as shell text. Older registry clients
-that do not understand these fields continue to derive the GitHub fallback from `id` + `url`.
+`target` is the separately validated structured value consumed by the in-DSH installer; it
+never executes the display command as shell text, and current store clients install only
+npm targets. Older registry clients that do not understand these fields continue to derive
+the GitHub fallback from `id` + `url`.
 
 ## POST /api/v1/install-events
 

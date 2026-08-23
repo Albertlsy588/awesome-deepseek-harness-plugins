@@ -193,40 +193,47 @@ test('a monorepo subpackage installs its own directory, not the repository root'
 })
 
 test('invalid API data cannot extend the installation allowlist', () => {
-  assert.throws(
-    () => validateRegistry({
-      ...registry,
-      plugins: [{ ...registry.plugins[0], target: 'github:attacker/other' }],
-    }),
-    /invalid plugin/,
-  )
-  assert.throws(
-    () => validateRegistry({
-      ...registry,
-      plugins: [{ ...registry.plugins[0], allowBuild: 'plugin;unsafe' }],
-    }),
-    /invalid plugin/,
-  )
-  assert.throws(
-    () => validateRegistry({
-      ...registry,
-      plugins: [{ ...registry.plugins[0], url: 'https://example.com/owner/repo' }],
-    }),
-    /invalid plugin/,
-  )
-  assert.throws(
-    () => validateRegistry({
-      ...registry,
-      plugins: [{ ...registry.plugins[0], category: 'unlisted' }],
-    }),
-    /invalid plugin/,
-  )
+  // Each malformed entry is dropped, never installed. With nothing valid
+  // left, the registry as a whole is refused.
+  const invalidEntries = [
+    { ...registry.plugins[0], target: 'github:attacker/other' },
+    { ...registry.plugins[0], allowBuild: 'plugin;unsafe' },
+    { ...registry.plugins[0], url: 'https://example.com/owner/repo' },
+    { ...registry.plugins[0], category: 'unlisted' },
+  ]
+  for (const entry of invalidEntries) {
+    assert.throws(
+      () => validateRegistry({ ...registry, plugins: [entry] }),
+      /no valid plugins/,
+    )
+  }
   assert.throws(() => validateRegistry({ ...registry, count: 2 }), /count does not match/)
   assert.throws(
     () => validateRegistry({ ...registry, categories: { tools: { en: 'Tools' } } }),
     /categories are invalid/,
   )
   assert.throws(() => validateRegistry({ ...registry, plugins: [] }), /plugins are empty/)
+})
+
+test('one invalid entry is skipped instead of invalidating the whole registry', () => {
+  // issue #159: a single catalog entry whose allowBuild failed validation
+  // 503'd every client's store. The bad entry must drop out while everything
+  // else keeps working, and the returned count must describe the surviving
+  // plugins so a persisted copy re-validates cleanly.
+  const bad = {
+    ...registry.plugins[0],
+    id: 'whoisddd/dsh-approval-notify',
+    url: 'https://github.com/whoisddd/dsh-approval-notify',
+    target: 'github:whoisddd/dsh-approval-notify',
+    allowBuild: '@WhoisDDD/dsh-approval-notify',
+  }
+  const validated = validateRegistry({
+    ...registry,
+    count: 2,
+    plugins: [...registry.plugins, bad],
+  })
+  assert.equal(validated.count, 1)
+  assert.deepEqual(validated.plugins.map(plugin => plugin.id), ['owner/repo'])
 })
 
 test('revalidation goes to the network even when the cache is still fresh', async () => {

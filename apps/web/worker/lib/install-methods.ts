@@ -8,6 +8,13 @@
  * on npm) and this module derives the *verdicts* from them, so a
  * change of judgement costs a deploy rather than a re-crawl of every plugin.
  *
+ * The github method stays derived and collected here, but no user-facing
+ * surface OFFERS it any more: its `--allow-build` grant quoted a
+ * repository-author-controlled package name, and one unvalidatable value
+ * poisoned the whole registry for every client (issue #159). The front end
+ * filters to npm via offeredInstallCommand below; re-opening source installs
+ * later is a display-layer change, not a data change.
+ *
  * Must stay aligned with the classifier in scripts/review-plugin-submission.mjs,
  * which reaches the same verdicts from the pull-request gate. The two are
  * cross-checked by tests/install-methods.test.ts.
@@ -164,17 +171,41 @@ function command(spec: string, buildPackage?: string | null): string {
   return `dsh plugin --profile web add${allowance} ${spec}`
 }
 
+/**
+ * The install command the site and the store offer for a plugin, or null when
+ * the plugin is browse-only.
+ *
+ * Offered means npm. A `github:` source command may still appear in the frozen
+ * v1 `install` field — it is the official record for a plugin without an npm
+ * package — but no surface offers it as an install method any more. Shared by
+ * the worker's crawlable shell and the React app so the two can never disagree
+ * about which plugins are installable.
+ */
+export function offeredInstallCommand(plugin: {
+  install: string
+  installMethods?: PluginInstallMethod[]
+}): string | null {
+  const npm = plugin.installMethods?.find((method) => method.kind === 'npm')
+  if (npm) return npm.command
+  // Crawled and no npm method: browse-only, even if the snapshot predates the
+  // npm-only switch and still carries a github method.
+  if (plugin.installMethods) return null
+  // Pre-verification snapshots carry only the command string; a github: source
+  // command is the record of a plugin nobody can install from the store.
+  return /\bgithub:/.test(plugin.install) ? null : plugin.install
+}
+
 const SELF_PACKAGE_PLUGIN_ID = 'imsai-sh/awesome-deepseek-harness-plugins/packages/dsh1024'
 
 /**
- * Derives the install methods shown for a plugin. Pure: no I/O, so the rules
- * can be exercised exhaustively in tests and changed without a re-crawl.
+ * Derives the install methods recorded for a plugin. Pure: no I/O, so the
+ * rules can be exercised exhaustively in tests and changed without a re-crawl.
  *
  * An npm method is emitted when the registry's latest package declares a DSH
  * bundle. Its repository metadata is retained as a diagnostic fact but is not
  * an installability rule: npm package names are the installation identity.
- * Published npm is preferred because it is prebuilt and avoids git lifecycle
- * builds; GitHub remains the source-install fallback.
+ * The github method stays derived as the source-install record, but only the
+ * npm method is OFFERED to users — see offeredInstallCommand.
  */
 export function deriveInstallMethods(
   id: string,

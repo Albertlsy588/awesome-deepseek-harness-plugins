@@ -4211,6 +4211,11 @@ main {
   font-size: 13px;
 }
 
+.seo-shell-install-unavailable {
+  color: var(--subtle);
+  font-size: 14px;
+}
+
 .seo-shell-facts {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -4570,6 +4575,29 @@ main {
   min-width: 0;
   padding-left: 10px;
   border-left: 2px solid var(--line);
+}
+
+/* Browse-only plugin: no npm package published, so no command is offered —
+   only the pointer at the source repository. */
+.install-unavailable {
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  gap: 8px;
+  line-height: 1.6;
+  padding: 14px 16px;
+}
+
+.install-unavailable p {
+  margin: 0;
+}
+
+.install-unavailable a {
+  align-self: flex-start;
+  font-weight: 600;
 }
 
 .install-method .install-options {

@@ -119,6 +119,21 @@ test('installed dependencies map to catalog ids without exposing their specs', (
   ])
 })
 
+test('a source-installed plugin stays recognized after its entry goes npm-only', () => {
+  // The user installed from GitHub before the store switched to npm-only
+  // installs; the registry entry now advertises the npm target, but the
+  // manifest spec still points at the repository. Recognition must survive
+  // through the URL scan, or the store shows an installed plugin as absent.
+  const plugins = [{
+    id: 'owner/legacy', name: 'legacy', owner: 'owner',
+    url: 'https://github.com/owner/legacy', category: 'tools', description: { en: 'legacy' },
+    install: 'dsh plugin add published-legacy', target: 'published-legacy', added: '2026-01-01',
+  }]
+  const installed = { legacy: 'github:owner/legacy&commit=abc123' }
+
+  assert.deepEqual(installedPluginIds(installed, plugins), ['owner/legacy'])
+})
+
 test('plugin installs reuse the pnpm store already linked to the profile', async () => {
   const profile = await mkdtemp(join(tmpdir(), 'dsh1024-store-dir-'))
   const modules = join(profile, 'node_modules')
