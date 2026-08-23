@@ -45,7 +45,10 @@ export function InstallMethods({ methods, pluginId }: {
         : t('installChecking')
     return (
       <div className="bridge-install-panel">
-        <BridgeInstallButton pluginId={pluginId} />
+        {/* The command's last token, not the bare spec: the store's own
+            package pins `dsh1024@latest` there so updates cross pre-1.0
+            minor ranges. */}
+        <BridgeInstallButton pluginId={pluginId} target={preferred.command.split(' ').at(-1)} />
         <p>npm · {status}</p>
       </div>
     )

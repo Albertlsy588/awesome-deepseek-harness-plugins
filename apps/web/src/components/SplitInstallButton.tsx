@@ -8,7 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { installOffered, officialInstallCommand, trackedInstallCommand, type RegistryPlugin } from '../lib/api'
+import { installOffered, installTarget, officialInstallCommand, trackedInstallCommand, type RegistryPlugin } from '../lib/api'
 import { pluginSourceUrl } from '../../worker/lib/plugin-id'
 import { useI18n } from '../lib/i18n'
 import { useEmbedBridge } from '../lib/embedBridge'
@@ -184,7 +184,11 @@ export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'i
   if (connected) {
     return (
       <div className="split-install">
-        <BridgeInstallButton pluginId={plugin.id} className="split-install-main bridge-local-install" />
+        <BridgeInstallButton
+          pluginId={plugin.id}
+          target={installTarget(plugin) ?? undefined}
+          className="split-install-main bridge-local-install"
+        />
       </div>
     )
   }

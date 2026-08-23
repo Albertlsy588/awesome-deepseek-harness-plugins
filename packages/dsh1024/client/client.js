@@ -14,6 +14,7 @@ const BRIDGE_PROTOCOL = 'dsh1024-bridge'
 const BRIDGE_VERSION = 1
 const READY_TIMEOUT_MS = 5_000
 const PLUGIN_ID_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/
+const NPM_TARGET_RE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*(?:@[A-Za-z0-9^~><=.*][A-Za-z0-9^~><=.*-]*)?$/
 
 const zh = {
   tab: '1024 Store', connected: '商店已连接', connecting: '正在连接商店', unavailable: '商店无法嵌入',
@@ -132,6 +133,10 @@ function validBridgeRequest(message) {
     && typeof message.pluginId === 'string'
     && message.pluginId.length <= 201
     && PLUGIN_ID_RE.test(message.pluginId)
+    // The page may name the npm target directly (npm-only installs); the
+    // local endpoint re-validates the grammar before executing anything.
+    && (message.target === undefined
+      || (typeof message.target === 'string' && message.target.length <= 278 && NPM_TARGET_RE.test(message.target)))
 }
 
 function MarketShell({ locale, onClose, activation }) {
@@ -214,7 +219,9 @@ function MarketShell({ locale, onClose, activation }) {
       reply({ ok: false, error: copy.busy })
       return
     }
-    if (!window.confirm(copy.confirmInstall + ' “' + message.pluginId + '”?')) {
+    // The confirmation names what actually gets executed: the npm target when
+    // the page supplied one, the catalog id otherwise.
+    if (!window.confirm(copy.confirmInstall + ' “' + (message.target ?? message.pluginId) + '”?')) {
       reply({ ok: false, error: copy.cancelled })
       return
     }
@@ -223,7 +230,9 @@ function MarketShell({ locale, onClose, activation }) {
     fetch('/dsh1024/install', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: message.pluginId }),
+      body: JSON.stringify(message.target === undefined
+        ? { id: message.pluginId }
+        : { id: message.pluginId, target: message.target }),
     })
       .then(responseJson)
       .then(({ status, body }) => {

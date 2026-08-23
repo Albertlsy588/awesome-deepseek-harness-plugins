@@ -48,7 +48,7 @@ interface EmbedBridgeValue {
   installedPlugins: BridgeInstalledPlugin[] | null
   installedError: string
   refreshInstalled: () => Promise<void>
-  install: (pluginId: string) => Promise<BridgeResult>
+  install: (pluginId: string, target?: string) => Promise<BridgeResult>
   readCatalogPageCache: () => Promise<PluginsPage | null>
   writeCatalogPageCache: (page: PluginsPage) => Promise<void>
 }
@@ -209,7 +209,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
 
   const sendRequest = useCallback((
     action: 'install' | 'installed' | 'catalog-cache-read' | 'catalog-cache-write',
-    options: { pluginId?: string; catalogPage?: PluginsPage } = {},
+    options: { pluginId?: string; target?: string; catalogPage?: PluginsPage } = {},
   ): Promise<BridgeResult> => {
     const port = portRef.current
     if (port === null) {
@@ -230,6 +230,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
         action,
       }
       if (options.pluginId !== undefined) message.pluginId = options.pluginId
+      if (options.target !== undefined) message.target = options.target
       if (options.catalogPage !== undefined) message.catalogPage = options.catalogPage
       port.postMessage(message)
     })
@@ -254,8 +255,12 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
     void refreshInstalled()
   }, [connected, refreshInstalled])
 
-  const install = useCallback(async (pluginId: string) => {
-    const result = await sendRequest('install', { pluginId })
+  // The page names the npm target alongside the catalog id: the page and the
+  // local endpoint read the same first-party catalog API, so the endpoint
+  // executes the named package directly instead of re-fetching the registry
+  // to re-derive it (issue #159's failure mode).
+  const install = useCallback(async (pluginId: string, target?: string) => {
+    const result = await sendRequest('install', { pluginId, target })
     if (result.ok) {
       setInstalledPluginIds((current) => [...new Set([...(current ?? []), pluginId])].sort())
       void refreshInstalled()

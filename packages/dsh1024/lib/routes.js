@@ -11,6 +11,20 @@ import { resolveDshHome } from './shared/files.js';
 import { readCatalogPageCache, writeCatalogPageCache } from './catalog-cache.js';
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/;
 const PACKAGE_RE = /^(?:@[a-z0-9._-]+\/)?[A-Za-z0-9._-]+$/;
+/**
+ * The one install-target grammar the store executes when the embedded page
+ * sends the target along with the request: an npm package name, optionally
+ * with a version, tag, or simple range. Everything else — github:, file:,
+ * URLs, aliases, workspace specs — is refused, so the page can only ask for
+ * what the official CLI would treat as a registry install.
+ */
+// Leading characters are pinned to alphanumerics so a "target" can never
+// reach the official CLI looking like a flag (`-g`, `--registry=…`).
+const DIRECT_INSTALL_TARGET_RE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*(?:@[A-Za-z0-9^~><=.*][A-Za-z0-9^~><=.*-]*)?$/;
+/** Whether a page-supplied install target is an npm package spec. */
+export function isDirectInstallTarget(value) {
+    return typeof value === 'string' && value.length <= 214 + 64 && DIRECT_INSTALL_TARGET_RE.test(value);
+}
 const COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
 const BODY_LIMIT_BYTES = 4 * 1024;
 const CATALOG_CACHE_BODY_LIMIT_BYTES = 4 * 1024 * 1024;
@@ -436,29 +450,54 @@ export function mountMarketRoutes(webServer, config) {
                     return;
                 }
                 try {
-                    // Resolved by id: a repository URL is no longer unique now that one
-                    // monorepo can contribute several plugins.
                     const body = await readJsonBody(request);
                     const requestedId = typeof body.id === 'string' ? body.id.toLowerCase() : '';
-                    const { registry } = await loadRegistry(config.registryUrl, fetch, { dshHome });
-                    const plugin = registry.plugins.find(entry => entry.id.toLowerCase() === requestedId);
-                    if (plugin === undefined) {
-                        sendJson(response, 400, { error: 'plugin is not in the 1024 Store registry' });
-                        return;
+                    let target;
+                    let eventId;
+                    let extraArgs;
+                    if (body.target !== undefined) {
+                        // The embedded store page names the npm target directly. The page
+                        // and this endpoint trust the same first-party catalog API, so a
+                        // second registry round-trip adds nothing but a failure mode
+                        // (issue #159) — the grammar check is the whole gate: only an npm
+                        // package spec ever reaches the official CLI.
+                        if (!isDirectInstallTarget(body.target)) {
+                            sendJson(response, 400, { error: 'install target must be an npm package spec' });
+                            return;
+                        }
+                        // Telemetry hygiene: the attribution id must look like a catalog
+                        // plugin id, or the anonymous event would carry arbitrary text.
+                        if (!/^[a-z0-9_.-]+(?:\/[a-z0-9_.-]+)+$/.test(requestedId) || requestedId.length > 201) {
+                            sendJson(response, 400, { error: 'plugin id is invalid' });
+                            return;
+                        }
+                        target = body.target;
+                        eventId = requestedId;
+                        extraArgs = [];
                     }
-                    const target = installTarget(plugin);
-                    // Only npm packages are installable from the store. A github: target
-                    // marks a browse-only entry — kept in the registry so an earlier
-                    // source install is still recognized — and the store UI offers no
-                    // install for it, so this refusal only fires for a stale or
-                    // hand-crafted page.
-                    if (target.startsWith('github:')) {
-                        sendJson(response, 400, { error: 'this plugin has not published an npm package; source installs are not offered by the store' });
-                        return;
+                    else {
+                        // Older embedded pages send only the catalog id; the registry
+                        // entry then decides the executed target, as it always has.
+                        const { registry } = await loadRegistry(config.registryUrl, fetch, { dshHome });
+                        const plugin = registry.plugins.find(entry => entry.id.toLowerCase() === requestedId);
+                        if (plugin === undefined) {
+                            sendJson(response, 400, { error: 'plugin is not in the 1024 Store registry' });
+                            return;
+                        }
+                        target = installTarget(plugin);
+                        // Browse-only entry: no npm package. The store UI offers no
+                        // install for it, so this refusal only fires for a stale or
+                        // hand-crafted page.
+                        if (target.startsWith('github:')) {
+                            sendJson(response, 400, { error: 'this plugin has not published an npm package; source installs are not offered by the store' });
+                            return;
+                        }
+                        eventId = pluginEventId(plugin);
+                        extraArgs = installExtraArgs(plugin);
                     }
                     mutating = true;
                     try {
-                        const result = await runReportedPluginCommand(config.profile, pluginEventId(plugin), 'install', target, progress, installExtraArgs(plugin));
+                        const result = await runReportedPluginCommand(config.profile, eventId, 'install', target, progress, extraArgs);
                         const ok = result.exitCode === 0 && !result.timedOut;
                         sendJson(response, ok ? 200 : 502, {
                             ok,

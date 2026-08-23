@@ -15,6 +15,8 @@ export interface MarketRouteConfig {
     updateUrl: string;
     embedUrl: string;
 }
+/** Whether a page-supplied install target is an npm package spec. */
+export declare function isDirectInstallTarget(value: unknown): value is string;
 /** Read the store that pnpm used to link an existing profile's node_modules. */
 export declare function readProfilePnpmStoreDir(directory: string): string | undefined;
 /**

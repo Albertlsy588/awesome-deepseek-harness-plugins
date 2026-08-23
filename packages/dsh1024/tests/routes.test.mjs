@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   installedPluginIds,
+  isDirectInstallTarget,
   isTrustedSameOrigin,
   mountMarketRoutes,
   readProfilePnpmStoreDir,
@@ -117,6 +118,25 @@ test('installed dependencies map to catalog ids without exposing their specs', (
     'owner/mono/packages/child',
     'owner/npm-plugin',
   ])
+})
+
+test('a page-supplied install target must be an npm package spec', () => {
+  // The embedded page names the npm target directly and this grammar is the
+  // whole gate before the official CLI runs — nothing that is not a registry
+  // install may pass.
+  for (const target of [
+    'dsh-plugin', '@scope/dsh-plugin', 'dsh-plugin@1.2.0', '@scope/dsh-plugin@latest',
+    'dsh1024@latest', 'dsh-plugin@^1.0.0',
+  ]) {
+    assert.equal(isDirectInstallTarget(target), true, target)
+  }
+  for (const target of [
+    'github:owner/repo', 'github:owner/repo#path:sub/dir', 'file:../evil', 'link:/tmp/x',
+    'https://evil.example/pkg.tgz', 'workspace:*', 'npm:alias@1', '@Scope/upper-scope',
+    '-g', '--registry=https://evil.example', 'a b', '', 42, null, undefined,
+  ]) {
+    assert.equal(isDirectInstallTarget(target), false, String(target))
+  }
 })
 
 test('a source-installed plugin stays recognized after its entry goes npm-only', () => {
