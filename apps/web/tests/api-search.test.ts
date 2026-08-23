@@ -79,7 +79,7 @@ describe('plugin search API', () => {
     expect(payload.results[0]?.name).toBe('dsh-gomoku')
     // The install field must stay the official dsh CLI command, matching the
     // registry projection (wrapper commands are presentation-layer only).
-    expect(payload.results[0]?.install).toContain('dsh plugin --profile web add github:')
+    expect(payload.results[0]?.install).toMatch(/^dsh plugin --profile web add \S+$/)
     database.close()
   })
 

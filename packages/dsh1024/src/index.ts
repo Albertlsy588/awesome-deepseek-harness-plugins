@@ -17,6 +17,8 @@ export interface Config {
   updateUrl?: string
   /** Store page embedded by the local shell. HTTP is accepted only on loopback for development. */
   embedUrl?: string
+  /** Show the 1024 Store entry in the main sidebar. The settings tabs stay either way. */
+  sidebarEntry?: boolean
 }
 
 interface MarketContext extends Context {
@@ -40,6 +42,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     registryUrl: config.registryUrl ?? DEFAULT_REGISTRY_URL,
     updateUrl: config.updateUrl ?? DEFAULT_UPDATE_URL,
     embedUrl: config.embedUrl ?? DEFAULT_EMBED_URL,
+    sidebarEntry: config.sidebarEntry ?? true,
   }
   ctx.inject(['webServer'], hostContext => {
     const host = hostContext as MarketContext

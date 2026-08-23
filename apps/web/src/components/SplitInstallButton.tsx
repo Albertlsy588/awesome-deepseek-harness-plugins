@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Copy } from 'lucide-react'
+import { Check, ChevronDown, Code2, Copy } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -8,7 +8,8 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { officialInstallCommand, trackedInstallCommand, type RegistryPlugin } from '../lib/api'
+import { installOffered, officialInstallCommand, trackedInstallCommand, type RegistryPlugin } from '../lib/api'
+import { pluginSourceUrl } from '../../worker/lib/plugin-id'
 import { useI18n } from '../lib/i18n'
 import { useEmbedBridge } from '../lib/embedBridge'
 import { BridgeInstallButton } from './BridgeInstallButton'
@@ -25,9 +26,9 @@ const VIEWPORT_MARGIN = 8
 // The menu overlaps the toggle slightly, the way the anchored version did.
 const ANCHOR_OVERLAP = 6
 
-export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'id' | 'install'> }) {
+export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'id' | 'install' | 'url'> }) {
   const { t } = useI18n()
-  const { connected } = useEmbedBridge()
+  const { connected, installedPluginIds } = useEmbedBridge()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState<Kind | null>(null)
   const [placement, setPlacement] = useState<Placement | null>(null)
@@ -127,6 +128,44 @@ export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'i
     items[next]?.focus()
   }
 
+  // Browse-only plugin: only npm installs are offered and this plugin has
+  // none, so there is no command to copy and no local install to trigger.
+  // Inside the embedded store the one-click button's place is taken by a
+  // source-install link so the row keeps an action; on the site the empty
+  // span keeps the grid cell, matching a command-less repository row.
+  // Placed after the hooks so the hook order never varies.
+  if (!installOffered(plugin)) {
+    if (connected) {
+      // Already installed (from source, before npm-only): the row says so —
+      // offering "install from source" on something that is already on the
+      // machine would be absurd. BridgeInstallButton renders the disabled
+      // installed state for it.
+      if (installedPluginIds?.includes(plugin.id)) {
+        return (
+          <div className="split-install">
+            <BridgeInstallButton pluginId={plugin.id} className="split-install-main bridge-local-install" />
+          </div>
+        )
+      }
+      return (
+        <div className="split-install">
+          <a
+            className="split-install-main bridge-source-install"
+            href={pluginSourceUrl(plugin.id, plugin.url)}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={t('sourceInstall')}
+            title={t('sourceInstall')}
+          >
+            <Code2 size={16} aria-hidden="true" />
+            <span>{t('sourceInstall')}</span>
+          </a>
+        </div>
+      )
+    }
+    return <span />
+  }
+
   const menu = open ? createPortal(
     <div
       className="split-install-menu"
@@ -156,7 +195,11 @@ export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'i
   if (connected) {
     return (
       <div className="split-install">
-        <BridgeInstallButton pluginId={plugin.id} className="split-install-main bridge-local-install" />
+        <BridgeInstallButton
+          pluginId={plugin.id}
+          command={officialInstallCommand(plugin)}
+          className="split-install-main bridge-local-install"
+        />
       </div>
     )
   }

@@ -3,12 +3,24 @@ import { useState } from 'react'
 import { useEmbedBridge } from '../lib/embedBridge'
 import { useI18n } from '../lib/i18n'
 
+/**
+ * One-click install button for the embedded store.
+ *
+ * A single click installs — no blocking confirmation anywhere: the local
+ * shell's `window.confirm` used to freeze the whole flow when the host
+ * suppressed the native dialog. The install console shows the exact command
+ * and its output while the install runs, which is where accountability
+ * lives now.
+ */
 export function BridgeInstallButton({
   pluginId,
+  command,
   className = 'button button-primary',
   iconOnly = false,
 }: {
   pluginId: string
+  /** Full official install command; the local endpoint forwards it verbatim. */
+  command?: string
   className?: string
   iconOnly?: boolean
 }) {
@@ -23,7 +35,7 @@ export function BridgeInstallButton({
     setState('installing')
     setError('')
     try {
-      const result = await install(pluginId)
+      const result = await install(pluginId, command)
       if (!result.ok) throw new Error(result.error || t('bridgeInstallFailed'))
       setState('installed')
     } catch (installError) {
@@ -49,7 +61,7 @@ export function BridgeInstallButton({
       onClick={runInstall}
       disabled={state === 'installing' || alreadyInstalled}
       aria-label={label}
-      title={error || label}
+      title={error || command || label}
     >
       <Icon size={iconOnly ? 15 : 16} aria-hidden="true" />
       {!iconOnly && <span>{label}</span>}

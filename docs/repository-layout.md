@@ -45,8 +45,8 @@ One structured file per plugin gives this repository:
 - schema validation before anything reaches production;
 - smaller pull-request diffs and fewer merge conflicts;
 - one place to review bilingual metadata;
-- deterministic derivation of owner and install commands (path-aware: a monorepo
-  subdirectory id derives a `github:owner/repo#path:sub/dir` install spec);
+- deterministic derivation of owner and source location (path-aware: a monorepo
+  subdirectory id pins the plugin's manifest at `<sub/dir>/package.json`);
 - an auditable git history for every curated entry.
 
 The files are an input, not a database: after a submission merges, the catalog-sync workflow pushes the full set to `POST /api/v1/catalog/sync`, the Worker reconciles it into D1 as the `github_pr` source, and the README projections are rebuilt from the live catalog API.

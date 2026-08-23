@@ -1,12 +1,19 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdtempSync } from 'node:fs'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+// Isolated before the module under test resolves anything: routes read
+// preferences and profiles under DSH_HOME, and the suite must never depend
+// on (or touch) the developer's real ~/.dsh state.
+process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'dsh1024-routes-home-'))
 import {
   installedPluginIds,
   isTrustedSameOrigin,
   mountMarketRoutes,
+  parseDirectInstallCommand,
   readProfilePnpmStoreDir,
 } from '../lib/routes.js'
 
@@ -14,6 +21,7 @@ const baseConfig = {
   profile: 'market-test',
   registryUrl: 'https://deepseek1024.com/api/v1/registry',
   updateUrl: 'https://deepseek1024.com/api/v1/self/update',
+  sidebarEntry: true,
 }
 
 function routeHarness(embedUrl) {
@@ -42,6 +50,7 @@ test('the shell exposes its validated embed URL without credentials', async () =
   assert.deepEqual(JSON.parse(body), {
     url: 'https://deepseek1024.com/embed/store?bridge=dsh1024-v1',
     origin: 'https://deepseek1024.com',
+    sidebarEntry: true,
   })
   dispose()
   assert.equal(routes.size, 0)
@@ -117,6 +126,53 @@ test('installed dependencies map to catalog ids without exposing their specs', (
     'owner/mono/packages/child',
     'owner/npm-plugin',
   ])
+})
+
+test('a page-supplied install command must be a plain official dsh plugin command', () => {
+  // The embedded page hands over the full command it displays; everything
+  // after `dsh` is forwarded to the official CLI verbatim. The gate pins the
+  // shape — `dsh plugin …` out of inert tokens — so no shell metacharacter,
+  // quoting, or non-plugin subcommand can ride along.
+  assert.deepEqual(
+    parseDirectInstallCommand('dsh plugin --profile web add @scope/dsh-plugin'),
+    ['plugin', '--profile', 'web', 'add', '@scope/dsh-plugin'],
+  )
+  assert.deepEqual(
+    parseDirectInstallCommand('  dsh plugin --profile web add dsh1024@latest  '),
+    ['plugin', '--profile', 'web', 'add', 'dsh1024@latest'],
+  )
+  for (const command of [
+    'dsh telemetry disable',
+    'dsh1024 plugin --profile web add x',
+    'rm -rf /',
+    'dsh plugin add "quoted target"',
+    'dsh plugin add pkg; rm -rf /',
+    'dsh plugin add pkg && curl evil',
+    'dsh plugin add pkg | tee /tmp/x',
+    'dsh plugin add `whoami`',
+    'dsh plugin add $(whoami)',
+    'dsh plugin add pkg%PATH%',
+    'dsh plugin',
+    'dsh plugin add',
+    '', 42, null, undefined,
+  ]) {
+    assert.equal(parseDirectInstallCommand(command), null, String(command))
+  }
+})
+
+test('a source-installed plugin stays recognized after its entry goes npm-only', () => {
+  // The user installed from GitHub before the store switched to npm-only
+  // installs; the registry entry now advertises the npm target, but the
+  // manifest spec still points at the repository. Recognition must survive
+  // through the URL scan, or the store shows an installed plugin as absent.
+  const plugins = [{
+    id: 'owner/legacy', name: 'legacy', owner: 'owner',
+    url: 'https://github.com/owner/legacy', category: 'tools', description: { en: 'legacy' },
+    install: 'dsh plugin add published-legacy', target: 'published-legacy', added: '2026-01-01',
+  }]
+  const installed = { legacy: 'github:owner/legacy&commit=abc123' }
+
+  assert.deepEqual(installedPluginIds(installed, plugins), ['owner/legacy'])
 })
 
 test('plugin installs reuse the pnpm store already linked to the profile', async () => {

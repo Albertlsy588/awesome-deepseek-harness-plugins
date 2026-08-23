@@ -14,6 +14,9 @@ const BRIDGE_PROTOCOL = 'dsh1024-bridge'
 const BRIDGE_VERSION = 1
 const READY_TIMEOUT_MS = 5_000
 const PLUGIN_ID_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/
+// A page-supplied install command: `dsh plugin …` out of inert tokens. The
+// local endpoint re-validates before forwarding it to the official CLI.
+const INSTALL_COMMAND_RE = /^dsh plugin(?: [A-Za-z0-9@:/._#+=-]+)+$/
 
 const zh = {
   tab: '1024 Store', connected: '商店已连接', connecting: '正在连接商店', unavailable: '商店无法嵌入',
@@ -22,8 +25,10 @@ const zh = {
   updateNow: '更新到', upToDate: '已是最新', current: '当前版本',
   fallbackTitle: '商店页面未能加载', fallbackBody: '可以重试、在系统浏览器打开主站，或检查本地壳更新。',
   updateFailed: '更新检查失败', operationFailed: '操作失败', restart: '更新已安装，重启 DeepSeek Harness 后生效。',
+  settings: '商店设置', sidebarEntrySetting: '在左侧栏显示 1024 Store 入口',
   confirmInstall: '确认从 1024 Store 安装', confirmUpdate: '确认更新 1024 Store 到', cancelled: '用户取消了安装。',
   busy: '已有插件操作正在进行。', installed: '安装完成，重启 DeepSeek Harness 后生效。',
+  uninstalled: '卸载完成，重启 DeepSeek Harness 后生效。',
   plugins: '个插件', close: '关闭',
 }
 
@@ -35,7 +40,9 @@ const en = {
   fallbackTitle: 'The store page did not load', fallbackBody: 'Reload it, open the website in your browser, or check for a local shell update.',
   updateFailed: 'Update check failed', operationFailed: 'Operation failed', restart: 'Update installed. Restart DeepSeek Harness to apply it.',
   confirmInstall: 'Install from 1024 Store', confirmUpdate: 'Update 1024 Store to', cancelled: 'Installation was cancelled.',
+  settings: 'Store settings', sidebarEntrySetting: 'Show the 1024 Store entry in the sidebar',
   busy: 'Another plugin operation is already running.', installed: 'Installed. Restart DeepSeek Harness to apply it.',
+  uninstalled: 'Uninstalled. Restart DeepSeek Harness to apply it.',
   plugins: 'plugins', close: 'Close',
 }
 
@@ -57,6 +64,27 @@ function readCatalogCount() {
   return catalogCount
 }
 
+// The panel's "show sidebar entry" switch takes effect immediately: the
+// preference is persisted by the local endpoint and published here so the
+// mounted SidebarEntry can hide or reappear without a restart.
+let sidebarEntryVisible = null
+const sidebarEntryListeners = new Set()
+
+function publishSidebarEntry(visible) {
+  if (typeof visible !== 'boolean' || visible === sidebarEntryVisible) return
+  sidebarEntryVisible = visible
+  for (const listener of sidebarEntryListeners) listener()
+}
+
+function subscribeSidebarEntry(listener) {
+  sidebarEntryListeners.add(listener)
+  return () => sidebarEntryListeners.delete(listener)
+}
+
+function readSidebarEntryVisible() {
+  return sidebarEntryVisible
+}
+
 function useCatalogCount() {
   return useSyncExternalStore(subscribeCatalogCount, readCatalogCount, readCatalogCount)
 }
@@ -66,6 +94,7 @@ const CSS = `
 .dsm-shellbar{align-items:center;background:var(--dsw-alias-bg-layer-1);border-bottom:1px solid var(--dsw-alias-border-l2);display:flex;gap:10px;min-height:48px;padding:7px 10px}
 .dsm-brand{align-items:center;display:flex;gap:9px;min-width:0}.dsm-brand-logo{display:block;flex:0 0 32px;height:32px;object-fit:contain;width:32px}.dsm-title{align-items:baseline;display:flex;font-size:14px;font-weight:720;gap:5px;line-height:1.2;white-space:nowrap}.dsm-title em{color:var(--dsw-alias-brand-primary);font-style:normal}
 .dsm-grow{flex:1}.dsm-version{color:var(--dsw-alias-label-tertiary);font-size:11px;white-space:nowrap}
+.dsm-settings{position:relative}.dsm-settings-pop{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.18);min-width:240px;padding:10px 12px;position:absolute;right:0;top:calc(100% + 6px);z-index:5}.dsm-settings-row{align-items:center;cursor:pointer;display:flex;font-size:12.5px;gap:8px;line-height:1.4}.dsm-settings-row input{accent-color:var(--dsw-alias-brand-primary);height:15px;width:15px}
 .dsm-icon,.dsm-command{appearance:none;align-items:center;background:transparent;border:1px solid var(--dsw-alias-border-l3);border-radius:7px;color:inherit;cursor:pointer;display:inline-flex;font:inherit;font-size:12px;gap:6px;justify-content:center;min-height:32px;padding:0 9px;white-space:nowrap}.dsm-icon{font-size:16px;padding:0;width:32px}.dsm-command[data-kind=primary]{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-foreground);font-weight:680}.dsm-icon:hover,.dsm-command:hover{background:var(--dsw-alias-button-ghost-active-fill)}.dsm-command[data-kind=primary]:hover{filter:brightness(.94)}.dsm-icon:disabled,.dsm-command:disabled{cursor:not-allowed;opacity:.5}
 .dsm-stage{min-height:0;position:relative}.dsm-frame{background:var(--dsw-alias-bg-layer-1);border:0;height:100%;width:100%}.dsm-loading{align-items:center;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);display:flex;font-size:12px;gap:9px;inset:0;justify-content:center;position:absolute;z-index:1}.dsm-spinner{animation:dsm-spin .8s linear infinite;border:2px solid var(--dsw-alias-border-l3);border-radius:50%;border-top-color:var(--dsw-alias-brand-primary);height:18px;width:18px}@keyframes dsm-spin{to{transform:rotate(360deg)}}.dsm-toast{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:7px;box-shadow:0 8px 28px rgba(0,0,0,.2);font-size:12px;left:50%;max-width:min(520px,calc(100% - 24px));overflow-wrap:anywhere;padding:9px 12px;position:absolute;top:12px;transform:translateX(-50%);z-index:2}
 .dsm-fallback{align-items:center;background:var(--dsw-alias-bg-layer-1);display:flex;inset:0;justify-content:center;overflow:auto;padding:22px;position:absolute}.dsm-fallback-inner{max-width:520px;text-align:center;width:100%}.dsm-fallback-mark{align-items:center;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;display:inline-flex;font-size:22px;height:48px;justify-content:center;width:48px}.dsm-fallback h3{font-size:17px;letter-spacing:0;margin:14px 0 7px}.dsm-fallback p{color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1.55;margin:0 auto}.dsm-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:18px}.dsm-update-state{border-top:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5;margin-top:18px;padding-top:14px}.dsm-error{color:var(--dsw-alias-state-error-primary);overflow-wrap:anywhere}.dsm-success{color:#16845b}
@@ -123,6 +152,12 @@ function validBridgeRequest(message) {
     && message.requestId.length <= 128
   if (!base) return false
   if (message.action === 'installed') return message.pluginId === undefined
+  if (message.action === 'status') return message.pluginId === undefined
+  if (message.action === 'uninstall') {
+    return typeof message.pluginId === 'string'
+      && message.pluginId.length <= 201
+      && PLUGIN_ID_RE.test(message.pluginId)
+  }
   if (message.action === 'catalog-cache-read') return message.catalogPage === undefined
   if (message.action === 'catalog-cache-write') {
     return message.catalogPage !== null && typeof message.catalogPage === 'object'
@@ -132,6 +167,10 @@ function validBridgeRequest(message) {
     && typeof message.pluginId === 'string'
     && message.pluginId.length <= 201
     && PLUGIN_ID_RE.test(message.pluginId)
+    // The page may hand over the full official install command it displays;
+    // the local endpoint re-validates the shape before executing anything.
+    && (message.command === undefined
+      || (typeof message.command === 'string' && message.command.length <= 1024 && INSTALL_COMMAND_RE.test(message.command)))
 }
 
 function MarketShell({ locale, onClose, activation }) {
@@ -155,6 +194,46 @@ function MarketShell({ locale, onClose, activation }) {
   const [updating, setUpdating] = useState(false)
   const [restartRequired, setRestartRequired] = useState(false)
   const [operationMessage, setOperationMessage] = useState('')
+  const toastTimerRef = useRef(null)
+  // Toasts announce, they do not linger: auto-dismiss after a few seconds,
+  // with each new message restarting the clock.
+  const showToast = useCallback(message => {
+    setOperationMessage(message)
+    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = message === '' ? null : window.setTimeout(() => {
+      toastTimerRef.current = null
+      setOperationMessage('')
+    }, 8000)
+  }, [])
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [updateArmed, setUpdateArmed] = useState(false)
+  const sidebarVisible = useSyncExternalStore(subscribeSidebarEntry, readSidebarEntryVisible, readSidebarEntryVisible)
+
+  const saveSidebarEntry = useCallback(visible => {
+    // Optimistic: the entry reacts immediately, and a failed write rolls back.
+    const previous = readSidebarEntryVisible()
+    publishSidebarEntry(visible)
+    fetch('/dsh1024/preferences', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sidebarEntry: visible }),
+    })
+      .then(responseJson)
+      .then(({ status, body }) => {
+        if (status !== 200 || body.ok !== true) throw new Error(body.error || ('HTTP ' + status))
+      })
+      .catch(() => { if (previous !== null) publishSidebarEntry(previous) })
+  }, [])
+
+  useEffect(() => {
+    if (!settingsOpen) return undefined
+    const onPointerDown = event => {
+      if (event.target.closest && event.target.closest('.dsm-settings')) return
+      setSettingsOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [settingsOpen])
 
   const closeBridge = useCallback(() => {
     if (readyTimerRef.current !== null) window.clearTimeout(readyTimerRef.current)
@@ -197,6 +276,7 @@ function MarketShell({ locale, onClose, activation }) {
         if (!active) return
         const candidate = status === 200 && typeof body.url === 'string' ? body.url : DEFAULT_EMBED_URL
         setEmbedUrl(candidate)
+        if (status === 200 && typeof body.sidebarEntry === 'boolean') publishSidebarEntry(body.sidebarEntry)
       })
       .catch(() => { if (active) setEmbedUrl(DEFAULT_EMBED_URL) })
     return () => { active = false }
@@ -214,32 +294,119 @@ function MarketShell({ locale, onClose, activation }) {
       reply({ ok: false, error: copy.busy })
       return
     }
-    if (!window.confirm(copy.confirmInstall + ' “' + message.pluginId + '”?')) {
-      reply({ ok: false, error: copy.cancelled })
+    // No window.confirm here: a blocking native dialog inside the panel can
+    // be suppressed or hidden by the host environment, which froze this
+    // handler mid-flight and left the page's install button spinning forever.
+    // The page owns the confirmation UI (a two-step button that shows the
+    // exact command); this shell just executes what it is asked.
+    operationBusyRef.current = true
+    setOperationMessage('')
+    fetch('/dsh1024/install', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(message.command === undefined
+        ? { id: message.pluginId }
+        : { id: message.pluginId, command: message.command }),
+    })
+      .then(responseJson)
+      .then(({ status, body }) => {
+        // The full command output travels back to the page either way, so the
+        // store can show the user exactly what ran and what it printed.
+        const output = {
+          stdout: typeof body.stdout === 'string' ? body.stdout.slice(-8192) : '',
+          stderr: typeof body.stderr === 'string' ? body.stderr.slice(-8192) : '',
+          exitCode: typeof body.exitCode === 'number' ? body.exitCode : null,
+        }
+        if (status !== 200 || !body.ok) {
+          const detail = String(body.error || body.stderr || body.stdout || ('HTTP ' + status)).trim().slice(-800)
+          showToast(copy.operationFailed + ': ' + detail)
+          reply({ ok: false, error: detail, ...output })
+          return
+        }
+        showToast(copy.installed)
+        reply({ ok: true, ...output })
+      })
+      .catch(error => {
+        const detail = String(error).trim().slice(-800)
+        showToast(copy.operationFailed + ': ' + detail)
+        reply({ ok: false, error: detail })
+      })
+      .finally(() => {
+        operationBusyRef.current = false
+      })
+  }, [copy, showToast])
+
+  const runUninstall = useCallback((message, port) => {
+    const reply = payload => port.postMessage({
+      protocol: BRIDGE_PROTOCOL,
+      version: BRIDGE_VERSION,
+      type: 'result',
+      requestId: message.requestId,
+      ...payload,
+    })
+    if (operationBusyRef.current) {
+      reply({ ok: false, error: copy.busy })
       return
     }
     operationBusyRef.current = true
     setOperationMessage('')
-    fetch('/dsh1024/install', {
+    fetch('/dsh1024/uninstall', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ id: message.pluginId }),
     })
       .then(responseJson)
       .then(({ status, body }) => {
-        if (status !== 200 || !body.ok) throw new Error(body.error || body.stderr || body.stdout || ('HTTP ' + status))
-        setOperationMessage(copy.installed)
-        reply({ ok: true })
+        const output = {
+          stdout: typeof body.stdout === 'string' ? body.stdout.slice(-8192) : '',
+          stderr: typeof body.stderr === 'string' ? body.stderr.slice(-8192) : '',
+          exitCode: typeof body.exitCode === 'number' ? body.exitCode : null,
+          command: typeof body.command === 'string' ? body.command : undefined,
+        }
+        if (status !== 200 || !body.ok) {
+          const detail = String(body.error || body.stderr || body.stdout || ('HTTP ' + status)).trim().slice(-800)
+          showToast(copy.operationFailed + ': ' + detail)
+          reply({ ok: false, error: detail, ...output })
+          return
+        }
+        showToast(copy.uninstalled)
+        reply({ ok: true, ...output })
       })
       .catch(error => {
         const detail = String(error).trim().slice(-800)
-        setOperationMessage(copy.operationFailed + ': ' + detail)
+        showToast(copy.operationFailed + ': ' + detail)
         reply({ ok: false, error: detail })
       })
       .finally(() => {
         operationBusyRef.current = false
       })
-  }, [copy])
+  }, [copy, showToast])
+
+  const readStatus = useCallback((message, port) => {
+    const reply = payload => port.postMessage({
+      protocol: BRIDGE_PROTOCOL,
+      version: BRIDGE_VERSION,
+      type: 'result',
+      requestId: message.requestId,
+      ...payload,
+    })
+    fetch('/dsh1024/status', { cache: 'no-store' })
+      .then(responseJson)
+      .then(({ status, body }) => {
+        if (status !== 200) throw new Error('HTTP ' + status)
+        reply({
+          ok: true,
+          status: {
+            active: body.active === true,
+            action: typeof body.action === 'string' ? body.action : null,
+            target: typeof body.target === 'string' ? body.target : '',
+            seconds: typeof body.seconds === 'number' ? body.seconds : 0,
+            lastLine: typeof body.lastLine === 'string' ? body.lastLine : '',
+          },
+        })
+      })
+      .catch(error => reply({ ok: false, error: String(error).trim().slice(-300) }))
+  }, [])
 
   const readInstalled = useCallback((message, port) => {
     const reply = payload => port.postMessage({
@@ -324,9 +491,25 @@ function MarketShell({ locale, onClose, activation }) {
         setConnection('connected')
         return
       }
-      if (!validBridgeRequest(message)) return
+      if (!validBridgeRequest(message)) {
+        // Never drop a request silently: an unanswered request leaves the
+        // page's install button spinning until its own timeout fires.
+        if (message.type === 'request' && typeof message.requestId === 'string') {
+          channel.port1.postMessage({
+            protocol: BRIDGE_PROTOCOL,
+            version: BRIDGE_VERSION,
+            type: 'result',
+            requestId: message.requestId,
+            ok: false,
+            error: 'unsupported bridge request',
+          })
+        }
+        return
+      }
       if (message.action === 'install') runInstall(message, channel.port1)
+      else if (message.action === 'uninstall') runUninstall(message, channel.port1)
       else if (message.action === 'installed') readInstalled(message, channel.port1)
+      else if (message.action === 'status') readStatus(message, channel.port1)
       else if (message.action === 'catalog-cache-read') readCatalogPageCache(message, channel.port1)
       else writeCatalogPageCache(message, channel.port1)
     }
@@ -340,7 +523,7 @@ function MarketShell({ locale, onClose, activation }) {
       new URL(embedUrl).origin,
       [channel.port2],
     )
-  }, [closeBridge, embedUrl, readCatalogPageCache, readInstalled, runInstall, writeCatalogPageCache])
+  }, [closeBridge, embedUrl, readCatalogPageCache, readInstalled, readStatus, runInstall, runUninstall, writeCatalogPageCache])
 
   useEffect(() => {
     if (embedUrl === null) return undefined
@@ -375,7 +558,14 @@ function MarketShell({ locale, onClose, activation }) {
 
   const selfUpdate = useCallback(() => {
     if (!updateInfo?.latestVersion || updating) return
-    if (!window.confirm(copy.confirmUpdate + ' v' + updateInfo.latestVersion + '?')) return
+    // Two-step confirmation on the button itself; a blocking window.confirm
+    // can be suppressed by the host environment and freeze the flow.
+    if (!updateArmed) {
+      setUpdateArmed(true)
+      window.setTimeout(() => setUpdateArmed(false), 5000)
+      return
+    }
+    setUpdateArmed(false)
     setUpdating(true)
     setUpdateError('')
     fetch('/dsh1024/self-update', { method: 'POST' })
@@ -387,11 +577,11 @@ function MarketShell({ locale, onClose, activation }) {
       })
       .catch(error => setUpdateError(copy.operationFailed + ': ' + String(error).trim().slice(-800)))
       .finally(() => setUpdating(false))
-  }, [copy, updateInfo, updating])
+  }, [copy, updateArmed, updateInfo, updating])
 
   const renderUpdateAction = () => updateInfo?.updateAvailable
     ? h('button', { className: 'dsm-command', 'data-kind': 'primary', type: 'button', disabled: updating, onClick: selfUpdate },
-        updating ? copy.updating : copy.updateNow + ' v' + updateInfo.latestVersion)
+        updating ? copy.updating : (updateArmed ? copy.confirmUpdate + ' v' + updateInfo.latestVersion : copy.updateNow + ' v' + updateInfo.latestVersion))
     : null
 
   return h('div', { className: 'dsm-shell' },
@@ -403,6 +593,24 @@ function MarketShell({ locale, onClose, activation }) {
       h('span', { className: 'dsm-grow' }),
       updateInfo && h('span', { className: 'dsm-version' }, 'v' + updateInfo.currentVersion),
       renderUpdateAction(),
+      h('div', { className: 'dsm-settings' },
+        h('button', {
+          className: 'dsm-icon', type: 'button', title: copy.settings, 'aria-label': copy.settings,
+          'aria-expanded': settingsOpen, onClick: () => setSettingsOpen(value => !value),
+        }, h('svg', {
+          width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+          strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true,
+        },
+          h('path', { d: 'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z' }),
+          h('circle', { cx: 12, cy: 12, r: 3 }))),
+        settingsOpen && h('div', { className: 'dsm-settings-pop', role: 'menu' },
+          h('label', { className: 'dsm-settings-row' },
+            h('input', {
+              type: 'checkbox',
+              checked: sidebarVisible !== false,
+              onChange: event => saveSidebarEntry(event.target.checked),
+            }),
+            h('span', null, copy.sidebarEntrySetting)))),
       h('button', { className: 'dsm-icon', type: 'button', title: copy.reload, 'aria-label': copy.reload, onClick: reloadFrame }, '↻'),
       h('button', { className: 'dsm-icon', type: 'button', title: copy.openSite, 'aria-label': copy.openSite, onClick: () => window.open(SITE_URL, '_blank', 'noopener,noreferrer') }, '↗'),
       onClose && h('button', { className: 'dsm-icon', type: 'button', title: copy.close, 'aria-label': copy.close, onClick: onClose }, '×')),
@@ -449,6 +657,19 @@ function SidebarEntry({ wide, locale }) {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [activation, setActivation] = useState(0)
+  // The sidebar entry hides when the user switches it off (panel settings or
+  // plugin config); the settings tabs stay either way. Subscribed, so the
+  // panel switch takes effect immediately. Any fetch failure keeps the entry.
+  const visiblePreference = useSyncExternalStore(subscribeSidebarEntry, readSidebarEntryVisible, readSidebarEntryVisible)
+  useEffect(() => {
+    if (readSidebarEntryVisible() !== null) return
+    fetch('/dsh1024/embed-config', { cache: 'no-store' })
+      .then(responseJson)
+      .then(({ status, body }) => {
+        if (status === 200 && typeof body.sidebarEntry === 'boolean') publishSidebarEntry(body.sidebarEntry)
+      })
+      .catch(() => {})
+  }, [])
   const label = t('tab')
   const formattedCount = count === null
     ? ''
@@ -475,6 +696,8 @@ function SidebarEntry({ wide, locale }) {
     }
     setOpen(value => !value)
   }, [open])
+
+  if (visiblePreference === false) return null
 
   return h(React.Fragment, null,
     h('button', {

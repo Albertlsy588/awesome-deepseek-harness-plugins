@@ -8,7 +8,9 @@ export function InstallOptions({ plugin }: { plugin: Pick<RegistryPlugin, 'id' |
   const { t } = useI18n()
   const { connected } = useEmbedBridge()
 
-  if (connected) return <BridgeInstallButton pluginId={plugin.id} />
+  if (connected) {
+    return <BridgeInstallButton pluginId={plugin.id} command={officialInstallCommand(plugin)} />
+  }
   return (
     <div className="install-options">
       <div className="install-option install-option-recommended">

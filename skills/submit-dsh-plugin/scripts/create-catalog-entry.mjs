@@ -27,7 +27,7 @@ function usage() {
     [--dry-run]
 
 monorepo 子包在 --id 中追加仓库内路径段（例如 owner/repository/packages/foo），
-安装规格由目录推导为 github:owner/repository#path:sub/dir。`
+路径段锁定插件 manifest 的位置（<sub/dir>/package.json）。`
 }
 
 function fail(message) {
@@ -77,7 +77,7 @@ function pluginFileName(id) {
 }
 
 // 插件 ID 为 owner/repository，可追加仓库内路径段（monorepo 子包）。路径段
-// 会进入 pnpm 的 `github:owner/repository#path:` 安装规格，因此 `.` 与 `..`
+// 锁定插件 manifest 在仓库中的目录并与 git 树路径逐段比对，因此 `.` 与 `..`
 // 段一律拒绝；201 字符上限与目录仓库的可信审查保持一致。
 const idSegmentPattern = /^[A-Za-z0-9_.-]+$/
 

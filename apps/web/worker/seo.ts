@@ -1,4 +1,5 @@
 import { comparePlugins, findPluginById, findPluginsUnder, hasGrowthForSort, repositoryName } from './lib/catalog'
+import { offeredInstallCommand } from './lib/install-methods'
 import { pluginDetailPath, pluginSourceUrl } from './lib/plugin-id'
 import {
   renderCollectionShell,
@@ -529,7 +530,8 @@ export function buildApiHostRobotsTxt(): string {
 /**
  * The whole catalog as plain text, for answer engines that will not run
  * JavaScript and will not crawl 2,900 URLs. Install commands come from the
- * registry `install` field, never a literal.
+ * offered (npm) install method, never a literal; browse-only plugins carry
+ * their repository link instead.
  */
 export function buildLlmsFullTxt(catalog: SeoCatalog): string {
   const grouped = new Map<string, CatalogPlugin[]>()
@@ -543,7 +545,12 @@ export function buildLlmsFullTxt(catalog: SeoCatalog): string {
     .map(([category, plugins]) => {
       const lines = plugins.map((plugin) => {
         const description = plugin.description.en.replace(/\s+/g, ' ').trim()
-        return `- [${plugin.name}](${SITE_ORIGIN}${pluginPath(plugin)}) — ${description} — install: ${plugin.install}`
+        // Only npm installs are offered; a plugin without a published npm
+        // package points at its repository instead of a command nobody
+        // should run (source installs are no longer an install method).
+        const command = offeredInstallCommand(plugin)
+        const tail = command ? `install: ${command}` : `source: ${plugin.url}`
+        return `- [${plugin.name}](${SITE_ORIGIN}${pluginPath(plugin)}) — ${description} — ${tail}`
       })
       return `## ${categoryLabelFor(catalog, category, 'en')} (${plugins.length})\n\n${lines.join('\n')}`
     })
@@ -551,7 +558,7 @@ export function buildLlmsFullTxt(catalog: SeoCatalog): string {
     '# DSH 1024Store — full DeepSeek Harness plugin catalog',
     '',
     `> ${catalog.plugins.length} plugins for DeepSeek Harness (\`dsh\`), DeepSeek's coding-agent CLI. Updated ${catalog.updated}.`,
-    '> Install any listed plugin with: dsh plugin --profile web add github:<owner>/<repository>',
+    '> Install any listed plugin with its per-plugin command: dsh plugin --profile web add <npm-package>. Plugins listed with a source link only have not published an npm package yet and cannot be installed from the store.',
     `> Source: ${SITE_ORIGIN}/ · Search API: https://api.deepseek1024.com/v1/plugins/search?q=`,
     '',
     ...sections,

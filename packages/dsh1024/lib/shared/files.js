@@ -21,6 +21,7 @@ export function storePaths(dshHome) {
         receipts: join(directory, 'receipts.json'),
         registryCache: join(directory, 'registry-cache.json'),
         catalogPageCache: join(directory, 'catalog-page-cache.json'),
+        preferences: join(directory, 'preferences.json'),
     };
 }
 export async function readJson(path, fallback = null) {

@@ -32,6 +32,38 @@ interface BridgeResult {
   pluginIds?: string[]
   plugins?: BridgeInstalledPlugin[]
   catalogPage?: PluginsPage | null
+  /** Tail of the official CLI's output, forwarded by the local shell. */
+  stdout?: string
+  stderr?: string
+  exitCode?: number | null
+  /** The exact official command the shell executed (uninstall replies). */
+  command?: string
+  /** Live progress snapshot from the local /dsh1024/status endpoint. */
+  status?: BridgeOperationStatus
+}
+
+export interface BridgeOperationStatus {
+  active: boolean
+  action: string | null
+  target: string
+  seconds: number
+  lastLine: string
+}
+
+/**
+ * The one install the store is running or has just finished, kept for the
+ * install console: the exact command, its live output line, and — once it
+ * ends — the full captured output, so a failure is debuggable from the page.
+ */
+export interface InstallActivity {
+  kind: 'install' | 'uninstall'
+  pluginId: string
+  command: string | null
+  state: 'running' | 'ok' | 'failed'
+  error: string | null
+  stdout: string
+  stderr: string
+  startedAt: number
 }
 
 interface PendingRequest {
@@ -48,7 +80,11 @@ interface EmbedBridgeValue {
   installedPlugins: BridgeInstalledPlugin[] | null
   installedError: string
   refreshInstalled: () => Promise<void>
-  install: (pluginId: string) => Promise<BridgeResult>
+  install: (pluginId: string, command?: string) => Promise<BridgeResult>
+  uninstall: (pluginId: string) => Promise<BridgeResult>
+  installActivity: InstallActivity | null
+  clearInstallActivity: () => void
+  bridgeStatus: () => Promise<BridgeOperationStatus | null>
   readCatalogPageCache: () => Promise<PluginsPage | null>
   writeCatalogPageCache: (page: PluginsPage) => Promise<void>
 }
@@ -62,6 +98,10 @@ const EmbedBridgeContext = createContext<EmbedBridgeValue>({
   installedError: '',
   refreshInstalled: async () => undefined,
   install: async () => ({ ok: false, error: 'Local DSH bridge is not connected.' }),
+  uninstall: async () => ({ ok: false, error: 'Local DSH bridge is not connected.' }),
+  installActivity: null,
+  clearInstallActivity: () => undefined,
+  bridgeStatus: async () => null,
   readCatalogPageCache: async () => null,
   writeCatalogPageCache: async () => undefined,
 })
@@ -109,6 +149,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
   const [installedPluginIds, setInstalledPluginIds] = useState<string[] | null>(null)
   const [installedPlugins, setInstalledPlugins] = useState<BridgeInstalledPlugin[] | null>(null)
   const [installedError, setInstalledError] = useState('')
+  const [installActivity, setInstallActivity] = useState<InstallActivity | null>(null)
   const portRef = useRef<MessagePort | null>(null)
   const pendingRef = useRef(new Map<string, PendingRequest>())
 
@@ -171,12 +212,24 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
         const catalogPage = payload.catalogPage === null
           ? null
           : isPluginsPage(payload.catalogPage) ? payload.catalogPage : undefined
+        const statusObject = messageObject(payload.status)
         pending.resolve({
           ok,
           error: typeof payload.error === 'string' ? payload.error : undefined,
           pluginIds,
           plugins,
           catalogPage,
+          stdout: typeof payload.stdout === 'string' ? payload.stdout : undefined,
+          stderr: typeof payload.stderr === 'string' ? payload.stderr : undefined,
+          exitCode: typeof payload.exitCode === 'number' ? payload.exitCode : undefined,
+          command: typeof payload.command === 'string' ? payload.command : undefined,
+          status: statusObject === null ? undefined : {
+            active: statusObject.active === true,
+            action: typeof statusObject.action === 'string' ? statusObject.action : null,
+            target: typeof statusObject.target === 'string' ? statusObject.target : '',
+            seconds: typeof statusObject.seconds === 'number' ? statusObject.seconds : 0,
+            lastLine: typeof statusObject.lastLine === 'string' ? statusObject.lastLine : '',
+          },
         })
       }
       port.onmessageerror = () => disconnect('Local DSH bridge sent an invalid message.')
@@ -186,7 +239,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
         protocol: EMBED_BRIDGE_PROTOCOL,
         version: EMBED_BRIDGE_VERSION,
         type: 'ready',
-        capabilities: ['install', 'installed', 'catalog-cache'],
+        capabilities: ['install', 'installed', 'catalog-cache', 'status', 'uninstall'],
       })
     }
 
@@ -208,8 +261,9 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
   }, [embedded])
 
   const sendRequest = useCallback((
-    action: 'install' | 'installed' | 'catalog-cache-read' | 'catalog-cache-write',
-    options: { pluginId?: string; catalogPage?: PluginsPage } = {},
+    action: 'install' | 'uninstall' | 'installed' | 'status' | 'catalog-cache-read' | 'catalog-cache-write',
+    options: { pluginId?: string; command?: string; catalogPage?: PluginsPage } = {},
+    timeoutMs = 6 * 60 * 1000,
   ): Promise<BridgeResult> => {
     const port = portRef.current
     if (port === null) {
@@ -220,7 +274,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
       const timer = window.setTimeout(() => {
         pendingRef.current.delete(requestId)
         reject(new Error(action === 'install' ? 'Local installation timed out.' : 'Local DSH bridge request timed out.'))
-      }, 6 * 60 * 1000)
+      }, timeoutMs)
       pendingRef.current.set(requestId, { resolve, reject, timer })
       const message: Record<string, unknown> = {
         protocol: EMBED_BRIDGE_PROTOCOL,
@@ -230,6 +284,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
         action,
       }
       if (options.pluginId !== undefined) message.pluginId = options.pluginId
+      if (options.command !== undefined) message.command = options.command
       if (options.catalogPage !== undefined) message.catalogPage = options.catalogPage
       port.postMessage(message)
     })
@@ -254,14 +309,87 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
     void refreshInstalled()
   }, [connected, refreshInstalled])
 
-  const install = useCallback(async (pluginId: string) => {
-    const result = await sendRequest('install', { pluginId })
+  // The page hands over the full official command alongside the catalog id:
+  // page and local endpoint read the same first-party catalog API, so the
+  // endpoint forwards the command verbatim instead of re-fetching the
+  // registry to re-derive it (issue #159's failure mode). Keeping the whole
+  // command on the page side means the template can follow the official
+  // CLI's evolution without a plugin release.
+  const install = useCallback(async (pluginId: string, command?: string) => {
+    setInstallActivity({
+      kind: 'install',
+      pluginId,
+      command: command ?? null,
+      state: 'running',
+      error: null,
+      stdout: '',
+      stderr: '',
+      startedAt: Date.now(),
+    })
+    let result: BridgeResult
+    try {
+      result = await sendRequest('install', { pluginId, command })
+    } catch (error) {
+      result = { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+    setInstallActivity((current) => current === null || current.pluginId !== pluginId ? current : {
+      ...current,
+      state: result.ok ? 'ok' : 'failed',
+      error: result.ok ? null : result.error ?? 'Installation failed.',
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+    })
     if (result.ok) {
       setInstalledPluginIds((current) => [...new Set([...(current ?? []), pluginId])].sort())
       void refreshInstalled()
     }
     return result
   }, [refreshInstalled, sendRequest])
+
+  const uninstall = useCallback(async (pluginId: string) => {
+    setInstallActivity({
+      kind: 'uninstall',
+      pluginId,
+      command: null,
+      state: 'running',
+      error: null,
+      stdout: '',
+      stderr: '',
+      startedAt: Date.now(),
+    })
+    let result: BridgeResult
+    try {
+      result = await sendRequest('uninstall', { pluginId })
+    } catch (error) {
+      result = { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+    setInstallActivity((current) => current === null || current.pluginId !== pluginId ? current : {
+      ...current,
+      state: result.ok ? 'ok' : 'failed',
+      error: result.ok ? null : result.error ?? 'Uninstall failed.',
+      command: result.command ?? current.command,
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+    })
+    if (result.ok) {
+      setInstalledPluginIds((current) => (current ?? []).filter((id) => id !== pluginId))
+      void refreshInstalled()
+    }
+    return result
+  }, [refreshInstalled, sendRequest])
+
+  const clearInstallActivity = useCallback(() => setInstallActivity(null), [])
+
+  // Short timeout and silent failure: an older local shell does not answer
+  // status requests, and the console must degrade to command-only display.
+  const bridgeStatus = useCallback(async () => {
+    try {
+      const result = await sendRequest('status', {}, 4000)
+      return result.ok ? result.status ?? null : null
+    } catch {
+      return null
+    }
+  }, [sendRequest])
 
   const readCatalogPageCache = useCallback(async () => {
     const result = await sendRequest('catalog-cache-read')
@@ -282,9 +410,13 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
     installedError,
     refreshInstalled,
     install,
+    uninstall,
+    installActivity,
+    clearInstallActivity,
+    bridgeStatus,
     readCatalogPageCache,
     writeCatalogPageCache,
-  }), [activation, connected, embedded, install, installedError, installedPluginIds, installedPlugins, readCatalogPageCache, refreshInstalled, writeCatalogPageCache])
+  }), [activation, bridgeStatus, clearInstallActivity, connected, embedded, install, installActivity, installedError, installedPluginIds, installedPlugins, readCatalogPageCache, refreshInstalled, uninstall, writeCatalogPageCache])
   return <EmbedBridgeContext.Provider value={value}>{children}</EmbedBridgeContext.Provider>
 }
 

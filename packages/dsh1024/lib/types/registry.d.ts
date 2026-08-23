@@ -30,8 +30,16 @@ export type RegistrySource = 'api' | 'cache';
 export declare const DEFAULT_REGISTRY_URL = "https://deepseek1024.com/api/v1/registry";
 /**
  * Validate untrusted registry JSON before it can become an installation allowlist.
+ *
+ * Per-entry validation filters rather than rejects: one malformed entry used
+ * to invalidate the whole registry, and every client answered 503 until the
+ * catalog was fixed (issue #159). The per-entry checks themselves stay strict
+ * — a skipped entry is simply not in the allowlist — and skipped ids are
+ * logged so a data problem stays visible instead of silently shrinking the
+ * store. Registry-level corruption (bad metadata, a count that disagrees with
+ * the payload, nothing valid at all) still throws.
  * @param value - parsed `/api/v1/registry` response.
- * @returns the validated registry.
+ * @returns the validated registry, restricted to its valid plugins.
  */
 export declare function validateRegistry(value: unknown): Registry;
 /**

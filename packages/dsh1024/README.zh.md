@@ -66,8 +66,8 @@ registry 和仓库中的 package manifest。一键更新只会执行固定目标
 之后的所有参数原样转发给官方 CLI —— 不增、不删、不重排、不补默认值：
 
 ```sh
-dsh1024 plugin --profile web add github:omdsh-dev/dsh-deep-research
-dsh plugin      --profile web add github:omdsh-dev/dsh-deep-research
+dsh1024 plugin --profile web add @scope/dsh-plugin
+dsh plugin      --profile web add @scope/dsh-plugin
 ```
 
 上面两行执行的是同一个官方操作。包装器只负责它之外的事：核对结果 profile，
@@ -77,15 +77,15 @@ dsh plugin      --profile web add github:omdsh-dev/dsh-deep-research
 就照原样转发，而不是被悄悄补上；`--`、ref 以及其他官方参数也都保持官方语义：
 
 ```sh
-dsh1024 plugin --profile web add github:owner/repository#v1.2.0
-dsh1024 plugin --profile web add github:owner/repository -- \
+dsh1024 plugin --profile web add @scope/dsh-plugin@1.2.0
+dsh1024 plugin --profile web add @scope/dsh-plugin -- \
   --ignore-scripts --reporter append-only --config.confirmModulesPurge=false
 ```
 
 包装器会在不经过 shell 的情况下把第一条示例执行为：
 
 ```sh
-npx --yes @deepseek-ai/dsh plugin --profile web add github:owner/repository#v1.2.0
+npx --yes @deepseek-ai/dsh plugin --profile web add @scope/dsh-plugin@1.2.0
 ```
 
 如果 PATH 上已经装有官方 `dsh`，包装器会直接复用该可执行文件，省掉 npx 每次

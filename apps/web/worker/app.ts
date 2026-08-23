@@ -41,7 +41,7 @@ import {
   parseInstallationEvent,
   recordInstallationEvent,
 } from './lib/install-metrics'
-import { withLegacyNpmCodeAliases } from './lib/install-methods'
+import { offeredInstallCommand, withLegacyNpmCodeAliases } from './lib/install-methods'
 import { buildLlmsFullTxt, buildRobotsTxt, buildSitemap, seoCatalog } from './seo'
 import type {
   BackgroundContext,
@@ -90,7 +90,7 @@ const REGISTRY_CACHE_HEADER = 'public, max-age=60, s-maxage=300, stale-while-rev
 // robots.txt is static, but the catalog-derived crawler documents below are
 // not: without revalidation they can sit a whole day behind the catalog.
 const CRAWLER_CACHE_HEADER = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400'
-const V1_PLUGIN_LIMIT = 300
+const V1_PLUGIN_LIMIT = 500
 const DEFAULT_SEARCH_LIMIT = 20
 const MAX_SEARCH_LIMIT = 100
 const MAX_SEARCH_PAGE = 1_000_000
@@ -375,15 +375,26 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       executionContext(context),
     )
     const query = parseCatalogQuery(context.req.query())
-    const catalog = buildCatalog(snapshot, query)
-    // v1 remains available for compatibility, but no longer sends the entire
-    // catalog in one response. Keep the full match counts so consumers can
-    // detect truncation without changing the established response shape.
+    // v1 is the partner surface: it lists only installable plugins — the ones
+    // with a published npm package — star-ranked by default (the query's
+    // default sort), capped at V1_PLUGIN_LIMIT. Browse-only plugins never
+    // reach it, so a partner site can render every listed entry with a
+    // working install command. The response SHAPE stays frozen; this narrows
+    // content only. `catalogTotal` keeps meaning the whole catalog,
+    // installable or not.
+    const installable = snapshot.snapshot.plugins.filter(
+      (plugin) => offeredInstallCommand(plugin) !== null,
+    )
+    const catalog = buildCatalog(
+      { ...snapshot, snapshot: { ...snapshot.snapshot, plugins: installable } },
+      query,
+    )
     const payload = JSON.stringify({
       ...catalog,
       packages: catalog.packages
         .slice(0, V1_PLUGIN_LIMIT)
         .map(projectV1InstallCodeAliases),
+      meta: { ...catalog.meta, catalogTotal: snapshot.snapshot.plugins.length },
     })
     context.header('Cache-Control', LIST_CACHE_HEADER)
     // Validator over the actual bytes, so a caller polling for changes is told
@@ -672,7 +683,12 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
           description: plugin.description,
           install: plugin.install,
           target: preferred?.spec ?? pluginInstallSpec(plugin.id),
-          allowBuild: preferred?.buildPackage ?? null,
+          // Permanently null, not projected from the snapshot: the value came
+          // from a third-party package.json, and one unvalidatable name there
+          // 503'd every store client (issue #159). Hard-coding null makes the
+          // fix effective on deploy, before the snapshot rebuilds. The key
+          // stays — the frozen v1 shape and 0.4.1's validator both expect it.
+          allowBuild: null,
           added: plugin.added,
           stars: plugin.stars,
         }

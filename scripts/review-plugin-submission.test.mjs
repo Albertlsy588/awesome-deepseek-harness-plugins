@@ -7,7 +7,7 @@ import test from 'node:test'
 import {
   classifyGitInstall,
   findHarnessBundle,
-  gitInstallAdvisory,
+  installAvailabilityAdvisory,
   parseNameStatus,
   pullRequestChanges,
   readCatalogEntry,
@@ -393,7 +393,7 @@ test('reviews a subdirectory entry against its pinned manifest path', async () =
 test('classifies an unobtainable entry point instead of rejecting the submission', async () => {
   // The shape that broke a real install: main points at a build artifact, the
   // artifact is not committed, and there is no prepare script to produce it.
-  // The plugin is still catalogued — the verdict becomes a published label.
+  // The plugin is still catalogued — the verdict is recorded, not enforced.
   const tree = [
     { path: 'package.json', type: 'blob', sha: 'package' },
     { path: 'cordis.patch.yml', type: 'blob', sha: 'patch' },
@@ -415,10 +415,18 @@ test('classifies an unobtainable entry point instead of rejecting the submission
   // The npm coordinates travel with the result so the advisory can name them.
   assert.equal(result.packageName, '@scope/plugin')
   assert.equal(result.packageVersion, '1.2.3')
+})
 
-  const advisory = gitInstallAdvisory(result.gitInstall.code, result.gitInstall.entryPoint, false)
-  assert.match(advisory, /UNVERIFIED/)
-  assert.match(advisory, /catalogued either way/)
+test('the availability advisory points authors at publishing to npm', () => {
+  const named = installAvailabilityAdvisory('@scope/plugin')
+  assert.match(named, /`@scope\/plugin`/)
+  assert.match(named, /npm only/)
+  assert.match(named, /browse-only/)
+  assert.match(named, /automatically/)
+  // No manifest name: the advisory still reads correctly.
+  const anonymous = installAvailabilityAdvisory(undefined)
+  assert.match(anonymous, /your package/)
+  assert.doesNotMatch(anonymous, /`undefined`/)
 })
 
 test('prefers a committed entry over a prepare script', () => {
@@ -432,7 +440,7 @@ test('prefers a committed entry over a prepare script', () => {
     }, files),
     { code: 'entry_committed', entryPoint: 'lib/index.js', requiresBuildAllowance: true },
   )
-  // Only the prepare script: obtainable, but the user must allowlist the build.
+  // Only the prepare script: obtainable, but the build must be allowlisted.
   assert.deepEqual(
     classifyGitInstall('package.json', {
       main: 'lib/index.js',
@@ -451,18 +459,6 @@ test('prefers a committed entry over a prepare script', () => {
   )
   // No entry at all: the carrier pattern, which cannot be confirmed statically.
   assert.equal(classifyGitInstall('package.json', {}, new Map()).code, 'no_entry_declared')
-})
-
-test('prepare advisory gives a first-run install command with build permission', () => {
-  const advisory = gitInstallAdvisory(
-    'prepare_builds_entry',
-    'lib/index.js',
-    true,
-    '@scope/plugin',
-  )
-  assert.match(advisory, /--allow-build=@scope\/plugin/)
-  assert.match(advisory, /first successful install/)
-  assert.doesNotMatch(advisory, /first .*fails/)
 })
 
 test('classifies a subdirectory bundle against its own directory', async () => {

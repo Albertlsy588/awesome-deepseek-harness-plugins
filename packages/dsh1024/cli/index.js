@@ -17,9 +17,9 @@ Usage:
   dsh1024 telemetry [status|enable|disable|reset]
 
 Examples:
-  dsh1024 plugin --profile web add github:omdsh-dev/dsh-deep-research
-  dsh1024 plugin --profile web add github:owner/plugin#v1.2.0
-  dsh1024 plugin --profile web add github:owner/plugin -- --ignore-scripts
+  dsh1024 plugin --profile web add @scope/dsh-plugin
+  dsh1024 plugin --profile web add dsh-plugin@1.2.0
+  dsh1024 plugin --profile web add @scope/dsh-plugin -- --ignore-scripts
 
 \`dsh1024 plugin ...\` is \`dsh plugin ...\` with a different name: every argument
 from \`plugin\` onwards is forwarded to the official @deepseek-ai/dsh CLI exactly

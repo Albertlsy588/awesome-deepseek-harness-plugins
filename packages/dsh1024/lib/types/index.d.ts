@@ -11,6 +11,8 @@ export interface Config {
     updateUrl?: string;
     /** Store page embedded by the local shell. HTTP is accepted only on loopback for development. */
     embedUrl?: string;
+    /** Show the 1024 Store entry in the main sidebar. The settings tabs stay either way. */
+    sidebarEntry?: boolean;
 }
 /**
  * Mount the market routes after the web server service becomes available.

@@ -93,8 +93,16 @@ function isPlugin(value: unknown, categoryIds: Set<string>): value is RegistryPl
 
 /**
  * Validate untrusted registry JSON before it can become an installation allowlist.
+ *
+ * Per-entry validation filters rather than rejects: one malformed entry used
+ * to invalidate the whole registry, and every client answered 503 until the
+ * catalog was fixed (issue #159). The per-entry checks themselves stay strict
+ * — a skipped entry is simply not in the allowlist — and skipped ids are
+ * logged so a data problem stays visible instead of silently shrinking the
+ * store. Registry-level corruption (bad metadata, a count that disagrees with
+ * the payload, nothing valid at all) still throws.
  * @param value - parsed `/api/v1/registry` response.
- * @returns the validated registry.
+ * @returns the validated registry, restricted to its valid plugins.
  */
 export function validateRegistry(value: unknown): Registry {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -111,11 +119,21 @@ export function validateRegistry(value: unknown): Registry {
   if (!Array.isArray(registry.plugins) || registry.plugins.length === 0) {
     throw new Error('registry plugins are empty')
   }
+  // Checked against the raw array: the count guards against a truncated or
+  // corrupted payload, which filtering must not paper over.
   if (registry.count !== registry.plugins.length) throw new Error('registry count does not match plugins')
-  if (!registry.plugins.every(plugin => isPlugin(plugin, categoryIds))) {
-    throw new Error('registry contains an invalid plugin')
+  const plugins = registry.plugins.filter(plugin => isPlugin(plugin, categoryIds))
+  if (plugins.length === 0) throw new Error('registry contains no valid plugins')
+  const skipped = registry.plugins.length - plugins.length
+  if (skipped > 0) {
+    const skippedIds = registry.plugins
+      .filter(plugin => !plugins.includes(plugin as RegistryPlugin))
+      .map(plugin => (plugin !== null && typeof plugin === 'object' && typeof (plugin as { id?: unknown }).id === 'string')
+        ? (plugin as { id: string }).id
+        : '<malformed>')
+    console.warn(`[dsh1024] skipped ${skipped} invalid registry entr${skipped === 1 ? 'y' : 'ies'}: ${skippedIds.slice(0, 10).join(', ')}${skippedIds.length > 10 ? ', …' : ''}`)
   }
-  return registry as unknown as Registry
+  return { ...registry, count: plugins.length, plugins } as unknown as Registry
 }
 
 /**

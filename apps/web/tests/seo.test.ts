@@ -182,6 +182,8 @@ describe('SEO metadata', () => {
 
 describe('crawlable shell', () => {
   it('renders the plugin page as HTML a non-rendering crawler can read', () => {
+    // TEST_PLUGINS[0] is npm-published: the shell prints its npm command and
+    // never a source command.
     const plugin = TEST_PLUGINS[0]!
     const { shell } = metadataForPath(`/plugins/${plugin.owner}/${plugin.repository}`, testSeoCatalog())
 
@@ -189,10 +191,25 @@ describe('crawlable shell', () => {
     expect(shell).toContain('<h1>')
     expect(shell).toContain(plugin.name)
     expect(shell).toContain(plugin.install)
+    expect(shell).not.toContain('seo-shell-install-unavailable')
+    expect(shell).not.toContain('add github:')
     expect(shell).toContain(`href="${plugin.url}"`)
     // The npx wrapper is a display-layer affordance and must never be rendered
     // into HTML the crawler treats as the canonical install instruction.
     expect(shell).not.toContain('npx @dsh-1024store/')
+  })
+
+  it('states browse-only instead of printing a source command', () => {
+    // No npm package: the shell says the store cannot install the plugin and
+    // relies on the repository link, never the github: command that is no
+    // longer offered.
+    const plugin = TEST_PLUGINS[2]!
+    const { shell } = metadataForPath(`/plugins/${plugin.owner}/${plugin.repository}`, testSeoCatalog())
+
+    expect(shell).toContain('seo-shell-install-unavailable')
+    expect(shell).not.toContain(plugin.install)
+    expect(shell).not.toContain('add github:')
+    expect(shell).toContain(`href="${plugin.url}"`)
   })
 
   it('links the catalog pages to plugin detail pages', () => {
@@ -315,7 +332,11 @@ describe('crawler directives', () => {
       expect(llms).toContain(plugin.name)
       expect(llms).toContain(`${plugin.owner}/${plugin.repository}`)
     }
-    expect(llms).toContain('dsh plugin --profile web add github:')
+    // npm installs are the only offered method; browse-only plugins carry
+    // their repository link instead of a source command.
+    expect(llms).toContain(`install: ${TEST_PLUGINS[0]!.install}`)
+    expect(llms).toContain('— source: https://github.com/')
+    expect(llms).not.toContain('dsh plugin --profile web add github:')
     expect(llms).not.toContain('npx @dsh-1024store/')
   })
   it('redirects a repository address to the subpackage that succeeded it', () => {

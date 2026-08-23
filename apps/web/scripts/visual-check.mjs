@@ -627,7 +627,9 @@ try {
   ) {
     throw new Error('rankings still show the redundant list heading or GitHub activity label')
   }
-  if (await rankings.locator('.ranking-section .segmented-control button').first().getAttribute('aria-pressed') !== 'true') {
+  // The install-rankings group renders first in the DOM; the default mode is
+  // the github group's 24h growth button, so assert that button directly.
+  if (await rankings.getByRole('button', { name: '近 24 小时增速', exact: true }).getAttribute('aria-pressed') !== 'true') {
     throw new Error('rankings should default to the 24h growth mode')
   }
   if ((await rankings.locator('header a[href="https://www.deepseek.com/harness/"]').count()) !== 0) {
@@ -743,7 +745,12 @@ try {
   await assertSeo(rankings, 'desktop rankings', '/')
   await rankings.locator('.ranking-section .segmented-control button').last().click()
   await rankings.locator('.ranking-section .package-row').first().waitFor()
-  if ((await rankings.locator('.ranking-section .package-row').count()) !== 100) {
+  // A repository row's expandable panel nests its sibling plugins as further
+  // .package-row elements, so only top-level rows count toward the board size.
+  const topLevelRankingRows = await rankings
+    .locator('.ranking-section .package-row:not(.row-repo-panel .package-row)')
+    .count()
+  if (topLevelRankingRows !== 100) {
     throw new Error('GitHub activity rankings did not render the top 100 packages')
   }
   if ((await rankings.locator('.ranking-section .package-row .split-install-main').count()) === 0) {
@@ -751,7 +758,7 @@ try {
   }
   // A middle row is the interesting case: rows below it used to paint over the
   // menu back when it was anchored inside the row's stacking context.
-  await rankings.locator('.ranking-section .package-row .split-install-toggle').nth(4).click()
+  await rankings.locator('.ranking-section .package-row .split-install-toggle:visible').nth(4).click()
   await rankings.locator('.split-install-menu').waitFor()
   await assertMenuOnTop(rankings, 'desktop rankings split install menu')
   await assertNoHorizontalOverflow(rankings, 'desktop rankings with the install menu open')
@@ -884,11 +891,11 @@ try {
   // counting rows immediately races the re-render rather than testing the search.
   await mobile.locator('.directory-section .package-row').first().waitFor({ timeout: 10_000 })
     .catch(() => { throw new Error('search returned no package rows') })
-  await mobile.locator('.directory-section .package-row .split-install-main').first().click()
+  await mobile.locator('.directory-section .package-row .split-install-main:visible').first().click()
   await mobile.locator('.directory-section .package-row .split-install-main[aria-label="已复制"]').waitFor()
   // The filtered list is short, so this is the first row; the portal assertion
   // below still proves nothing paints over the menu.
-  await mobile.locator('.directory-section .package-row .split-install-toggle').first().click()
+  await mobile.locator('.directory-section .package-row .split-install-toggle:visible').first().click()
   await mobile.locator('.split-install-menu').waitFor()
   await assertMenuOnTop(mobile, 'mobile split install menu')
   if ((await mobile.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {
@@ -983,22 +990,28 @@ try {
   await detail.locator('.detail-header').waitFor()
   await detail.locator('.install-activity-section').waitFor()
   const detailInstallCommands = await detail.locator('.install-section .install-command code:visible').allTextContents()
-  if (!detailInstallCommands.some((text) => text.trim().startsWith('dsh plugin --profile web add github:'))) {
-    throw new Error('detail page is missing the bare official CLI install command')
+  // The store installs from npm only: both commands target the published npm
+  // package, and no visible command may carry a github: source spec.
+  if (!detailInstallCommands.some((text) => /^dsh plugin --profile web add (?!github:)\S/.test(text.trim()))) {
+    throw new Error('detail page is missing the bare official npm install command')
   }
-  if (!detailInstallCommands.some((text) => text.trim().startsWith('dsh1024 plugin --profile web add github:'))) {
-    throw new Error('detail page is missing the tracked dsh1024 install command')
+  if (!detailInstallCommands.some((text) => /^dsh1024 plugin --profile web add (?!github:)\S/.test(text.trim()))) {
+    throw new Error('detail page is missing the tracked dsh1024 npm install command')
+  }
+  if (detailInstallCommands.some((text) => text.includes('add github:'))) {
+    throw new Error('detail page still renders a github source install command')
   }
   if (detailInstallCommands.some((text) => text.includes('@dsh-1024store/cli'))) {
     throw new Error('detail page still renders the legacy @dsh-1024store/cli command')
   }
   // main ships the verification badges without any assertion; pin their shape
-  // and the three states' copy so a wording change cannot silently drop them.
+  // and the states' copy so a wording change cannot silently drop them. The
+  // build-allowance badge died with source installs and may not reappear.
   const methodCount = await detail.locator('.install-section .install-method').count()
   if (methodCount > 0) {
     const badges = await detail.locator('.install-section .install-method .install-badge').allTextContents()
     if (badges.length === 0) throw new Error('install methods render without a verification badge')
-    const known = ['已验证', '未验证', '检查中', '需授权构建']
+    const known = ['已验证', '未验证', '检查中']
     const unknownBadge = badges.find((text) => !known.includes(text.trim()))
     if (unknownBadge !== undefined) {
       throw new Error(`unexpected install verification badge: ${JSON.stringify(unknownBadge)}`)
@@ -1018,6 +1031,33 @@ try {
   await detail.waitForURL((url) => url.pathname === '/')
   await detail.locator('.ranking-section').waitFor()
   await detail.close()
+
+  // npm-only regression: a plugin without a published npm package is
+  // browse-only — its detail page shows the unavailable note and repository
+  // link, never an install command. The plugin is picked from the live local
+  // registry so the assertion survives catalog drift.
+  const registryResponse = await fetch(`${baseUrl}/api/v1/registry`)
+  if (!registryResponse.ok) throw new Error(`registry API answered ${registryResponse.status}`)
+  const registryData = await registryResponse.json()
+  const browseOnly = registryData.plugins.find(
+    (plugin) => plugin.target?.startsWith('github:') && plugin.id.split('/').length === 2,
+  )
+  if (browseOnly === undefined) throw new Error('local registry has no browse-only plugin to check')
+  const unavailable = await openPage({ width: 1440, height: 1000 }, `/plugins/${browseOnly.id}`)
+  await unavailable.locator('.detail-header').waitFor()
+  await unavailable.locator('.install-section .install-unavailable').waitFor()
+  if ((await unavailable.locator('.install-section .install-command').count()) !== 0) {
+    throw new Error(`browse-only plugin ${browseOnly.id} still renders an install command`)
+  }
+  if ((await unavailable.locator('.install-section .install-unavailable a').count()) === 0) {
+    throw new Error('browse-only install note is missing its repository link')
+  }
+  const unavailableText = await unavailable.locator('.install-section').textContent()
+  if (unavailableText?.includes('add github:')) {
+    throw new Error('browse-only install section leaks a github source command')
+  }
+  await assertNoHorizontalOverflow(unavailable, 'browse-only detail')
+  await unavailable.close()
 
   // The store's own catalog entry must show the dedicated dsh1024 commands,
   // never a generic "install the whole monorepo" command.
@@ -1113,7 +1153,7 @@ try {
   ])
   await assertHeroCommandsAligned(compactMobile, 'compact mobile hero')
   await assertInstallCommandsReadable(compactMobile, 'compact mobile hero', '.catalog-hero')
-  await compactMobile.locator('.ranking-section .package-row .split-install-toggle').nth(3).click()
+  await compactMobile.locator('.ranking-section .package-row .split-install-toggle:visible').nth(3).click()
   await compactMobile.locator('.split-install-menu').waitFor()
   await assertMenuOnTop(compactMobile, 'compact split install menu')
   if ((await compactMobile.locator('.split-install-menu [role="menuitem"]').count()) !== 2) {

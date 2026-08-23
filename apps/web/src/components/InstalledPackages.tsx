@@ -105,6 +105,7 @@ export function InstalledPackages({ query }: { query: string }) {
             plugin={plugin}
             category={categories.get(plugin.category)}
             index={index}
+            uninstallable
           />
         ))}
       </div>

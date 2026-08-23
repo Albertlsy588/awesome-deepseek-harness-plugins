@@ -42,16 +42,16 @@ declared entry point is committed and whether `prepare` exists. npm inspection f
 latest manifest for the exact package name declared by the repository and records whether it
 declares `dsh.bundle`.
 
-- A published npm package whose latest manifest declares `dsh.bundle` is a verified method and
-  is recommended before GitHub source installation. Its `repository` field is diagnostic only:
-  a missing, stale, or different backlink does not change npm verification.
-- GitHub is always retained as the source method. A committed entry, a carrier package with no
-  declared entry, or an entry produced by `prepare` is statically considered loadable. Missing
-  build output without `prepare` is unverified; incomplete or failed inspection is unknown.
-- When `prepare` exists, the generated GitHub command includes pnpm's
-  `--allow-build=<package-name>` option. pnpm therefore grants and persists the permission while
-  completing the first install, instead of requiring a known-failing attempt followed by a
-  manual `pnpm-workspace.yaml` edit.
+- A published npm package whose latest manifest declares `dsh.bundle` is a verified method
+  and the only one OFFERED to users. Its `repository` field is diagnostic only: a missing,
+  stale, or different backlink does not change npm verification.
+- The GitHub source method stays derived and recorded — a committed entry, a carrier package
+  with no declared entry, or an entry produced by `prepare` is statically considered loadable —
+  but no user-facing surface currently offers it: its `--allow-build` grant quoted a
+  repository-author-controlled package name, and one unvalidatable value invalidated the whole
+  registry for every store client (issue #159). A plugin without a published npm package is
+  therefore listed browse-only. Re-opening source installs later is a display-layer decision;
+  the collected data already supports it.
 
 “Verified” means the static evidence supports a loadable installation path. It is not a runtime
 test, compatibility guarantee, quality rating, or security review.

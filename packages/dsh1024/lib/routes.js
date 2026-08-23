@@ -4,13 +4,41 @@ import { isIP } from 'node:net';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { installExtraArgs, installTarget, loadRegistry, parseGitHubSource } from './registry.js';
-import { runPluginCommand } from './shared/install-runner.js';
+import { runOfficialCommand, runPluginCommand } from './shared/install-runner.js';
 import { reportInstallEvent } from './telemetry.js';
 import { checkForUpdate } from './update.js';
-import { resolveDshHome } from './shared/files.js';
+import { readJson, resolveDshHome, storePaths, writeJsonAtomic } from './shared/files.js';
 import { readCatalogPageCache, writeCatalogPageCache } from './catalog-cache.js';
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/;
 const PACKAGE_RE = /^(?:@[a-z0-9._-]+\/)?[A-Za-z0-9._-]+$/;
+/**
+ * Token grammar for a page-supplied install command. Mirrors the runner's
+ * TARGET_RE character set (plus `=` for `--flag=value` forms): no whitespace,
+ * no quotes, and none of cmd.exe's metacharacters, so the vector stays inert
+ * even on the Windows shell fallback.
+ */
+const COMMAND_TOKEN_RE = /^[A-Za-z0-9@:/._#+=-]+$/;
+/**
+ * Parse the full official command the embedded page asks to run.
+ *
+ * The store page names the exact command it already shows the user, and this
+ * endpoint forwards everything after `dsh` to the official CLI verbatim —
+ * the same philosophy as the dsh1024 CLI wrapper. The command template
+ * therefore lives on the site and can follow the official CLI's evolution
+ * without a plugin release; the local gate only pins the shape: it must be a
+ * `dsh plugin …` command made of inert tokens.
+ * @returns the argument vector after `dsh`, or null when the shape is wrong.
+ */
+export function parseDirectInstallCommand(value) {
+    if (typeof value !== 'string' || value.length > 1024)
+        return null;
+    const tokens = value.trim().split(/\s+/);
+    if (tokens.length < 4 || tokens[0] !== 'dsh' || tokens[1] !== 'plugin')
+        return null;
+    if (!tokens.slice(2).every(token => COMMAND_TOKEN_RE.test(token)))
+        return null;
+    return tokens.slice(1);
+}
 const COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
 const BODY_LIMIT_BYTES = 4 * 1024;
 const CATALOG_CACHE_BODY_LIMIT_BYTES = 4 * 1024 * 1024;
@@ -143,6 +171,58 @@ async function runTrackedPluginCommand(profile, action, target, progress, extraA
         progress.action = null;
     }
 }
+/**
+ * Run a page-supplied `dsh plugin …` vector verbatim and report the install
+ * anonymously. Mirrors runTrackedPluginCommand's environment and progress
+ * handling, but forwards the arguments unchanged instead of assembling them —
+ * the command template belongs to the site.
+ */
+async function runReportedVerbatimCommand(profile, pluginId, args, progress) {
+    const startedAt = new Date();
+    progress.active = true;
+    progress.action = 'install';
+    progress.target = args.at(-1) ?? '';
+    progress.startedAt = Date.now();
+    progress.lastLine = '';
+    let result;
+    try {
+        const pnpmStoreDir = readProfilePnpmStoreDir(profileDirectory(profile));
+        const run = await runOfficialCommand({
+            invocation: cliInvocation(),
+            args,
+            stdio: 'capture',
+            timeoutMs: COMMAND_TIMEOUT_MS,
+            env: {
+                ...process.env,
+                CI: 'true',
+                ...(pnpmStoreDir === undefined ? {} : {
+                    npm_config_store_dir: pnpmStoreDir,
+                    PNPM_STORE_DIR: pnpmStoreDir,
+                }),
+            },
+            onLine: line => { progress.lastLine = line; },
+        });
+        result = run.error !== null
+            ? { exitCode: 127, timedOut: false, stdout: run.stdout, stderr: `${run.stderr}\n${run.error}` }
+            : { exitCode: run.exitCode, timedOut: run.timedOut, stdout: run.stdout, stderr: run.stderr };
+    }
+    finally {
+        progress.active = false;
+        progress.action = null;
+    }
+    const completedAt = new Date();
+    const succeeded = result.exitCode === 0 && !result.timedOut;
+    void reportInstallEvent({
+        pluginId,
+        profile,
+        operation: 'install',
+        status: succeeded ? 'success' : 'failed',
+        startedAt,
+        completedAt,
+        errorCode: succeeded ? null : failureCode(result),
+    });
+    return result;
+}
 /** Run one plugin mutation and report its outcome anonymously (fire-and-forget). */
 async function runReportedPluginCommand(profile, pluginId, action, target, progress, extraArgs = [], versions = {}) {
     const startedAt = new Date();
@@ -266,6 +346,11 @@ export function mountMarketRoutes(webServer, config) {
     }
     let mutating = false;
     const dshHome = resolveDshHome();
+    // The panel preference outranks the plugin config's default.
+    async function resolveSidebarEntry() {
+        const stored = await readJson(storePaths(dshHome).preferences, null);
+        return typeof stored?.sidebarEntry === 'boolean' ? stored.sidebarEntry : config.sidebarEntry;
+    }
     const progress = { active: false, action: null, target: '', startedAt: 0, lastLine: '' };
     const disposers = [
         webServer.register({
@@ -280,10 +365,43 @@ export function mountMarketRoutes(webServer, config) {
         webServer.register({
             kind: 'exact',
             path: '/dsh1024/embed-config',
-            handler: (request, response) => {
+            handler: async (request, response) => {
                 if (!requireMethod(request, response, 'GET'))
                     return;
-                sendJson(response, 200, { url: embedUrl.href, origin: embedUrl.origin });
+                sendJson(response, 200, {
+                    url: embedUrl.href,
+                    origin: embedUrl.origin,
+                    sidebarEntry: await resolveSidebarEntry(),
+                });
+            },
+        }),
+        webServer.register({
+            kind: 'exact',
+            path: '/dsh1024/preferences',
+            handler: async (request, response) => {
+                // Store preferences the user flips from the panel UI, persisted next
+                // to the other store state so no config file needs hand-editing. The
+                // plugin config supplies the default; the stored preference wins.
+                if (request.method === 'GET') {
+                    sendJson(response, 200, { sidebarEntry: await resolveSidebarEntry() });
+                    return;
+                }
+                if (!requireTrustedPost(request, response))
+                    return;
+                try {
+                    const body = await readJsonBody(request);
+                    if (typeof body.sidebarEntry !== 'boolean') {
+                        sendJson(response, 400, { error: 'sidebarEntry must be a boolean' });
+                        return;
+                    }
+                    const path = storePaths(dshHome).preferences;
+                    const current = await readJson(path, {}) ?? {};
+                    await writeJsonAtomic(path, { ...current, sidebarEntry: body.sidebarEntry });
+                    sendJson(response, 200, { ok: true, sidebarEntry: body.sidebarEntry });
+                }
+                catch (error) {
+                    sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+                }
             },
         }),
         webServer.register({
@@ -436,10 +554,44 @@ export function mountMarketRoutes(webServer, config) {
                     return;
                 }
                 try {
-                    // Resolved by id: a repository URL is no longer unique now that one
-                    // monorepo can contribute several plugins.
                     const body = await readJsonBody(request);
                     const requestedId = typeof body.id === 'string' ? body.id.toLowerCase() : '';
+                    if (body.command !== undefined) {
+                        // The embedded store page hands over the full official command it
+                        // already shows the user. Page and endpoint read the same
+                        // first-party catalog API, so a second registry round-trip adds
+                        // nothing but a failure mode (issue #159); forwarding the vector
+                        // verbatim also keeps the command template on the site, where it
+                        // can follow the official CLI's evolution without a plugin
+                        // release. parseDirectInstallCommand pins the shape.
+                        const args = parseDirectInstallCommand(body.command);
+                        if (args === null) {
+                            sendJson(response, 400, { error: 'install command must be a plain official dsh plugin command' });
+                            return;
+                        }
+                        // Telemetry hygiene: the attribution id must look like a catalog
+                        // plugin id, or the anonymous event would carry arbitrary text.
+                        if (!/^[a-z0-9_.-]+(?:\/[a-z0-9_.-]+)+$/.test(requestedId) || requestedId.length > 201) {
+                            sendJson(response, 400, { error: 'plugin id is invalid' });
+                            return;
+                        }
+                        mutating = true;
+                        try {
+                            const result = await runReportedVerbatimCommand(config.profile, requestedId, args, progress);
+                            const ok = result.exitCode === 0 && !result.timedOut;
+                            sendJson(response, ok ? 200 : 502, {
+                                ok,
+                                ...result,
+                                installed: readInstalled(config.profile),
+                            });
+                        }
+                        finally {
+                            mutating = false;
+                        }
+                        return;
+                    }
+                    // Older embedded pages send only the catalog id; the registry entry
+                    // then decides the executed target, as it always has.
                     const { registry } = await loadRegistry(config.registryUrl, fetch, { dshHome });
                     const plugin = registry.plugins.find(entry => entry.id.toLowerCase() === requestedId);
                     if (plugin === undefined) {
@@ -447,6 +599,13 @@ export function mountMarketRoutes(webServer, config) {
                         return;
                     }
                     const target = installTarget(plugin);
+                    // Browse-only entry: no npm package. The store UI offers no install
+                    // for it, so this refusal only fires for a stale or hand-crafted
+                    // page.
+                    if (target.startsWith('github:')) {
+                        sendJson(response, 400, { error: 'this plugin has not published an npm package; source installs are not offered by the store' });
+                        return;
+                    }
                     mutating = true;
                     try {
                         const result = await runReportedPluginCommand(config.profile, pluginEventId(plugin), 'install', target, progress, installExtraArgs(plugin));
@@ -478,35 +637,65 @@ export function mountMarketRoutes(webServer, config) {
                 }
                 try {
                     const body = await readJsonBody(request);
-                    const name = typeof body.name === 'string' ? body.name : '';
+                    const installed = readInstalled(config.profile);
+                    let name = typeof body.name === 'string' ? body.name : '';
+                    const requestedId = typeof body.id === 'string' ? body.id.toLowerCase() : '';
+                    if (name === '' && requestedId !== '') {
+                        // The page uninstalls by catalog id; the package name never leaves
+                        // this process. The id → package-name mapping is what the registry
+                        // exists for, so a resolution miss is a real 400, not a fallback.
+                        try {
+                            const { registry } = await loadRegistry(config.registryUrl, fetch, { preferCache: true, dshHome });
+                            const plugin = registry.plugins.find(entry => entry.id.toLowerCase() === requestedId);
+                            if (plugin !== undefined)
+                                name = installedPackageName(plugin, installed) ?? '';
+                        }
+                        catch {
+                            // Resolution failure falls through to the guard below.
+                        }
+                        if (name === '') {
+                            sendJson(response, 400, { error: 'no installed package matches this plugin id' });
+                            return;
+                        }
+                    }
                     if (!PACKAGE_RE.test(name) || name === 'dsh1024') {
                         sendJson(response, 400, { error: 'plugin cannot be uninstalled here' });
                         return;
                     }
-                    const installed = readInstalled(config.profile);
                     const installedSpec = installed[name];
                     if (installedSpec === undefined) {
                         sendJson(response, 400, { error: 'plugin is not installed' });
                         return;
                     }
-                    const { registry } = await loadRegistry(config.registryUrl, fetch, { dshHome });
-                    // Prefer the plugin whose github:owner/repo target appears in the installed
-                    // manifest spec so telemetry is attributed to the actually-installed plugin;
-                    // fall back to the display-name match only for the catalog-membership gate
-                    // (display names are not unique across the catalog — same-named forks exist).
-                    const cataloged = registry.plugins.find(plugin => installedSpec.toLowerCase().includes(installTarget(plugin).toLowerCase()))
-                        ?? registry.plugins.find(plugin => plugin.name === name);
-                    if (cataloged === undefined) {
-                        sendJson(response, 400, { error: 'plugin is not in the 1024 Store registry' });
-                        return;
+                    // Telemetry attribution is best-effort, never a gate: the registry
+                    // used to be a membership requirement here, which made "uninstall"
+                    // depend on a network catalog — the same single point of failure
+                    // that broke installs (issue #159). Prefer the plugin whose target
+                    // appears in the installed manifest spec; fall back to the display
+                    // name; with no match (or no registry at all) the uninstall still
+                    // runs, just unreported.
+                    let eventId = null;
+                    try {
+                        const { registry } = await loadRegistry(config.registryUrl, fetch, { preferCache: true, dshHome });
+                        const cataloged = registry.plugins.find(plugin => installedSpec.toLowerCase().includes(installTarget(plugin).toLowerCase()))
+                            ?? registry.plugins.find(plugin => plugin.name === name);
+                        if (cataloged !== undefined)
+                            eventId = pluginEventId(cataloged);
+                    }
+                    catch {
+                        // Registry unavailable: uninstall proceeds without attribution.
                     }
                     mutating = true;
                     try {
-                        const result = await runReportedPluginCommand(config.profile, pluginEventId(cataloged), 'uninstall', name, progress);
+                        const result = eventId === null
+                            ? await runTrackedPluginCommand(config.profile, 'uninstall', name, progress)
+                            : await runReportedPluginCommand(config.profile, eventId, 'uninstall', name, progress);
                         const ok = result.exitCode === 0 && !result.timedOut;
                         sendJson(response, ok ? 200 : 502, {
                             ok,
                             ...result,
+                            // The exact official command that ran, for the page's console.
+                            command: `dsh plugin --profile ${config.profile} remove ${name}`,
                             installed: readInstalled(config.profile),
                         });
                     }

@@ -20,6 +20,7 @@ export function apply(ctx, config = {}) {
         registryUrl: config.registryUrl ?? DEFAULT_REGISTRY_URL,
         updateUrl: config.updateUrl ?? DEFAULT_UPDATE_URL,
         embedUrl: config.embedUrl ?? DEFAULT_EMBED_URL,
+        sidebarEntry: config.sidebarEntry ?? true,
     };
     ctx.inject(['webServer'], hostContext => {
         const host = hostContext;
