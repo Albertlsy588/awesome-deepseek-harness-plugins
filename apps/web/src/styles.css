@@ -1992,6 +1992,34 @@ main {
   opacity: 1;
 }
 
+/* Source-install link for browse-only plugins in the embedded store: an
+   outlined, low-emphasis affordance — it opens the repository, it does not
+   install anything, so it must not compete with the one-click button. */
+.split-install-main.bridge-source-install {
+  display: inline-flex;
+  width: auto;
+  min-width: 96px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.split-install-main.bridge-source-install:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
 .split-install-toggle.icon-button {
   width: 22px;
   height: 32px;

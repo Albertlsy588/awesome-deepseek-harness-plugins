@@ -139,7 +139,7 @@ export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'i
       return (
         <div className="split-install">
           <a
-            className="split-install-main bridge-local-install button button-primary"
+            className="split-install-main bridge-source-install"
             href={pluginSourceUrl(plugin.id, plugin.url)}
             target="_blank"
             rel="noreferrer"

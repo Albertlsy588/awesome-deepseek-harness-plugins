@@ -20,7 +20,7 @@ export function InstallUnavailable({ repositoryUrl }: { repositoryUrl: string })
     return (
       <div className="bridge-install-panel">
         <a
-          className="button button-primary"
+          className="button button-secondary"
           href={repositoryUrl}
           target="_blank"
           rel="noreferrer"
