@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
+import { InstallConsole } from './components/InstallConsole'
 import { AboutPage as CommunityAboutPage } from './community/pages/AboutPage'
 import { FeedPage as CommunityFeedPage } from './community/pages/FeedPage'
 import { ThreadPage as CommunityThreadPage } from './community/pages/ThreadPage'
@@ -31,7 +32,9 @@ function LegacyPackageRedirect() {
 export function App() {
   return (
     <Routes>
-      <Route path="/embed/store" element={<CatalogPage view="catalog" />} />
+      {/* The embedded store bypasses AppShell; the install console must ride
+          along here too or an embedded install has no visible progress. */}
+      <Route path="/embed/store" element={<><CatalogPage view="catalog" /><InstallConsole /></>} />
       <Route element={<AppShell />}>
         <Route index element={<CatalogPage view="rankings" />} />
         <Route path="/plugins" element={<CatalogPage view="catalog" />} />

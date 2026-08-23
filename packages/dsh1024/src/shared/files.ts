@@ -16,6 +16,7 @@ export interface StorePaths {
   receipts: string
   registryCache: string
   catalogPageCache: string
+  preferences: string
 }
 
 export interface FileLockOptions {
@@ -40,6 +41,7 @@ export function storePaths(dshHome: string): StorePaths {
     receipts: join(directory, 'receipts.json'),
     registryCache: join(directory, 'registry-cache.json'),
     catalogPageCache: join(directory, 'catalog-page-cache.json'),
+    preferences: join(directory, 'preferences.json'),
   }
 }
 

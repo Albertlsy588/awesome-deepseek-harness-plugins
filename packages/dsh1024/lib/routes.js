@@ -7,7 +7,7 @@ import { installExtraArgs, installTarget, loadRegistry, parseGitHubSource } from
 import { runOfficialCommand, runPluginCommand } from './shared/install-runner.js';
 import { reportInstallEvent } from './telemetry.js';
 import { checkForUpdate } from './update.js';
-import { resolveDshHome } from './shared/files.js';
+import { readJson, resolveDshHome, storePaths, writeJsonAtomic } from './shared/files.js';
 import { readCatalogPageCache, writeCatalogPageCache } from './catalog-cache.js';
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/;
 const PACKAGE_RE = /^(?:@[a-z0-9._-]+\/)?[A-Za-z0-9._-]+$/;
@@ -346,6 +346,11 @@ export function mountMarketRoutes(webServer, config) {
     }
     let mutating = false;
     const dshHome = resolveDshHome();
+    // The panel preference outranks the plugin config's default.
+    async function resolveSidebarEntry() {
+        const stored = await readJson(storePaths(dshHome).preferences, null);
+        return typeof stored?.sidebarEntry === 'boolean' ? stored.sidebarEntry : config.sidebarEntry;
+    }
     const progress = { active: false, action: null, target: '', startedAt: 0, lastLine: '' };
     const disposers = [
         webServer.register({
@@ -360,14 +365,43 @@ export function mountMarketRoutes(webServer, config) {
         webServer.register({
             kind: 'exact',
             path: '/dsh1024/embed-config',
-            handler: (request, response) => {
+            handler: async (request, response) => {
                 if (!requireMethod(request, response, 'GET'))
                     return;
                 sendJson(response, 200, {
                     url: embedUrl.href,
                     origin: embedUrl.origin,
-                    sidebarEntry: config.sidebarEntry,
+                    sidebarEntry: await resolveSidebarEntry(),
                 });
+            },
+        }),
+        webServer.register({
+            kind: 'exact',
+            path: '/dsh1024/preferences',
+            handler: async (request, response) => {
+                // Store preferences the user flips from the panel UI, persisted next
+                // to the other store state so no config file needs hand-editing. The
+                // plugin config supplies the default; the stored preference wins.
+                if (request.method === 'GET') {
+                    sendJson(response, 200, { sidebarEntry: await resolveSidebarEntry() });
+                    return;
+                }
+                if (!requireTrustedPost(request, response))
+                    return;
+                try {
+                    const body = await readJsonBody(request);
+                    if (typeof body.sidebarEntry !== 'boolean') {
+                        sendJson(response, 400, { error: 'sidebarEntry must be a boolean' });
+                        return;
+                    }
+                    const path = storePaths(dshHome).preferences;
+                    const current = await readJson(path, {}) ?? {};
+                    await writeJsonAtomic(path, { ...current, sidebarEntry: body.sidebarEntry });
+                    sendJson(response, 200, { ok: true, sidebarEntry: body.sidebarEntry });
+                }
+                catch (error) {
+                    sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+                }
             },
         }),
         webServer.register({

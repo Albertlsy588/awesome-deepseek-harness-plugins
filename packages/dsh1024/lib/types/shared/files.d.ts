@@ -6,6 +6,7 @@ export interface StorePaths {
     receipts: string;
     registryCache: string;
     catalogPageCache: string;
+    preferences: string;
 }
 export interface FileLockOptions {
     /** Test hook that runs after the lock directory exists but before this owner commits. */

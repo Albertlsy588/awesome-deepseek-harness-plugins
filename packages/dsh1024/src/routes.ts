@@ -11,7 +11,7 @@ import { runOfficialCommand, runPluginCommand } from './shared/install-runner.ts
 import type { InstallInvocation } from './shared/install-runner.ts'
 import { reportInstallEvent } from './telemetry.ts'
 import { checkForUpdate } from './update.ts'
-import { resolveDshHome } from './shared/files.ts'
+import { readJson, resolveDshHome, storePaths, writeJsonAtomic } from './shared/files.ts'
 import { readCatalogPageCache, writeCatalogPageCache } from './catalog-cache.ts'
 
 export interface WebRoute {
@@ -413,6 +413,11 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
 
   let mutating = false
   const dshHome = resolveDshHome()
+  // The panel preference outranks the plugin config's default.
+  async function resolveSidebarEntry(): Promise<boolean> {
+    const stored = await readJson<{ sidebarEntry?: unknown }>(storePaths(dshHome).preferences, null)
+    return typeof stored?.sidebarEntry === 'boolean' ? stored.sidebarEntry : config.sidebarEntry
+  }
   const progress: Progress = { active: false, action: null, target: '', startedAt: 0, lastLine: '' }
   const disposers = [
     webServer.register({
@@ -426,13 +431,40 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
     webServer.register({
       kind: 'exact',
       path: '/dsh1024/embed-config',
-      handler: (request, response) => {
+      handler: async (request, response) => {
         if (!requireMethod(request, response, 'GET')) return
         sendJson(response, 200, {
           url: embedUrl.href,
           origin: embedUrl.origin,
-          sidebarEntry: config.sidebarEntry,
+          sidebarEntry: await resolveSidebarEntry(),
         })
+      },
+    }),
+    webServer.register({
+      kind: 'exact',
+      path: '/dsh1024/preferences',
+      handler: async (request, response) => {
+        // Store preferences the user flips from the panel UI, persisted next
+        // to the other store state so no config file needs hand-editing. The
+        // plugin config supplies the default; the stored preference wins.
+        if (request.method === 'GET') {
+          sendJson(response, 200, { sidebarEntry: await resolveSidebarEntry() })
+          return
+        }
+        if (!requireTrustedPost(request, response)) return
+        try {
+          const body = await readJsonBody(request) as { sidebarEntry?: unknown }
+          if (typeof body.sidebarEntry !== 'boolean') {
+            sendJson(response, 400, { error: 'sidebarEntry must be a boolean' })
+            return
+          }
+          const path = storePaths(dshHome).preferences
+          const current = await readJson<Record<string, unknown>>(path, {}) ?? {}
+          await writeJsonAtomic(path, { ...current, sidebarEntry: body.sidebarEntry })
+          sendJson(response, 200, { ok: true, sidebarEntry: body.sidebarEntry })
+        } catch (error) {
+          sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+        }
       },
     }),
     webServer.register({
