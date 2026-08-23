@@ -4,7 +4,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { registerCommunityRoutes } from './community/routes'
 import { registerAuthRoutes } from './auth-api'
 import { ANONYMOUS_QUOTA, AUTHENTICATED_QUOTA, consumeQuota } from './lib/api-quota'
-import { authenticateApiKey, sha256Hex, timingSafeEqualStrings } from './lib/auth'
+import { authenticateApiKey, cleanupExpiredAuthRows, sha256Hex, timingSafeEqualStrings } from './lib/auth'
 import {
   buildCatalog,
   buildPluginsPage,
@@ -815,6 +815,15 @@ export function createApp(overrides: Partial<AppDependencies> = {}) {
       new Date(capturedAt).toISOString(),
     )
     await dependencies.snapshotRefresher(context.env, fetch, capturedAt)
+    // Auth hygiene rides the sync: with no scheduled handler in this Worker,
+    // this authenticated daily call is the reliable in-Worker tick that purges
+    // expired sessions, oauth states, and stale rate counters.
+    await cleanupExpiredAuthRows(context.env.CATALOG_DB, capturedAt).catch((error) => {
+      console.error(JSON.stringify({
+        message: 'auth_cleanup_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }))
+    })
     return context.json({
       ok: true,
       total: result.total,

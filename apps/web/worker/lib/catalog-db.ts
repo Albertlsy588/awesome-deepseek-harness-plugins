@@ -17,6 +17,8 @@ interface CatalogRow {
   github_updated_at: string | null
   plugin_path: string
   plugin_id: string
+  curated_updated_at: string | null
+  row_updated_at: string | null
   curated_name: string | null
   curated_category: string | null
   curated_description_en: string | null
@@ -158,16 +160,17 @@ export async function syncCuratedEntries(
     ).bind(fullName, normalizeRepositoryName(fullName), owner, name, url, now, now, now, now)))
   }
 
-  // Retired plugins are dropped BEFORE the upserts, so an entry that merely
-  // re-cases its path replaces its old row instead of leaving both behind. A
-  // plugin the topic scan also found keeps its row and simply loses its
-  // curated columns.
+  // Retired plugins are dropped BEFORE the upserts. A plugin the topic scan
+  // also found keeps its row and simply loses its curated columns.
   //
   // Identity collisions no longer abort anything: normalized_plugin_id is not
   // UNIQUE (0013). A renamed GitHub repository can leave a stale row holding
   // the same id a curated entry re-introduces under the old name — both rows
-  // are allowed to coexist, readers order deterministically, and rows whose
-  // repository no longer resolves are garbage-collected out of band.
+  // are allowed to coexist, the snapshot picks a deterministic winner, and
+  // rows whose repository no longer resolves are garbage-collected out of
+  // band. Within ONE repository, though, a same-identity sibling at another
+  // path (an entry that merely re-cased its path) is our own stale leftover,
+  // not a rename artifact, so the upsert below clears it in the same batch.
   const currentPluginIds = JSON.stringify(entries.map((entry) => normalizePluginId(entry.id)))
   const retired = await db.batch([
     db.prepare(
@@ -188,7 +191,9 @@ export async function syncCuratedEntries(
     ).bind(now, currentPluginIds),
   ])
 
-  for (const group of chunks(entries, 40)) {
+  // 20 entries × 2 statements each keeps a batch at the 40-statement size D1
+  // has been serving all along.
+  for (const group of chunks(entries, 20)) {
     const normalizedNames = [...new Set(group.map((entry) => {
       const { owner, name } = curatedEntryParts(entry.id)
       return normalizeRepositoryName(`${owner}/${name}`)
@@ -204,6 +209,18 @@ export async function syncCuratedEntries(
       const { owner, name, path } = curatedEntryParts(entry.id)
       const id = ids.get(normalizeRepositoryName(`${owner}/${name}`))
       if (id === undefined) throw new Error(`Curated repository was not inserted: ${entry.id}`)
+      statements.push(db.prepare(
+        // The primary key (repository_id, plugin_path) is case-sensitive while
+        // the identity is not: an entry that re-cases its path targets a new
+        // PK slot and would leave the old row behind as a permanent duplicate
+        // the out-of-band GC can never collect (its repository still
+        // resolves). Same-repository siblings holding this identity at any
+        // other path are stale by definition, so clear them first.
+        `DELETE FROM catalog_plugins
+          WHERE repository_id = ?
+            AND normalized_plugin_id = ?
+            AND plugin_path <> ?`,
+      ).bind(id, normalizePluginId(entry.id), path))
       statements.push(db.prepare(
         // Only curated_* and the provenance flag are written. The crawler's
         // columns are absent from both the insert and the update, so a sync
@@ -292,6 +309,14 @@ function subpackageName(pluginPath: string): string | null {
   return leaf === undefined || leaf.length === 0 ? null : leaf
 }
 
+/** ISO-8601 strings compare lexicographically; an absent timestamp loses. */
+function fresherRow(candidate: CatalogRow, incumbent: CatalogRow): boolean {
+  const candidateCurated = candidate.curated_updated_at ?? ''
+  const incumbentCurated = incumbent.curated_updated_at ?? ''
+  if (candidateCurated !== incumbentCurated) return candidateCurated > incumbentCurated
+  return (candidate.row_updated_at ?? '') > (incumbent.row_updated_at ?? '')
+}
+
 async function sha256(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value)
   const digest = await crypto.subtle.digest('SHA-256', bytes)
@@ -309,6 +334,7 @@ export async function loadCatalogSnapshotFromD1(
     `SELECT r.full_name, r.owner, r.repository_name, r.html_url, r.github_description,
             r.stars, r.forks, r.pushed_at, r.github_updated_at,
             p.plugin_path, p.plugin_id,
+            p.curated_updated_at, p.updated_at AS row_updated_at,
             p.curated_name, p.curated_category,
             p.curated_description_en, p.curated_description_zh, p.curated_added,
             p.ai_category, p.ai_description_en, p.ai_description_zh,
@@ -325,15 +351,29 @@ export async function loadCatalogSnapshotFromD1(
   ).all<CatalogRow>()
   if (result.results.length === 0) return null
 
+  // A duplicated identity — rows a repository rename leaves behind now that
+  // normalized_plugin_id is not UNIQUE (0013) — must not race for lookups
+  // keyed by id: the row with the freshest curated write wins, then the
+  // freshest row overall. D1 keeps every row for the out-of-band GC; the
+  // projection carries exactly one per identity, so detail lookups, list
+  // keys, and the sitemap never see the stale twin.
+  const winners = new Map<string, CatalogRow>()
+  for (const row of result.results) {
+    const key = normalizePluginId(row.plugin_id)
+    const incumbent = winners.get(key)
+    if (incumbent === undefined || fresherRow(row, incumbent)) winners.set(key, row)
+  }
+  const rows = [...winners.values()]
+
   const categories = categoryLabelMap()
   // A plugin counts as unclassified only when neither a curator nor the
   // classifier has given it a category. The `?? null` mirrors the fallback used
   // to build each row below, so this stays true for a row whose ai_category is
   // absent rather than null.
-  if (result.results.some((row) => (row.curated_category ?? row.ai_category ?? null) === null)) {
+  if (rows.some((row) => (row.curated_category ?? row.ai_category ?? null) === null)) {
     categories[UNCLASSIFIED_CATEGORY.id] = { ...UNCLASSIFIED_CATEGORY.label }
   }
-  const plugins = result.results.map<CatalogPlugin>((row) => {
+  const plugins = rows.map<CatalogPlugin>((row) => {
     const description = row.github_description ?? `${row.full_name} discovered from GitHub.`
     // The plugin row owns its id: inspection moves a discovered plugin to its
     // manifest's directory, so a nested monorepo bundle yields the `#path:`

@@ -246,7 +246,8 @@ function coldStartSnapshot(env: Env, fetcher: typeof fetch): Promise<CatalogSnap
 /**
  * Read the snapshot. Reading never rebuilds it.
  *
- * The cron triggers own the rebuild. A read used to start one too — inline when
+ * POST /api/v1/catalog/sync owns the rebuild (plus the cold-start path above
+ * for an empty namespace). A read used to start one too — inline when
  * the snapshot was missing, via `ctx.waitUntil` when it was merely stale — and
  * nothing deduplicated those: one per request, each a full catalog read out of
  * D1, a GitHub GraphQL sweep, then batched writes back. That is affordable at

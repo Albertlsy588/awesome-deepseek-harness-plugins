@@ -82,8 +82,8 @@ function route(
       return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } })
     }
     if (!isHtml) return response
-    // A KV read, fresh or stale — the cron triggers own the rebuild, so SSR
-    // metadata never starts one and never blocks on one.
+    // A KV read, fresh or stale — the catalog-sync endpoint owns the rebuild,
+    // so SSR metadata never starts one and never blocks on one.
     const catalog = await loadCatalogSnapshot(env, ctx)
     const seo = seoCatalog(catalog.snapshot, catalog.source === 'empty')
     // A repository-level address whose plugin now lives in a subdirectory

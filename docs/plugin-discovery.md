@@ -19,9 +19,9 @@ out-of-band collection (topic scan, git/npm inspection) ─┐
 checked-in PR catalog ──> CI POST /api/v1/catalog/sync ──┘
 ```
 
-Nothing is bundled into the Worker: the API reads a fresh KV snapshot first, refreshes it
-from D1 when stale, and serves the last KV value during D1/GitHub failures. Stale KV is the
-only degradation mode. External consumers read the same D1-backed catalog through
+Nothing is bundled into the Worker: reads serve the KV snapshot, fresh or stale, without
+touching D1 — the snapshot is rebuilt only by the catalog-sync endpoint, or once on a cold
+start when the KV namespace is empty. Stale KV is the only degradation mode. External consumers read the same D1-backed catalog through
 `GET /api/v1/registry` — capped at its install-ranked head (see [API reference](api.md)).
 
 ## Data model

@@ -414,7 +414,7 @@ ${generatedNotice.zh}
 
 面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（\`dsh\`）生态的社区插件目录，共收录 **${total}** 个插件（含 PR 收录与 GitHub \`dsh-plugin\` topic 自动发现），目录数据更新于 ${registry.updated}。
 
-**但这个仓库不只是一份 awesome list。** 维护这份目录所需要的全部基建都在这里开源：一个在线插件市场、一个把市场装进 \`dsh\` 本体的插件、一条定时自动收集并做格式校验的目录流水线，以及一套免费的公开查询 API。代码采用 MIT 协议，fork 之后就能部署成你自己的插件市场。
+**但这个仓库不只是一份 awesome list。** 这里开源了一个在线插件市场、一个把市场装进 \`dsh\` 本体的插件、经静态校验的 PR 收录流水线，以及一套免费的公开查询 API；目录数据另有自动收集服务持续喂入。代码采用 MIT 协议，fork 之后就能部署成你自己的插件市场。
 
 ${heroImage(registry, 'zh')}
 
@@ -511,7 +511,7 @@ npx skills add imsai-sh/awesome-deepseek-harness-plugins --skill submit-dsh-plug
 
 ## 项目定位
 
-本项目与 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 都服务于 DeepSeek Harness 插件生态。在继承其目录数据与社区整理思路的基础上，本项目把「一份人工维护的列表」扩展成一套开源、可自部署的插件市场基建：自动发现与静态校验的目录流水线、在线市场网站、dsh 内置市场插件与免费查询 API，具体见上文[项目亮点](#项目亮点)。
+本项目与 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 都服务于 DeepSeek Harness 插件生态。在继承其目录数据与社区整理思路的基础上，本项目把「一份人工维护的列表」扩展成一套开源、可自部署的插件市场基建：在线市场网站、dsh 内置市场插件、静态校验的 PR 收录流水线与免费查询 API，并由自动收集服务持续补充目录数据，具体见上文[项目亮点](#项目亮点)。
 
 ## 项目结构
 
@@ -520,7 +520,7 @@ catalog/plugins/    插件提交表单与 curated 元数据（每个插件一个
 catalog/categories.json  分类定义（唯一分类信源）
 skills/             面向贡献者的可安装 Agent Skills
 apps/web/src/       React + Vite 前端
-apps/web/worker/    Cloudflare Worker API 与数据刷新（唯一读写 D1 的进程）
+apps/web/worker/    Cloudflare Worker API 与数据刷新
 packages/dsh1024/   dsh1024 npm 包：上报安装统计的包装 CLI + DSH 设置页内插件市场
 scripts/            提交审查、目录同步与 README 生成脚本
 \`\`\`
@@ -594,7 +594,7 @@ ${generatedNotice.en}
 
 The **DSH 1024Store** community catalog for [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) plugins: **${total}** plugins, updated ${registry.updated}.
 
-**This repository is more than an awesome list.** Everything needed to run the catalog is open source here: a hosted plugin marketplace, a plugin that puts that marketplace inside \`dsh\` itself, a scheduled discovery pipeline that validates every entry, and a free public query API. The code is MIT licensed, so you can fork it and run your own marketplace.
+**This repository is more than an awesome list.** It open-sources a hosted plugin marketplace, a plugin that puts that marketplace inside \`dsh\` itself, a statically validated PR submission pipeline, and a free public query API; an automated collection service feeds the catalog alongside them. The code is MIT licensed, so you can fork it and run your own marketplace.
 
 ${heroImage(registry, 'en')}
 

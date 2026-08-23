@@ -288,16 +288,38 @@ describe('curated catalog reconciliation', () => {
       { repo: 'owner/old-name', id: 'owner/old-name' },
     ])
 
-    // Both are published; the duplicate is visible data, not an error, until
-    // the stale row is garbage-collected out of band.
+    // Both rows stay in D1 for the out-of-band GC, but the projection picks
+    // one winner per identity — the row with the freshest curated write, here
+    // the re-synced entry under the re-created old-name repository.
     const snapshot = await loadCatalogSnapshotFromD1(db, '2026-08-17T00:00:00.000Z')
-    expect(snapshot?.plugins.filter((plugin) => plugin.id.toLowerCase() === 'owner/old-name'))
-      .toHaveLength(2)
+    const published = snapshot?.plugins.filter((plugin) => plugin.id.toLowerCase() === 'owner/old-name')
+    expect(published).toHaveLength(1)
+    expect(published?.[0]?.url).toBe('https://github.com/Owner/old-name')
 
     // Idempotent: re-running the same sync does not mint a third row.
     await syncCuratedEntries(db, [entry], '2026-08-18T00:00:00.000Z')
     expect(database.prepare('SELECT COUNT(*) AS count FROM catalog_plugins').get())
       .toEqual({ count: 2 })
+    database.close()
+  })
+
+  it('replaces, not duplicates, an entry whose path only changed case', async () => {
+    const database = catalogDatabase()
+    const db = sqliteD1(database)
+
+    await syncCuratedEntries(db, [curatedEntry({
+      id: 'Owner/monorepo/packages/Foo', name: 'Foo', repository: 'https://github.com/Owner/monorepo',
+    })], NOW)
+    // 'Foo' -> 'foo' keeps the same normalized id, so the retire step cannot
+    // catch the old row; the per-entry same-repository cleanup must. Without
+    // it this left a permanent duplicate no out-of-band GC could collect,
+    // because the repository still resolves.
+    await syncCuratedEntries(db, [curatedEntry({
+      id: 'Owner/monorepo/packages/foo', name: 'foo', repository: 'https://github.com/Owner/monorepo',
+    })], '2026-08-16T02:00:00.000Z')
+
+    expect(database.prepare('SELECT plugin_path, plugin_id, curated_name FROM catalog_plugins').all())
+      .toEqual([{ plugin_path: 'packages/foo', plugin_id: 'Owner/monorepo/packages/foo', curated_name: 'foo' }])
     database.close()
   })
 })

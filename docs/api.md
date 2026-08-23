@@ -23,9 +23,9 @@ handler behaviour, quotas, and error codes are identical. `api.deepseek1024.com`
 registered as a second custom domain of the `dsh-store` Worker via `wrangler.jsonc`
 `routes` and is provisioned automatically on deploy.
 
-All internal endpoints live under `https://deepseek1024.com/api/v1/`. The Worker is the only
-process that reads or writes the D1 catalog; every response is served from a 15-minute KV
-snapshot of D1, and stale KV is the only degradation mode. Legacy paths (`/api/plugin`,
+All internal endpoints live under `https://deepseek1024.com/api/v1/`. The Worker and the
+maintainer's out-of-band collection jobs are the only D1 writers; every response is served
+from a 15-minute KV snapshot of D1, and stale KV is the only degradation mode. Legacy paths (`/api/plugin`,
 `/api/plugin/:owner/:name`, `/plugins.json`, `/api/install-stats/:owner/:name`,
 `/api/dsh-1024store`, `/api/packages*`, `/api/health`) are removed without compatibility
 shims.
@@ -107,7 +107,7 @@ in D1; API keys are shown once at creation and stored only as hashes.
 - `DELETE /api/v1/api-keys/:id` — revokes (soft-deletes) the key.
 
 Cookie-authenticated mutations reject mismatched `Origin` headers (`403`); expired
-sessions and stale rate counters are purged by out-of-band maintenance.
+sessions and stale rate counters are purged whenever the daily catalog sync runs.
 
 ## GET /api/v1/plugins/:owner/:name[/sub/dir…]
 

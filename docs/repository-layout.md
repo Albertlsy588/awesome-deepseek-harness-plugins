@@ -34,7 +34,7 @@ There is no bundled registry, no `catalog/generated/` artifact, and no disaster-
 | `catalog/README.md` | English plugin directory (bot projection) | No |
 | `packages/dsh1024/` | The publishable `dsh1024` package: wrapper CLI (official DSH plugin command delegation, local verification, install-event delivery) plus the in-DSH marketplace plugin | Yes |
 | `apps/web/src/` | React interface: the catalog, and `src/community/` for the community section | Yes |
-| `apps/web/worker/` | Hono API, the only process that reads or writes D1; `worker/community/` holds the community's routes | Yes |
+| `apps/web/worker/` | Hono API serving the catalog out of D1/KV; `worker/community/` holds the community's routes | Yes |
 | `scripts/` | Trusted pull-request review, catalog sync, README generation, and their tests | Yes |
 | `.github/workflows/` | PR review/merge, CI, catalog sync, and deployment automation | Yes |
 
