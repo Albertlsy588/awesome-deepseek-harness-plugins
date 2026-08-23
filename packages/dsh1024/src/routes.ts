@@ -7,7 +7,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { installExtraArgs, installTarget, loadRegistry, parseGitHubSource } from './registry.ts'
 import type { RegistryPlugin } from './registry.ts'
-import { runPluginCommand } from './shared/install-runner.ts'
+import { runOfficialCommand, runPluginCommand } from './shared/install-runner.ts'
 import type { InstallInvocation } from './shared/install-runner.ts'
 import { reportInstallEvent } from './telemetry.ts'
 import { checkForUpdate } from './update.ts'
@@ -50,19 +50,30 @@ const PROFILE_RE = /^[A-Za-z0-9_-]+$/
 const PACKAGE_RE = /^(?:@[a-z0-9._-]+\/)?[A-Za-z0-9._-]+$/
 
 /**
- * The one install-target grammar the store executes when the embedded page
- * sends the target along with the request: an npm package name, optionally
- * with a version, tag, or simple range. Everything else — github:, file:,
- * URLs, aliases, workspace specs — is refused, so the page can only ask for
- * what the official CLI would treat as a registry install.
+ * Token grammar for a page-supplied install command. Mirrors the runner's
+ * TARGET_RE character set (plus `=` for `--flag=value` forms): no whitespace,
+ * no quotes, and none of cmd.exe's metacharacters, so the vector stays inert
+ * even on the Windows shell fallback.
  */
-// Leading characters are pinned to alphanumerics so a "target" can never
-// reach the official CLI looking like a flag (`-g`, `--registry=…`).
-const DIRECT_INSTALL_TARGET_RE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[A-Za-z0-9][A-Za-z0-9._-]*(?:@[A-Za-z0-9^~><=.*][A-Za-z0-9^~><=.*-]*)?$/
+const COMMAND_TOKEN_RE = /^[A-Za-z0-9@:/._#+=-]+$/
 
-/** Whether a page-supplied install target is an npm package spec. */
-export function isDirectInstallTarget(value: unknown): value is string {
-  return typeof value === 'string' && value.length <= 214 + 64 && DIRECT_INSTALL_TARGET_RE.test(value)
+/**
+ * Parse the full official command the embedded page asks to run.
+ *
+ * The store page names the exact command it already shows the user, and this
+ * endpoint forwards everything after `dsh` to the official CLI verbatim —
+ * the same philosophy as the dsh1024 CLI wrapper. The command template
+ * therefore lives on the site and can follow the official CLI's evolution
+ * without a plugin release; the local gate only pins the shape: it must be a
+ * `dsh plugin …` command made of inert tokens.
+ * @returns the argument vector after `dsh`, or null when the shape is wrong.
+ */
+export function parseDirectInstallCommand(value: unknown): string[] | null {
+  if (typeof value !== 'string' || value.length > 1024) return null
+  const tokens = value.trim().split(/\s+/)
+  if (tokens.length < 4 || tokens[0] !== 'dsh' || tokens[1] !== 'plugin') return null
+  if (!tokens.slice(2).every(token => COMMAND_TOKEN_RE.test(token))) return null
+  return tokens.slice(1)
 }
 const COMMAND_TIMEOUT_MS = 5 * 60 * 1000
 const BODY_LIMIT_BYTES = 4 * 1024
@@ -211,6 +222,63 @@ async function runTrackedPluginCommand(
     progress.active = false
     progress.action = null
   }
+}
+
+/**
+ * Run a page-supplied `dsh plugin …` vector verbatim and report the install
+ * anonymously. Mirrors runTrackedPluginCommand's environment and progress
+ * handling, but forwards the arguments unchanged instead of assembling them —
+ * the command template belongs to the site.
+ */
+async function runReportedVerbatimCommand(
+  profile: string,
+  pluginId: string,
+  args: string[],
+  progress: Progress,
+): Promise<CommandResult> {
+  const startedAt = new Date()
+  progress.active = true
+  progress.action = 'install'
+  progress.target = args.at(-1) ?? ''
+  progress.startedAt = Date.now()
+  progress.lastLine = ''
+  let result: CommandResult
+  try {
+    const pnpmStoreDir = readProfilePnpmStoreDir(profileDirectory(profile))
+    const run = await runOfficialCommand({
+      invocation: cliInvocation(),
+      args,
+      stdio: 'capture',
+      timeoutMs: COMMAND_TIMEOUT_MS,
+      env: {
+        ...process.env,
+        CI: 'true',
+        ...(pnpmStoreDir === undefined ? {} : {
+          npm_config_store_dir: pnpmStoreDir,
+          PNPM_STORE_DIR: pnpmStoreDir,
+        }),
+      },
+      onLine: line => { progress.lastLine = line },
+    })
+    result = run.error !== null
+      ? { exitCode: 127, timedOut: false, stdout: run.stdout, stderr: `${run.stderr}\n${run.error}` }
+      : { exitCode: run.exitCode, timedOut: run.timedOut, stdout: run.stdout, stderr: run.stderr }
+  } finally {
+    progress.active = false
+    progress.action = null
+  }
+  const completedAt = new Date()
+  const succeeded = result.exitCode === 0 && !result.timedOut
+  void reportInstallEvent({
+    pluginId,
+    profile,
+    operation: 'install',
+    status: succeeded ? 'success' : 'failed',
+    startedAt,
+    completedAt,
+    errorCode: succeeded ? null : failureCode(result),
+  })
+  return result
 }
 
 /** Run one plugin mutation and report its outcome anonymously (fire-and-forget). */
@@ -508,19 +576,19 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
           return
         }
         try {
-          const body = await readJsonBody(request) as { id?: unknown; target?: unknown }
+          const body = await readJsonBody(request) as { id?: unknown; command?: unknown }
           const requestedId = typeof body.id === 'string' ? body.id.toLowerCase() : ''
-          let target: string
-          let eventId: string
-          let extraArgs: string[]
-          if (body.target !== undefined) {
-            // The embedded store page names the npm target directly. The page
-            // and this endpoint trust the same first-party catalog API, so a
-            // second registry round-trip adds nothing but a failure mode
-            // (issue #159) — the grammar check is the whole gate: only an npm
-            // package spec ever reaches the official CLI.
-            if (!isDirectInstallTarget(body.target)) {
-              sendJson(response, 400, { error: 'install target must be an npm package spec' })
+          if (body.command !== undefined) {
+            // The embedded store page hands over the full official command it
+            // already shows the user. Page and endpoint read the same
+            // first-party catalog API, so a second registry round-trip adds
+            // nothing but a failure mode (issue #159); forwarding the vector
+            // verbatim also keeps the command template on the site, where it
+            // can follow the official CLI's evolution without a plugin
+            // release. parseDirectInstallCommand pins the shape.
+            const args = parseDirectInstallCommand(body.command)
+            if (args === null) {
+              sendJson(response, 400, { error: 'install command must be a plain official dsh plugin command' })
               return
             }
             // Telemetry hygiene: the attribution id must look like a catalog
@@ -529,38 +597,45 @@ export function mountMarketRoutes(webServer: WebServerService, config: MarketRou
               sendJson(response, 400, { error: 'plugin id is invalid' })
               return
             }
-            target = body.target
-            eventId = requestedId
-            extraArgs = []
-          } else {
-            // Older embedded pages send only the catalog id; the registry
-            // entry then decides the executed target, as it always has.
-            const { registry } = await loadRegistry(config.registryUrl, fetch, { dshHome })
-            const plugin = registry.plugins.find(entry => entry.id.toLowerCase() === requestedId)
-            if (plugin === undefined) {
-              sendJson(response, 400, { error: 'plugin is not in the 1024 Store registry' })
-              return
+            mutating = true
+            try {
+              const result = await runReportedVerbatimCommand(config.profile, requestedId, args, progress)
+              const ok = result.exitCode === 0 && !result.timedOut
+              sendJson(response, ok ? 200 : 502, {
+                ok,
+                ...result,
+                installed: readInstalled(config.profile),
+              })
+            } finally {
+              mutating = false
             }
-            target = installTarget(plugin)
-            // Browse-only entry: no npm package. The store UI offers no
-            // install for it, so this refusal only fires for a stale or
-            // hand-crafted page.
-            if (target.startsWith('github:')) {
-              sendJson(response, 400, { error: 'this plugin has not published an npm package; source installs are not offered by the store' })
-              return
-            }
-            eventId = pluginEventId(plugin)
-            extraArgs = installExtraArgs(plugin)
+            return
+          }
+          // Older embedded pages send only the catalog id; the registry entry
+          // then decides the executed target, as it always has.
+          const { registry } = await loadRegistry(config.registryUrl, fetch, { dshHome })
+          const plugin = registry.plugins.find(entry => entry.id.toLowerCase() === requestedId)
+          if (plugin === undefined) {
+            sendJson(response, 400, { error: 'plugin is not in the 1024 Store registry' })
+            return
+          }
+          const target = installTarget(plugin)
+          // Browse-only entry: no npm package. The store UI offers no install
+          // for it, so this refusal only fires for a stale or hand-crafted
+          // page.
+          if (target.startsWith('github:')) {
+            sendJson(response, 400, { error: 'this plugin has not published an npm package; source installs are not offered by the store' })
+            return
           }
           mutating = true
           try {
             const result = await runReportedPluginCommand(
               config.profile,
-              eventId,
+              pluginEventId(plugin),
               'install',
               target,
               progress,
-              extraArgs,
+              installExtraArgs(plugin),
             )
             const ok = result.exitCode === 0 && !result.timedOut
             sendJson(response, ok ? 200 : 502, {

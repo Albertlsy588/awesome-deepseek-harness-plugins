@@ -5,13 +5,13 @@ import { useI18n } from '../lib/i18n'
 
 export function BridgeInstallButton({
   pluginId,
-  target,
+  command,
   className = 'button button-primary',
   iconOnly = false,
 }: {
   pluginId: string
-  /** npm package spec to install; the local endpoint executes it directly. */
-  target?: string
+  /** Full official install command; the local endpoint forwards it verbatim. */
+  command?: string
   className?: string
   iconOnly?: boolean
 }) {
@@ -26,7 +26,7 @@ export function BridgeInstallButton({
     setState('installing')
     setError('')
     try {
-      const result = await install(pluginId, target)
+      const result = await install(pluginId, command)
       if (!result.ok) throw new Error(result.error || t('bridgeInstallFailed'))
       setState('installed')
     } catch (installError) {

@@ -48,7 +48,7 @@ interface EmbedBridgeValue {
   installedPlugins: BridgeInstalledPlugin[] | null
   installedError: string
   refreshInstalled: () => Promise<void>
-  install: (pluginId: string, target?: string) => Promise<BridgeResult>
+  install: (pluginId: string, command?: string) => Promise<BridgeResult>
   readCatalogPageCache: () => Promise<PluginsPage | null>
   writeCatalogPageCache: (page: PluginsPage) => Promise<void>
 }
@@ -209,7 +209,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
 
   const sendRequest = useCallback((
     action: 'install' | 'installed' | 'catalog-cache-read' | 'catalog-cache-write',
-    options: { pluginId?: string; target?: string; catalogPage?: PluginsPage } = {},
+    options: { pluginId?: string; command?: string; catalogPage?: PluginsPage } = {},
   ): Promise<BridgeResult> => {
     const port = portRef.current
     if (port === null) {
@@ -230,7 +230,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
         action,
       }
       if (options.pluginId !== undefined) message.pluginId = options.pluginId
-      if (options.target !== undefined) message.target = options.target
+      if (options.command !== undefined) message.command = options.command
       if (options.catalogPage !== undefined) message.catalogPage = options.catalogPage
       port.postMessage(message)
     })
@@ -255,12 +255,14 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
     void refreshInstalled()
   }, [connected, refreshInstalled])
 
-  // The page names the npm target alongside the catalog id: the page and the
-  // local endpoint read the same first-party catalog API, so the endpoint
-  // executes the named package directly instead of re-fetching the registry
-  // to re-derive it (issue #159's failure mode).
-  const install = useCallback(async (pluginId: string, target?: string) => {
-    const result = await sendRequest('install', { pluginId, target })
+  // The page hands over the full official command alongside the catalog id:
+  // page and local endpoint read the same first-party catalog API, so the
+  // endpoint forwards the command verbatim instead of re-fetching the
+  // registry to re-derive it (issue #159's failure mode). Keeping the whole
+  // command on the page side means the template can follow the official
+  // CLI's evolution without a plugin release.
+  const install = useCallback(async (pluginId: string, command?: string) => {
+    const result = await sendRequest('install', { pluginId, command })
     if (result.ok) {
       setInstalledPluginIds((current) => [...new Set([...(current ?? []), pluginId])].sort())
       void refreshInstalled()

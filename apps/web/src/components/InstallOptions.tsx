@@ -1,4 +1,4 @@
-import { installTarget, officialInstallCommand, trackedInstallCommand, type RegistryPlugin } from '../lib/api'
+import { officialInstallCommand, trackedInstallCommand, type RegistryPlugin } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { InstallCommand } from './InstallCommand'
 import { BridgeInstallButton } from './BridgeInstallButton'
@@ -9,7 +9,7 @@ export function InstallOptions({ plugin }: { plugin: Pick<RegistryPlugin, 'id' |
   const { connected } = useEmbedBridge()
 
   if (connected) {
-    return <BridgeInstallButton pluginId={plugin.id} target={installTarget(plugin) ?? undefined} />
+    return <BridgeInstallButton pluginId={plugin.id} command={officialInstallCommand(plugin)} />
   }
   return (
     <div className="install-options">

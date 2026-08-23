@@ -15,8 +15,18 @@ export interface MarketRouteConfig {
     updateUrl: string;
     embedUrl: string;
 }
-/** Whether a page-supplied install target is an npm package spec. */
-export declare function isDirectInstallTarget(value: unknown): value is string;
+/**
+ * Parse the full official command the embedded page asks to run.
+ *
+ * The store page names the exact command it already shows the user, and this
+ * endpoint forwards everything after `dsh` to the official CLI verbatim —
+ * the same philosophy as the dsh1024 CLI wrapper. The command template
+ * therefore lives on the site and can follow the official CLI's evolution
+ * without a plugin release; the local gate only pins the shape: it must be a
+ * `dsh plugin …` command made of inert tokens.
+ * @returns the argument vector after `dsh`, or null when the shape is wrong.
+ */
+export declare function parseDirectInstallCommand(value: unknown): string[] | null;
 /** Read the store that pnpm used to link an existing profile's node_modules. */
 export declare function readProfilePnpmStoreDir(directory: string): string | undefined;
 /**

@@ -377,24 +377,10 @@ export function officialInstallCommand(plugin: InstallCommandPlugin): string {
 export function installOffered(
   plugin: InstallCommandPlugin & Partial<Pick<RegistryPlugin, 'installMethods'>>,
 ): boolean {
-  return installTarget(plugin) !== null
-}
-
-/**
- * The npm package spec the store installs for this plugin, or null when it is
- * browse-only. The embedded store sends this alongside the catalog id so the
- * local endpoint executes it directly instead of re-deriving it from another
- * fetch of the same first-party API.
- */
-export function installTarget(
-  plugin: InstallCommandPlugin & Partial<Pick<RegistryPlugin, 'installMethods'>>,
-): string | null {
-  const command = offeredInstallCommand({
+  return offeredInstallCommand({
     install: officialInstallCommand(plugin),
     installMethods: plugin.installMethods,
-  })
-  // Offered commands are always `dsh plugin --profile web add <spec>`.
-  return command === null ? null : command.split(' ').at(-1) ?? null
+  }) !== null
 }
 
 

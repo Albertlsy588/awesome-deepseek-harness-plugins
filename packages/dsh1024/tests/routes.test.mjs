@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   installedPluginIds,
-  isDirectInstallTarget,
   isTrustedSameOrigin,
   mountMarketRoutes,
+  parseDirectInstallCommand,
   readProfilePnpmStoreDir,
 } from '../lib/routes.js'
 
@@ -120,22 +120,35 @@ test('installed dependencies map to catalog ids without exposing their specs', (
   ])
 })
 
-test('a page-supplied install target must be an npm package spec', () => {
-  // The embedded page names the npm target directly and this grammar is the
-  // whole gate before the official CLI runs — nothing that is not a registry
-  // install may pass.
-  for (const target of [
-    'dsh-plugin', '@scope/dsh-plugin', 'dsh-plugin@1.2.0', '@scope/dsh-plugin@latest',
-    'dsh1024@latest', 'dsh-plugin@^1.0.0',
+test('a page-supplied install command must be a plain official dsh plugin command', () => {
+  // The embedded page hands over the full command it displays; everything
+  // after `dsh` is forwarded to the official CLI verbatim. The gate pins the
+  // shape — `dsh plugin …` out of inert tokens — so no shell metacharacter,
+  // quoting, or non-plugin subcommand can ride along.
+  assert.deepEqual(
+    parseDirectInstallCommand('dsh plugin --profile web add @scope/dsh-plugin'),
+    ['plugin', '--profile', 'web', 'add', '@scope/dsh-plugin'],
+  )
+  assert.deepEqual(
+    parseDirectInstallCommand('  dsh plugin --profile web add dsh1024@latest  '),
+    ['plugin', '--profile', 'web', 'add', 'dsh1024@latest'],
+  )
+  for (const command of [
+    'dsh telemetry disable',
+    'dsh1024 plugin --profile web add x',
+    'rm -rf /',
+    'dsh plugin add "quoted target"',
+    'dsh plugin add pkg; rm -rf /',
+    'dsh plugin add pkg && curl evil',
+    'dsh plugin add pkg | tee /tmp/x',
+    'dsh plugin add `whoami`',
+    'dsh plugin add $(whoami)',
+    'dsh plugin add pkg%PATH%',
+    'dsh plugin',
+    'dsh plugin add',
+    '', 42, null, undefined,
   ]) {
-    assert.equal(isDirectInstallTarget(target), true, target)
-  }
-  for (const target of [
-    'github:owner/repo', 'github:owner/repo#path:sub/dir', 'file:../evil', 'link:/tmp/x',
-    'https://evil.example/pkg.tgz', 'workspace:*', 'npm:alias@1', '@Scope/upper-scope',
-    '-g', '--registry=https://evil.example', 'a b', '', 42, null, undefined,
-  ]) {
-    assert.equal(isDirectInstallTarget(target), false, String(target))
+    assert.equal(parseDirectInstallCommand(command), null, String(command))
   }
 })
 
