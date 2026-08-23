@@ -4721,6 +4721,13 @@ main {
   white-space: nowrap;
 }
 
+.install-console-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
 .install-console-error {
   color: var(--danger, #dc2626);
   font-size: 12px;

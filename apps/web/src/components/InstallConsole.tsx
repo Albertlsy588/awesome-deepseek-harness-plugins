@@ -91,6 +91,9 @@ export function InstallConsole() {
       {state === 'running' && lines.length > 0 && (
         <p className="install-console-live">{lines.at(-1)}</p>
       )}
+      {state === 'ok' && (
+        <p className="install-console-hint">{t('consoleRestartHint')}</p>
+      )}
       {state === 'failed' && error !== null && (
         <p className="install-console-error">{error}</p>
       )}
