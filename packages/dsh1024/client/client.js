@@ -28,6 +28,7 @@ const zh = {
   settings: '商店设置', sidebarEntrySetting: '在左侧栏显示 1024 Store 入口',
   confirmInstall: '确认从 1024 Store 安装', confirmUpdate: '确认更新 1024 Store 到', cancelled: '用户取消了安装。',
   busy: '已有插件操作正在进行。', installed: '安装完成，重启 DeepSeek Harness 后生效。',
+  uninstalled: '卸载完成，重启 DeepSeek Harness 后生效。',
   plugins: '个插件', close: '关闭',
 }
 
@@ -41,6 +42,7 @@ const en = {
   confirmInstall: 'Install from 1024 Store', confirmUpdate: 'Update 1024 Store to', cancelled: 'Installation was cancelled.',
   settings: 'Store settings', sidebarEntrySetting: 'Show the 1024 Store entry in the sidebar',
   busy: 'Another plugin operation is already running.', installed: 'Installed. Restart DeepSeek Harness to apply it.',
+  uninstalled: 'Uninstalled. Restart DeepSeek Harness to apply it.',
   plugins: 'plugins', close: 'Close',
 }
 
@@ -151,6 +153,11 @@ function validBridgeRequest(message) {
   if (!base) return false
   if (message.action === 'installed') return message.pluginId === undefined
   if (message.action === 'status') return message.pluginId === undefined
+  if (message.action === 'uninstall') {
+    return typeof message.pluginId === 'string'
+      && message.pluginId.length <= 201
+      && PLUGIN_ID_RE.test(message.pluginId)
+  }
   if (message.action === 'catalog-cache-read') return message.catalogPage === undefined
   if (message.action === 'catalog-cache-write') {
     return message.catalogPage !== null && typeof message.catalogPage === 'object'
@@ -187,6 +194,17 @@ function MarketShell({ locale, onClose, activation }) {
   const [updating, setUpdating] = useState(false)
   const [restartRequired, setRestartRequired] = useState(false)
   const [operationMessage, setOperationMessage] = useState('')
+  const toastTimerRef = useRef(null)
+  // Toasts announce, they do not linger: auto-dismiss after a few seconds,
+  // with each new message restarting the clock.
+  const showToast = useCallback(message => {
+    setOperationMessage(message)
+    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = message === '' ? null : window.setTimeout(() => {
+      toastTimerRef.current = null
+      setOperationMessage('')
+    }, 8000)
+  }, [])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [updateArmed, setUpdateArmed] = useState(false)
   const sidebarVisible = useSyncExternalStore(subscribeSidebarEntry, readSidebarEntryVisible, readSidebarEntryVisible)
@@ -301,22 +319,68 @@ function MarketShell({ locale, onClose, activation }) {
         }
         if (status !== 200 || !body.ok) {
           const detail = String(body.error || body.stderr || body.stdout || ('HTTP ' + status)).trim().slice(-800)
-          setOperationMessage(copy.operationFailed + ': ' + detail)
+          showToast(copy.operationFailed + ': ' + detail)
           reply({ ok: false, error: detail, ...output })
           return
         }
-        setOperationMessage(copy.installed)
+        showToast(copy.installed)
         reply({ ok: true, ...output })
       })
       .catch(error => {
         const detail = String(error).trim().slice(-800)
-        setOperationMessage(copy.operationFailed + ': ' + detail)
+        showToast(copy.operationFailed + ': ' + detail)
         reply({ ok: false, error: detail })
       })
       .finally(() => {
         operationBusyRef.current = false
       })
-  }, [copy])
+  }, [copy, showToast])
+
+  const runUninstall = useCallback((message, port) => {
+    const reply = payload => port.postMessage({
+      protocol: BRIDGE_PROTOCOL,
+      version: BRIDGE_VERSION,
+      type: 'result',
+      requestId: message.requestId,
+      ...payload,
+    })
+    if (operationBusyRef.current) {
+      reply({ ok: false, error: copy.busy })
+      return
+    }
+    operationBusyRef.current = true
+    setOperationMessage('')
+    fetch('/dsh1024/uninstall', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: message.pluginId }),
+    })
+      .then(responseJson)
+      .then(({ status, body }) => {
+        const output = {
+          stdout: typeof body.stdout === 'string' ? body.stdout.slice(-8192) : '',
+          stderr: typeof body.stderr === 'string' ? body.stderr.slice(-8192) : '',
+          exitCode: typeof body.exitCode === 'number' ? body.exitCode : null,
+          command: typeof body.command === 'string' ? body.command : undefined,
+        }
+        if (status !== 200 || !body.ok) {
+          const detail = String(body.error || body.stderr || body.stdout || ('HTTP ' + status)).trim().slice(-800)
+          showToast(copy.operationFailed + ': ' + detail)
+          reply({ ok: false, error: detail, ...output })
+          return
+        }
+        showToast(copy.uninstalled)
+        reply({ ok: true, ...output })
+      })
+      .catch(error => {
+        const detail = String(error).trim().slice(-800)
+        showToast(copy.operationFailed + ': ' + detail)
+        reply({ ok: false, error: detail })
+      })
+      .finally(() => {
+        operationBusyRef.current = false
+      })
+  }, [copy, showToast])
 
   const readStatus = useCallback((message, port) => {
     const reply = payload => port.postMessage({
@@ -443,6 +507,7 @@ function MarketShell({ locale, onClose, activation }) {
         return
       }
       if (message.action === 'install') runInstall(message, channel.port1)
+      else if (message.action === 'uninstall') runUninstall(message, channel.port1)
       else if (message.action === 'installed') readInstalled(message, channel.port1)
       else if (message.action === 'status') readStatus(message, channel.port1)
       else if (message.action === 'catalog-cache-read') readCatalogPageCache(message, channel.port1)
@@ -458,7 +523,7 @@ function MarketShell({ locale, onClose, activation }) {
       new URL(embedUrl).origin,
       [channel.port2],
     )
-  }, [closeBridge, embedUrl, readCatalogPageCache, readInstalled, readStatus, runInstall, writeCatalogPageCache])
+  }, [closeBridge, embedUrl, readCatalogPageCache, readInstalled, readStatus, runInstall, runUninstall, writeCatalogPageCache])
 
   useEffect(() => {
     if (embedUrl === null) return undefined

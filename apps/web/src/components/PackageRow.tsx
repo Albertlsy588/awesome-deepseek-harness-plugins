@@ -9,7 +9,7 @@ import {
 import { memo, useId, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { CatalogPlugin, CatalogSort, CategoryResult, RankingMode } from '../lib/api'
-import { packagePath, pluginListIdentity, repositoryInstallTarget } from '../lib/api'
+import { isSelfPlugin, packagePath, pluginListIdentity, repositoryInstallTarget } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/format'
 import { useI18n } from '../lib/i18n'
 import { ROW_LINK_TARGET } from '../lib/link-target'
@@ -17,6 +17,8 @@ import { useEmbedBridge } from '../lib/embedBridge'
 import { CategoryTag } from './CategoryTag'
 import { OwnerAvatar } from './OwnerAvatar'
 import { SplitInstallButton } from './SplitInstallButton'
+import { BridgeInstallButton } from './BridgeInstallButton'
+import { BridgeUninstallButton } from './BridgeUninstallButton'
 
 interface PackageRowProps {
   plugin: CatalogPlugin
@@ -38,6 +40,8 @@ interface PackageRowProps {
    * holds, so an expanded row costs no request.
    */
   repositoryPlugins?: CatalogPlugin[]
+  /** Installed-plugins tab: the action column uninstalls instead of installing. */
+  uninstallable?: boolean
 }
 
 // Memoized so appending a page of rows leaves already-mounted rows untouched.
@@ -51,6 +55,7 @@ export const PackageRow = memo(function PackageRow({
   repositoryDescription,
   categories,
   repositoryPlugins,
+  uninstallable,
 }: PackageRowProps) {
   const { language, t } = useI18n()
   const { embedded } = useEmbedBridge()
@@ -260,13 +265,19 @@ export const PackageRow = memo(function PackageRow({
         )}
       </div>
 
-      {isRepository
-        ? installableRoot === undefined
-          // Nothing to copy: this repository publishes only subdirectories, and
-          // each of them offers its own command inside the panel.
-          ? <span />
-          : <SplitInstallButton plugin={installableRoot} />
-        : <SplitInstallButton plugin={plugin} />}
+      {uninstallable
+        // The store's own row keeps the installed state — the local endpoint
+        // refuses to uninstall it, so a live trigger would only ever fail.
+        ? isSelfPlugin(plugin)
+          ? <BridgeInstallButton pluginId={plugin.id} className="split-install-main bridge-local-install" />
+          : <BridgeUninstallButton pluginId={plugin.id} />
+        : isRepository
+          ? installableRoot === undefined
+            // Nothing to copy: this repository publishes only subdirectories, and
+            // each of them offers its own command inside the panel.
+            ? <span />
+            : <SplitInstallButton plugin={installableRoot} />
+          : <SplitInstallButton plugin={plugin} />}
 
       {isRepository ? (
         // Spans every grid column so the panel reads as part of the row rather

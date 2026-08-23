@@ -36,6 +36,8 @@ interface BridgeResult {
   stdout?: string
   stderr?: string
   exitCode?: number | null
+  /** The exact official command the shell executed (uninstall replies). */
+  command?: string
   /** Live progress snapshot from the local /dsh1024/status endpoint. */
   status?: BridgeOperationStatus
 }
@@ -54,6 +56,7 @@ export interface BridgeOperationStatus {
  * ends — the full captured output, so a failure is debuggable from the page.
  */
 export interface InstallActivity {
+  kind: 'install' | 'uninstall'
   pluginId: string
   command: string | null
   state: 'running' | 'ok' | 'failed'
@@ -78,6 +81,7 @@ interface EmbedBridgeValue {
   installedError: string
   refreshInstalled: () => Promise<void>
   install: (pluginId: string, command?: string) => Promise<BridgeResult>
+  uninstall: (pluginId: string) => Promise<BridgeResult>
   installActivity: InstallActivity | null
   clearInstallActivity: () => void
   bridgeStatus: () => Promise<BridgeOperationStatus | null>
@@ -94,6 +98,7 @@ const EmbedBridgeContext = createContext<EmbedBridgeValue>({
   installedError: '',
   refreshInstalled: async () => undefined,
   install: async () => ({ ok: false, error: 'Local DSH bridge is not connected.' }),
+  uninstall: async () => ({ ok: false, error: 'Local DSH bridge is not connected.' }),
   installActivity: null,
   clearInstallActivity: () => undefined,
   bridgeStatus: async () => null,
@@ -217,6 +222,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
           stdout: typeof payload.stdout === 'string' ? payload.stdout : undefined,
           stderr: typeof payload.stderr === 'string' ? payload.stderr : undefined,
           exitCode: typeof payload.exitCode === 'number' ? payload.exitCode : undefined,
+          command: typeof payload.command === 'string' ? payload.command : undefined,
           status: statusObject === null ? undefined : {
             active: statusObject.active === true,
             action: typeof statusObject.action === 'string' ? statusObject.action : null,
@@ -233,7 +239,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
         protocol: EMBED_BRIDGE_PROTOCOL,
         version: EMBED_BRIDGE_VERSION,
         type: 'ready',
-        capabilities: ['install', 'installed', 'catalog-cache', 'status'],
+        capabilities: ['install', 'installed', 'catalog-cache', 'status', 'uninstall'],
       })
     }
 
@@ -255,7 +261,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
   }, [embedded])
 
   const sendRequest = useCallback((
-    action: 'install' | 'installed' | 'status' | 'catalog-cache-read' | 'catalog-cache-write',
+    action: 'install' | 'uninstall' | 'installed' | 'status' | 'catalog-cache-read' | 'catalog-cache-write',
     options: { pluginId?: string; command?: string; catalogPage?: PluginsPage } = {},
     timeoutMs = 6 * 60 * 1000,
   ): Promise<BridgeResult> => {
@@ -311,6 +317,7 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
   // CLI's evolution without a plugin release.
   const install = useCallback(async (pluginId: string, command?: string) => {
     setInstallActivity({
+      kind: 'install',
       pluginId,
       command: command ?? null,
       state: 'running',
@@ -334,6 +341,38 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
     })
     if (result.ok) {
       setInstalledPluginIds((current) => [...new Set([...(current ?? []), pluginId])].sort())
+      void refreshInstalled()
+    }
+    return result
+  }, [refreshInstalled, sendRequest])
+
+  const uninstall = useCallback(async (pluginId: string) => {
+    setInstallActivity({
+      kind: 'uninstall',
+      pluginId,
+      command: null,
+      state: 'running',
+      error: null,
+      stdout: '',
+      stderr: '',
+      startedAt: Date.now(),
+    })
+    let result: BridgeResult
+    try {
+      result = await sendRequest('uninstall', { pluginId })
+    } catch (error) {
+      result = { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+    setInstallActivity((current) => current === null || current.pluginId !== pluginId ? current : {
+      ...current,
+      state: result.ok ? 'ok' : 'failed',
+      error: result.ok ? null : result.error ?? 'Uninstall failed.',
+      command: result.command ?? current.command,
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+    })
+    if (result.ok) {
+      setInstalledPluginIds((current) => (current ?? []).filter((id) => id !== pluginId))
       void refreshInstalled()
     }
     return result
@@ -371,12 +410,13 @@ export function EmbedBridgeProvider({ children }: { children: ReactNode }) {
     installedError,
     refreshInstalled,
     install,
+    uninstall,
     installActivity,
     clearInstallActivity,
     bridgeStatus,
     readCatalogPageCache,
     writeCatalogPageCache,
-  }), [activation, bridgeStatus, clearInstallActivity, connected, embedded, install, installActivity, installedError, installedPluginIds, installedPlugins, readCatalogPageCache, refreshInstalled, writeCatalogPageCache])
+  }), [activation, bridgeStatus, clearInstallActivity, connected, embedded, install, installActivity, installedError, installedPluginIds, installedPlugins, readCatalogPageCache, refreshInstalled, uninstall, writeCatalogPageCache])
   return <EmbedBridgeContext.Provider value={value}>{children}</EmbedBridgeContext.Provider>
 }
 

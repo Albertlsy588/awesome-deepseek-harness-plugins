@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdtempSync } from 'node:fs'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+// Isolated before the module under test resolves anything: routes read
+// preferences and profiles under DSH_HOME, and the suite must never depend
+// on (or touch) the developer's real ~/.dsh state.
+process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'dsh1024-routes-home-'))
 import {
   installedPluginIds,
   isTrustedSameOrigin,
@@ -15,6 +21,7 @@ const baseConfig = {
   profile: 'market-test',
   registryUrl: 'https://deepseek1024.com/api/v1/registry',
   updateUrl: 'https://deepseek1024.com/api/v1/self/update',
+  sidebarEntry: true,
 }
 
 function routeHarness(embedUrl) {
@@ -43,6 +50,7 @@ test('the shell exposes its validated embed URL without credentials', async () =
   assert.deepEqual(JSON.parse(body), {
     url: 'https://deepseek1024.com/embed/store?bridge=dsh1024-v1',
     origin: 'https://deepseek1024.com',
+    sidebarEntry: true,
   })
   dispose()
   assert.equal(routes.size, 0)

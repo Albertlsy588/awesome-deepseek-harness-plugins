@@ -2020,6 +2020,39 @@ main {
   color: var(--ink);
 }
 
+/* Uninstall on the installed tab: outlined and calm at rest, danger on
+   hover — destructive intent should be visible only when aimed at. */
+.split-install-main.bridge-uninstall {
+  display: inline-flex;
+  width: auto;
+  min-width: 96px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.split-install-main.bridge-uninstall:hover:not(:disabled) {
+  border-color: var(--danger, #dc2626);
+  color: var(--danger, #dc2626);
+  background: var(--surface-hover);
+}
+
+.split-install-main.bridge-uninstall:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
 .split-install-toggle.icon-button {
   width: 22px;
   height: 32px;

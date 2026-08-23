@@ -637,35 +637,65 @@ export function mountMarketRoutes(webServer, config) {
                 }
                 try {
                     const body = await readJsonBody(request);
-                    const name = typeof body.name === 'string' ? body.name : '';
+                    const installed = readInstalled(config.profile);
+                    let name = typeof body.name === 'string' ? body.name : '';
+                    const requestedId = typeof body.id === 'string' ? body.id.toLowerCase() : '';
+                    if (name === '' && requestedId !== '') {
+                        // The page uninstalls by catalog id; the package name never leaves
+                        // this process. The id → package-name mapping is what the registry
+                        // exists for, so a resolution miss is a real 400, not a fallback.
+                        try {
+                            const { registry } = await loadRegistry(config.registryUrl, fetch, { preferCache: true, dshHome });
+                            const plugin = registry.plugins.find(entry => entry.id.toLowerCase() === requestedId);
+                            if (plugin !== undefined)
+                                name = installedPackageName(plugin, installed) ?? '';
+                        }
+                        catch {
+                            // Resolution failure falls through to the guard below.
+                        }
+                        if (name === '') {
+                            sendJson(response, 400, { error: 'no installed package matches this plugin id' });
+                            return;
+                        }
+                    }
                     if (!PACKAGE_RE.test(name) || name === 'dsh1024') {
                         sendJson(response, 400, { error: 'plugin cannot be uninstalled here' });
                         return;
                     }
-                    const installed = readInstalled(config.profile);
                     const installedSpec = installed[name];
                     if (installedSpec === undefined) {
                         sendJson(response, 400, { error: 'plugin is not installed' });
                         return;
                     }
-                    const { registry } = await loadRegistry(config.registryUrl, fetch, { dshHome });
-                    // Prefer the plugin whose github:owner/repo target appears in the installed
-                    // manifest spec so telemetry is attributed to the actually-installed plugin;
-                    // fall back to the display-name match only for the catalog-membership gate
-                    // (display names are not unique across the catalog — same-named forks exist).
-                    const cataloged = registry.plugins.find(plugin => installedSpec.toLowerCase().includes(installTarget(plugin).toLowerCase()))
-                        ?? registry.plugins.find(plugin => plugin.name === name);
-                    if (cataloged === undefined) {
-                        sendJson(response, 400, { error: 'plugin is not in the 1024 Store registry' });
-                        return;
+                    // Telemetry attribution is best-effort, never a gate: the registry
+                    // used to be a membership requirement here, which made "uninstall"
+                    // depend on a network catalog — the same single point of failure
+                    // that broke installs (issue #159). Prefer the plugin whose target
+                    // appears in the installed manifest spec; fall back to the display
+                    // name; with no match (or no registry at all) the uninstall still
+                    // runs, just unreported.
+                    let eventId = null;
+                    try {
+                        const { registry } = await loadRegistry(config.registryUrl, fetch, { preferCache: true, dshHome });
+                        const cataloged = registry.plugins.find(plugin => installedSpec.toLowerCase().includes(installTarget(plugin).toLowerCase()))
+                            ?? registry.plugins.find(plugin => plugin.name === name);
+                        if (cataloged !== undefined)
+                            eventId = pluginEventId(cataloged);
+                    }
+                    catch {
+                        // Registry unavailable: uninstall proceeds without attribution.
                     }
                     mutating = true;
                     try {
-                        const result = await runReportedPluginCommand(config.profile, pluginEventId(cataloged), 'uninstall', name, progress);
+                        const result = eventId === null
+                            ? await runTrackedPluginCommand(config.profile, 'uninstall', name, progress)
+                            : await runReportedPluginCommand(config.profile, eventId, 'uninstall', name, progress);
                         const ok = result.exitCode === 0 && !result.timedOut;
                         sendJson(response, ok ? 200 : 502, {
                             ok,
                             ...result,
+                            // The exact official command that ran, for the page's console.
+                            command: `dsh plugin --profile ${config.profile} remove ${name}`,
                             installed: readInstalled(config.profile),
                         });
                     }

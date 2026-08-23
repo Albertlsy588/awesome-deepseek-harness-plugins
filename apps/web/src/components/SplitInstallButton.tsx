@@ -28,7 +28,7 @@ const ANCHOR_OVERLAP = 6
 
 export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'id' | 'install' | 'url'> }) {
   const { t } = useI18n()
-  const { connected } = useEmbedBridge()
+  const { connected, installedPluginIds } = useEmbedBridge()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState<Kind | null>(null)
   const [placement, setPlacement] = useState<Placement | null>(null)
@@ -136,6 +136,17 @@ export function SplitInstallButton({ plugin }: { plugin: Pick<RegistryPlugin, 'i
   // Placed after the hooks so the hook order never varies.
   if (!installOffered(plugin)) {
     if (connected) {
+      // Already installed (from source, before npm-only): the row says so —
+      // offering "install from source" on something that is already on the
+      // machine would be absurd. BridgeInstallButton renders the disabled
+      // installed state for it.
+      if (installedPluginIds?.includes(plugin.id)) {
+        return (
+          <div className="split-install">
+            <BridgeInstallButton pluginId={plugin.id} className="split-install-main bridge-local-install" />
+          </div>
+        )
+      }
       return (
         <div className="split-install">
           <a

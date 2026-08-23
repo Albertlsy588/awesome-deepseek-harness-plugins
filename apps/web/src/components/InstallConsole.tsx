@@ -50,7 +50,7 @@ export function InstallConsole() {
 
   if (!connected || installActivity === null) return null
 
-  const { state, command, pluginId, error, stdout, stderr } = installActivity
+  const { kind, state, command, pluginId, error, stdout, stderr } = installActivity
   const finishedOutput = [stderr, stdout].filter((text) => text.trim().length > 0).join('\n')
   const showDetails = expanded && (finishedOutput.length > 0 || lines.length > 0)
 
@@ -61,7 +61,9 @@ export function InstallConsole() {
         {state === 'ok' && <CheckCircle2 size={15} aria-hidden="true" />}
         {state === 'failed' && <XCircle size={15} aria-hidden="true" />}
         <span className="install-console-title">
-          {state === 'running' ? t('installConsoleRunning') : state === 'ok' ? t('installConsoleDone') : t('installConsoleFailed')}
+          {kind === 'uninstall'
+            ? state === 'running' ? t('uninstallConsoleRunning') : state === 'ok' ? t('uninstallConsoleDone') : t('uninstallConsoleFailed')
+            : state === 'running' ? t('installConsoleRunning') : state === 'ok' ? t('installConsoleDone') : t('installConsoleFailed')}
           {' · '}
           {pluginId}
         </span>
