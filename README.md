@@ -2,11 +2,11 @@
 
 <!-- 本文件由 scripts/build-readme.mjs 从 deepseek1024.com 目录 API 自动生成，请勿手工编辑。 -->
 
-面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **10369** 个插件（含 PR 收录与 GitHub `dsh-plugin` topic 自动发现），目录数据更新于 2026-08-24。
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **10380** 个插件（含 PR 收录与 GitHub `dsh-plugin` topic 自动发现），目录数据更新于 2026-08-24。
 
 **但这个仓库不只是一份 awesome list。** 这里开源了一个在线插件市场、一个把市场装进 `dsh` 本体的插件、经静态校验的 PR 收录流水线，以及一套免费的公开查询 API；目录数据另有自动收集服务持续喂入。代码采用 MIT 协议，fork 之后就能部署成你自己的插件市场。
 
-[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.zh.png?v=5086703916f0)](https://deepseek1024.com/)
+[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.zh.png?v=ece9fdb100d0)](https://deepseek1024.com/)
 
 [在线网站](https://deepseek1024.com/) · [API 文档](docs/api.md) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md)
 
@@ -159,23 +159,23 @@ npx wrangler deploy --secrets-file .dev.vars
 
 分组默认折叠，点开即可展开。GitHub 对单个文件的渲染长度有上限，条目较多的分类只列出其中一部分（分类标题会写明列出了多少），完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。
 
-- [UI 增强](#ui) (1832)
-- [主题与外观](#theme) (359)
-- [会话与消息](#session) (596)
+- [UI 增强](#ui) (1831)
+- [主题与外观](#theme) (358)
+- [会话与消息](#session) (597)
 - [记忆](#memory) (295)
-- [工具与能力](#tools) (3004)
+- [工具与能力](#tools) (3006)
 - [技能包](#skill) (852)
 - [工作流与自动化](#workflow) (493)
 - [通知与集成](#notify) (369)
-- [模型与账号接入](#model) (564)
-- [开发与运行时](#dev) (1071)
+- [模型与账号接入](#model) (565)
+- [开发与运行时](#dev) (1072)
 - [娱乐](#fun) (423)
-- [待分类](#unclassified) (511)
+- [待分类](#unclassified) (519)
 
 <a id="ui"></a>
 
 <details>
-<summary><strong>UI 增强</strong> · 显示 240 / 共 1832 个</summary>
+<summary><strong>UI 增强</strong> · 显示 240 / 共 1831 个</summary>
 
 - [01_content](https://github.com/Aisland-SJL/dsh-worktable/tree/HEAD/01_content) — 为控制台增加侧边栏应用抽屉和可停靠拆分工作区，形成项目实时控制台。
 - [account-card](https://github.com/picoaide/picoaide-harness/tree/HEAD/packages/client/account-card) — 在客户端界面中显示账户信息。
@@ -417,14 +417,14 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-better-sidebar-mcp](https://github.com/jiuge2467/dsh-studio/tree/HEAD/plugins/dsh-better-sidebar-mcp) — 在 DSH 侧边栏集成 MCP 工具，方便访问和管理。
 - [dsh-better-stats](https://github.com/null5069/dsh-better-stats) — 增强 DSH 统计条，显示官方价格、实时费用结算、计时器和子智能体树合并。
 - [dsh-better-status](https://github.com/Yaing-Yan/dsh-better-status) — DeepSeek Harness 插件：把文本形式的会话统计（轮/步、LLM/工具耗时、首 token、tok/s、缓存命中、输入/输出 token）替换为页面右侧直观醒目的图表面板。
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 1592 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 1591 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
 <a id="theme"></a>
 
 <details>
-<summary><strong>主题与外观</strong> · 显示 259 / 共 359 个</summary>
+<summary><strong>主题与外观</strong> · 显示 258 / 共 358 个</summary>
 
 - [ambient-theme](https://github.com/intpfx/OpenFX/tree/HEAD/domains/dsh-openfx/packages/ambient-theme) — 应用环境主题，根据环境或时间改变视觉外观。
 - [aurora](https://github.com/CAPTAIN1275/dsh-ui-web/tree/HEAD/packages/skins/aurora) — 应用极光主题配色，带鲜艳渐变和星空灵感视觉风格。
@@ -600,7 +600,6 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-refined](https://github.com/djh2203/dsh-refined) — DeepSeek-Refined 的 DeepSeek Harness 移植版 为 DeepSeek Harness（DSH）前端注入 Obsidian Border 风格的 Markdown 美化与多主题配色。
 - [dsh-retro-mac](https://github.com/Leyan0365/dsh-retro-mac) — Retro Macintosh — a classic Mac OS 8/9 Platinum skin for the DeepSeek Harness Web GUI. 复古麦金塔皮肤：铂金灰界面、Chicago 字体、条纹壁纸、浮雕控件。
 - [dsh-rhine-theme](https://github.com/mjn96/dsh-rhine-theme) — 明日方舟莱茵生命美术风格的deepseek harness皮肤主题
-- [dsh-russian-lang](https://github.com/GooDAnDReaDY/dsh-russian-lang) — 为DSH网页界面提供俄语本地化，包含核心命名空间词典和语言选项。
 - [dsh-s7r](https://github.com/hunter118/dsh-s7r) — 将界面装扮成 System 7 风格的复古桌面外观。
 - [dsh-simple-background](https://github.com/RunCross/dsh-simple-background) — 用于dsh web设置背景图，简单的设置背景图片的功能
 - [dsh-skin](https://github.com/KinGao294/dsh-skin) — Codex 风格皮肤切换器 + 自定义壁纸层，可调透明度与模糊。
@@ -692,7 +691,7 @@ npx wrangler deploy --secrets-file .dev.vars
 <a id="session"></a>
 
 <details>
-<summary><strong>会话与消息</strong> · 显示 257 / 共 596 个</summary>
+<summary><strong>会话与消息</strong> · 显示 257 / 共 597 个</summary>
 
 - [agent-board](https://github.com/meisam2236/agent-board) — 使用持久化的工作区看板跟踪和管理 DeepSeek Harness 中的 AI 代理。
 - [agent-mode-switcher](https://github.com/my-dsh-plugin/agent-mode-switcher) — 在模型回答后切换当前会话的代理预设，以不同模式继续对话。
@@ -951,7 +950,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-multi-workspace](https://github.com/somnusovis/dsh-multi-workspace) — 管理多个工作区，高效组织和切换会话。
 - [dsh-my-favorites](https://github.com/qiqiangvae/dsh-my-favorites) — dsh 收藏夹插件，可以收藏网址和会话，支持快捷键切换会话
 - [dsh-my-plugins](https://github.com/Ycet/dsh-my-plugins) — DSH 设置-插件页新增「我的插件」标签：双列卡片展示用户自己安装的插件（配置状态、Cordis 状态、插件介绍）。Add a "My Plugins" tab to the DSH settings plugins page, listing user-installed plugins in two-column cards with configuration status, Cordis status and description.
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 339 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 340 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
@@ -1224,7 +1223,7 @@ npx wrangler deploy --secrets-file .dev.vars
 <a id="tools"></a>
 
 <details>
-<summary><strong>工具与能力</strong> · 显示 270 / 共 3004 个</summary>
+<summary><strong>工具与能力</strong> · 显示 270 / 共 3006 个</summary>
 
 - [@zhaoolee/dsh-notes](https://github.com/zhaoolee/notes) — 将 DSH 对话导出为锤子便签风格 PNG，或在配置的账号工作区中新建和更新 Markdown 便签。
 - [88API Image Studio](https://github.com/blackdm666/dsh-plugin-88api-image) — 统一接入 Image2 与 Nano Banana 四款模型，覆盖文生图、多参考图编辑、2K/4K 输出、顺序批量任务、默认模型持久化和脱敏 Key 配置。
@@ -1496,7 +1495,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-atbash](https://github.com/uckkk/dsh-atbash) — Atbash 密码
 - [dsh-atomgit](https://github.com/xiongjiamu/dsh-atomgit) — 打包 AtomGit 技能、工作流、CLI 与 MCP 工具，支持仓库和平台集成。
 - [dsh-attachment-formats](https://github.com/genusamblyrhynchusbrunooftoul602/dsh-attachment-formats) — 扩展输入框以支持PDF等附件格式，复用原生流程，无需改动核心。
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 2734 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 2736 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
@@ -2328,7 +2327,7 @@ npx wrangler deploy --secrets-file .dev.vars
 <a id="model"></a>
 
 <details>
-<summary><strong>模型与账号接入</strong> · 显示 265 / 共 564 个</summary>
+<summary><strong>模型与账号接入</strong> · 显示 265 / 共 565 个</summary>
 
 - [all](https://github.com/DamonBao/dsh-codex-suite/tree/HEAD/packages/all) — 提供包含 OpenAI Codex 模型接入和账户用量统计的插件套件。
 - [balance](https://github.com/sumomok/dsh-plugins/tree/HEAD/packages/balance) — 显示账户余额与消费数据。
@@ -2595,14 +2594,14 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-llm-proxy](https://github.com/superfish058/dsh-llm-proxy) — 提供模型级LLM代理路由与重试，可直接在DSH设置页面动态配置。
 - [dsh-llm-qodersdk](https://github.com/JiamingZang/dsh-llm-qodersdk) — dsh插件，将dsh的LLM请求路由到本机Qoder CLI，可使用Qoder credits与模型。
 - [dsh-llm-rate-limit](https://github.com/Asong6824/dsh-llm-rate-limit) — 在 DeepSeek Harness 中实施 LLM API 限流、并发控制、FIFO 队列、token 预算和自适应 429 冷却。
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 299 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 300 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
 <a id="dev"></a>
 
 <details>
-<summary><strong>开发与运行时</strong> · 显示 264 / 共 1071 个</summary>
+<summary><strong>开发与运行时</strong> · 显示 264 / 共 1072 个</summary>
 
 - [_skeleton-client](https://github.com/XJungit/omdp/tree/HEAD/_skeleton-client) — 用于在仓库中构建新插件包的骨架客户端模板。
 - [_template](https://github.com/messiahyl/dsh-plugins/tree/HEAD/packages/_template) — 提供 DSH 插件开发的 monorepo 模板，包含安装源和第三方目录。
@@ -2868,7 +2867,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-easy-lsp](https://github.com/amazing-tree-keeper/dsh-easy-lsp) — 管理语言服务器，提供一键安装与主动诊断功能。
 - [dsh-easy-mcp](https://github.com/amazing-tree-keeper/dsh-easy-mcp) — 可视化管理 MCP 服务器，支持实时更新、测试与备份。
 - [dsh-easycode](https://github.com/TreasureGooldove/dsh-easycode) — 应用脚手架插件,快速使用DeepSeek Harness创建想要的应用
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 807 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 808 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
@@ -3185,9 +3184,9 @@ npx wrangler deploy --secrets-file .dev.vars
 <a id="unclassified"></a>
 
 <details>
-<summary><strong>待分类</strong> · 显示 0 / 共 511 个</summary>
+<summary><strong>待分类</strong> · 显示 0 / 共 519 个</summary>
 
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 511 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 519 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
