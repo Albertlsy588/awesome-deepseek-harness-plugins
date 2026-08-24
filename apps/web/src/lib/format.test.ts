@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatExactNumber, formatNumber } from '../src/lib/format'
+import { formatExactNumber, formatNumber } from './format'
 
 describe('formatNumber', () => {
   it('stays exact below ten thousand', () => {
