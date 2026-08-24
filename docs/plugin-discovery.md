@@ -98,4 +98,4 @@ It is the only way back: a Worker cannot read a schema it predates, so rolling o
 rolling back both.
 
 `GITHUB_TOKEN` must be a Cloudflare Worker secret, never a Wrangler plaintext variable or a
-committed `.dev.vars` value; the snapshot refresh uses it to read repository metrics.
+committed `.dev.vars` value; the plugin detail endpoint uses it to read repository metadata.

@@ -262,40 +262,6 @@ export async function syncCuratedEntries(
   }
 }
 
-export async function saveCatalogMetrics(
-  db: D1Database,
-  plugins: CatalogPlugin[],
-  now = new Date().toISOString(),
-): Promise<void> {
-  if (plugins.length === 0) return
-  // Stars and forks are repository facts: sibling plugins of one monorepo would
-  // otherwise issue identical UPDATEs in the same batch.
-  const byRepository = new Map<string, CatalogPlugin>()
-  for (const plugin of plugins) {
-    const key = normalizeRepositoryName(`${plugin.owner}/${plugin.repository}`)
-    if (!byRepository.has(key)) byRepository.set(key, plugin)
-  }
-  for (const group of chunks([...byRepository.values()], 50)) {
-    await db.batch(group.map((plugin) => db.prepare(
-      `UPDATE catalog_repositories
-          SET stars = ?, forks = ?, pushed_at = ?, github_updated_at = ?, updated_at = ?
-        WHERE normalized_full_name = ?
-          AND (stars IS NOT ? OR forks IS NOT ? OR pushed_at IS NOT ? OR github_updated_at IS NOT ?)`,
-    ).bind(
-      plugin.stars,
-      plugin.forks,
-      plugin.pushedAt,
-      plugin.updatedAt,
-      now,
-      normalizeRepositoryName(`${plugin.owner}/${plugin.repository}`),
-      plugin.stars,
-      plugin.forks,
-      plugin.pushedAt,
-      plugin.updatedAt,
-    )))
-  }
-}
-
 /**
  * The leaf directory of a monorepo subpackage, or null for a root plugin.
  *
