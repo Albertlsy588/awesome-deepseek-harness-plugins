@@ -2,7 +2,7 @@
 
 ## Add a plugin
 
-Catalog entries are maintained as one JSON file per plugin in `catalog/plugins/`. A plugin is identified by its `id`: either `owner/repository` for a repository-level plugin, or `owner/repository/sub/dir` for a monorepo subpackage, so one repository may contribute several entries as long as every `id` is unique. A community pull request may either add exactly one new source entry (the automated fast path) or update or remove existing `catalog/plugins/*.json` entries (accepted, but merged only after maintainer review). No community pull request may touch anything outside `catalog/plugins/`; workflow changes and application changes remain maintainer operations and use the repository's explicit emergency bypass path.
+Catalog entries are maintained as one JSON file per plugin in `catalog/plugins/`. A plugin is identified by its `id`: either `owner/repository` for a repository-level plugin, or `owner/repository/sub/dir` for a monorepo subpackage, so one repository may contribute several entries as long as every `id` is unique. A community pull request may either add exactly one new source entry (the automated fast path) or update or remove existing `catalog/plugins/*.json` entries (accepted, but merged only after maintainer review). No community pull request may touch anything outside `catalog/plugins/`; workflow and script changes remain maintainer operations and use the repository's explicit emergency bypass path.
 
 1. Confirm the plugin's `package.json` declares a non-empty `dsh.bundle.patch` and that the referenced patch file is committed. Know how your plugin becomes **installable**: the 1024 Store installs plugins from npm only, so the install command appears once the manifest's package is published to npm with its `dsh.bundle` declaration — the catalog detects a newly published package automatically. A plugin without a published npm package is still catalogued, listed browse-only with its repository link. For a repository-level `id` the manifest may live at the root or in any nested directory; for a subdirectory `id` the manifest must be located exactly at `<sub/dir>/package.json` — the id's path pins where the plugin lives in the repository.
 2. Test the plugin yourself. Catalog review does not install, build, or execute third-party code; authors remain responsible for runtime compatibility.
@@ -10,7 +10,7 @@ Catalog entries are maintained as one JSON file per plugin in `catalog/plugins/`
 4. Copy an existing plugin JSON file and name it after the id: each `/`-separated id segment is lowercased with non-alphanumeric runs converted to `-`, and the segments are joined with `--`, e.g. `owner/repository` → `owner--repository.json` and `owner/repository/packages/foo` → `owner--repository--packages--foo.json`. Files stay flat in `catalog/plugins/`.
 5. Keep both descriptions factual, neutral, and specific. Avoid superlatives, calls to action, and unsupported claims.
 6. Set `added` to the submission date.
-7. Commit only that one new `catalog/plugins/*.json` file. Do not change README files, workflows, application code, or any other path in the same pull request. `README.md` and `catalog/README.md` are bot-generated projections and are refreshed automatically.
+7. Commit only that one new `catalog/plugins/*.json` file. Do not change README files, workflows, scripts, or any other path in the same pull request. `README.md` and `catalog/README.md` are bot-generated projections and are refreshed automatically.
 
 Example (repository-level plugin):
 
@@ -52,7 +52,7 @@ Every pull request receives one deliberately narrow static gate. The workflow re
 
 The trusted workflow comments on the pull request with the exact failure reason. A failed review leaves the pull request open so the author can push a correction — the workflow never closes a pull request. A non-draft pull request that passes `Plugin submission review / static-review` with exactly one new entry is squash-merged automatically; GitHub then records it as merged (and therefore no longer open). Draft pull requests are validated but remain open until marked ready for review. A pull request that updates or removes existing entries passes the same static review (the check turns green), but it is never merged automatically: the bot comments that maintainer review is required, and a maintainer inspects the change set and merges it manually.
 
-After the merge everything is automated — there is no maintainer step. The catalog-sync workflow pushes all `catalog/plugins/*.json` entries to the website's `POST /api/v1/catalog/sync` endpoint, so the plugin is synced automatically into the production D1 catalog, and then rebuilds `README.md` and `catalog/README.md` from the live catalog API, committing any changes as `github-actions[bot]`. Your plugin appears on [deepseek1024.com](https://deepseek1024.com/) and in both README directories without further action. See [docs/api.md](docs/api.md) for the endpoint contract.
+After the merge everything is automated — there is no maintainer step. The catalog-sync workflow pushes all `catalog/plugins/*.json` entries to the website's `POST /api/v1/catalog/sync` endpoint, so the plugin is synced automatically into the production D1 catalog, and then rebuilds `README.md` and `catalog/README.md` from the live catalog API, committing any changes as `github-actions[bot]`. Your plugin appears on [deepseek1024.com](https://deepseek1024.com/) and in both README directories without further action. See the [API reference](https://github.com/imsai-sh/dsh1024-oss/blob/main/docs/api.md) in the site's source repository for the endpoint contract.
 
 Repository owners must protect `main` in GitHub Rules or branch protection:
 
@@ -68,13 +68,11 @@ Catalog metadata contributions are provided under CC0-1.0. Code contributions ar
 
 ## Maintainer changes
 
-Non-catalog changes are rejected by the public pull request gate. Maintainers use the explicit emergency ruleset bypass for trusted repository maintenance, including workflows and the Web application. Community pull requests that update or remove catalog entries need no bypass: once their static review is green, a maintainer reviews the change set and merges through the normal pull request UI.
+Non-catalog changes are rejected by the public pull request gate. Maintainers use the explicit emergency ruleset bypass for trusted repository maintenance, including workflows and scripts. (The website and CLI live in [imsai-sh/dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss); changes there follow that repository's process.) Community pull requests that update or remove catalog entries need no bypass: once their static review is green, a maintainer reviews the change set and merges through the normal pull request UI.
 
 1. Create a focused maintenance branch from `main`.
-2. For any API-related change, register the route and compatibility evidence in `apps/web/contracts/`, preserve every existing-version contract, and run `npm run test:api-contract`. Breaking behavior requires a new versioned route while the previous version remains available.
-3. Run `npm run cf-typecheck`, `npm run typecheck`, `npm test`, and `npm run build`.
-4. Run `npm run test:visual` and attach screenshots for visible UI changes.
-5. Review the complete diff, then use the emergency bypass deliberately when merging the maintenance pull request.
-6. Avoid unrelated formatting churn, and never hand-edit the bot-generated `README.md` or `catalog/README.md`; run `npm run readme:build` instead.
+2. Run `npm test` (the catalog script suites).
+3. Review the complete diff, then use the emergency bypass deliberately when merging the maintenance pull request.
+4. Avoid unrelated formatting churn, and never hand-edit the bot-generated `README.md` or `catalog/README.md`; run `npm run readme:build` instead.
 
 Never commit `.dev.vars`, GitHub tokens, Cloudflare credentials, or other secrets.

@@ -18,4 +18,4 @@ Protect `main` by requiring pull requests and the single `Plugin submission revi
 
 ## Verification
 
-Tests cover the one-file policy, ordinary-PR rejection, symlink rejection, merge input validation, wrong-base rejection, stale workflow handling, idempotent already-merged behavior, repository-rule failures, documentation consistency, and workflow trigger contracts. Run `actionlint`, `npm run cf-typecheck`, `npm run typecheck`, `npm test`, `npm run build`, and `npm audit --omit=dev` before publishing the maintenance change.
+Tests cover the one-file policy, ordinary-PR rejection, symlink rejection, merge input validation, wrong-base rejection, stale workflow handling, idempotent already-merged behavior, repository-rule failures, documentation consistency, and workflow trigger contracts. Run `actionlint`, `npm test`, and `npm audit --omit=dev` before publishing the maintenance change.

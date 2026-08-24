@@ -1,5 +1,8 @@
 name: CI
 
+# Deliberately push-to-main only, never pull_request: fork PR code must never be
+# installed, built, or executed by this repository's CI. The only workflow that
+# looks at a PR is plugin-review.yml, which treats the submitted checkout as data.
 on:
   push:
     branches: [main]
@@ -17,28 +20,4 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run cf-typecheck
-        env:
-          GITHUB_TOKEN: ci-typecheck-placeholder
-      - run: npm run typecheck
-      - run: npm run test:api-contract
       - run: npm test
-      - run: npm run build
-        env:
-          GITHUB_TOKEN: ci-build-placeholder
-          INSTALL_CLIENT_HASH_SECRET: ci-install-secret-that-is-at-least-32-bytes
-
-  cli-platforms:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run test:cli

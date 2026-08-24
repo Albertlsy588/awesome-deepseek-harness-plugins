@@ -69,8 +69,8 @@ export function declaredEntryPoint(manifest) {
  * committed. The source method is collected as a record — no user-facing
  * surface offers it while installs are npm-only — but the classification must
  * keep reaching the same verdicts as the website's crawl
- * (apps/web/worker/lib/install-methods.ts), or the recorded data diverges
- * between the gate and the catalog.
+ * (apps/web/worker/lib/install-methods.ts in the dsh1024-oss repository), or
+ * the recorded data diverges between the gate and the catalog.
  *
  * This is a LABEL, not an admission test: the submission is still accepted
  * and the plugin still gets catalogued.

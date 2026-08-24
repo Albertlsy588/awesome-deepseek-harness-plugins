@@ -1,5 +1,9 @@
-# API contracts and their implementation require explicit API-owner review.
-/apps/web/contracts/ @imsai-sh
-/apps/web/worker/ @imsai-sh
-/apps/web/tests/api-contract.test.ts @imsai-sh
-/docs/api.md @imsai-sh
+# Catalog schema, category definitions, automation, and the submission spec
+# (which must stay in lockstep with skills/submit-dsh-plugin) require owner review.
+/catalog/categories.json @imsai-sh
+/catalog/schema/ @imsai-sh
+/scripts/ @imsai-sh
+/skills/ @imsai-sh
+/CONTRIBUTING.md @imsai-sh
+/.github/workflows/ @imsai-sh
+/.github/PULL_REQUEST_TEMPLATE.md @imsai-sh

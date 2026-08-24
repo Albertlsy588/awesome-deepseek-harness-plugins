@@ -8,9 +8,11 @@
 # to it or base work on it.
 #
 # First-rollout runbook (one-time, BEFORE this workflow can go green):
-#   1. Deploy the Worker so /api/v1/catalog/sync and /api/v1/registry exist.
-#   2. Set CATALOG_SYNC_TOKEN on the Worker (wrangler secret put CATALOG_SYNC_TOKEN)
-#      AND as a repository Actions secret with the same value.
+#   1. Deploy the Worker (source: imsai-sh/dsh1024-oss) so /api/v1/catalog/sync
+#      and /api/v1/registry exist.
+#   2. Set CATALOG_SYNC_TOKEN on the Worker (wrangler secret put CATALOG_SYNC_TOKEN,
+#      run from the dsh1024-oss checkout) AND as a repository Actions secret here
+#      with the same value. Rotating it is a coordinated two-repo change.
 #   3. Run this workflow via workflow_dispatch (or wait for the next trigger).
 #   The sync step retries for up to ~10 minutes, so a run racing a Worker deploy
 #   normally self-heals; a run started before the secrets exist must be re-run.
@@ -48,9 +50,6 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: >-
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     steps:
       # With ssh-key set, checkout rewrites origin to the SSH URL, so the final
       # git push authenticates as the write deploy key ("Deploy keys" is on the
@@ -72,10 +71,10 @@ jobs:
             echo "::error::The CATALOG_SYNC_TOKEN repository secret is not configured. Catalog entries were NOT synced to production. Create the secret with the Worker's CATALOG_SYNC_TOKEN value."
             exit 1
           fi
-          # Retry with backoff: a push that changes catalog/categories.json (or the
-          # first rollout) triggers Deploy in parallel, and the still-running old
-          # Worker rejects the sync until the new Worker is live. The endpoint is an
-          # idempotent upsert reconciliation, so retries are safe.
+          # Retry with backoff: the Worker is deployed manually from the dsh1024-oss
+          # repository, so this run may race a deploy that is still rolling out (or,
+          # on first rollout, land before the Worker or its secret exists). The
+          # endpoint is an idempotent upsert reconciliation, so retries are safe.
           for attempt in $(seq 1 20); do
             if npm run catalog:sync; then
               exit 0

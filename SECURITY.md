@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Do not open a public issue for an exploitable vulnerability in DSH 1024Store. Use GitHub's private vulnerability reporting for this repository when available, and include affected routes, reproduction steps, and impact.
+Do not open a public issue for an exploitable vulnerability in the catalog automation (the submission review workflow, sync scripts, or README generation). Use GitHub's private vulnerability reporting for this repository when available, and include the affected workflow or script, reproduction steps, and impact. Vulnerabilities in the deepseek1024.com site, its API, or the `dsh1024` CLI belong to [imsai-sh/dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss).
 
 ## Third-party packages
 

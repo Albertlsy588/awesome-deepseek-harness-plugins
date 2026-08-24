@@ -10,8 +10,10 @@ The catalog in production D1 is fed from two directions:
 - **Discovery facts** — GitHub repositories carrying the `dsh-plugin` topic, plus the
   git/npm inspection results that back install verification. These are maintained by
   out-of-band collection jobs operated by the maintainer; **none of that tooling runs inside
-  this Worker**, which is why `apps/web` contains no scheduled tasks and its Wrangler
-  configuration declares no Cron Triggers. The jobs write to the same D1 database directly.
+  the Worker** (whose source lives in
+  [imsai-sh/dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss)), which is why it exports
+  no scheduled tasks and its Wrangler configuration declares no Cron Triggers. The jobs
+  write to the same D1 database directly.
 
 ```text
 out-of-band collection (topic scan, git/npm inspection) ─┐
@@ -22,7 +24,8 @@ checked-in PR catalog ──> CI POST /api/v1/catalog/sync ──┘
 Nothing is bundled into the Worker: reads serve the KV snapshot, fresh or stale, without
 touching D1 — the snapshot is rebuilt only by the catalog-sync endpoint, or once on a cold
 start when the KV namespace is empty. Stale KV is the only degradation mode. External consumers read the same D1-backed catalog through
-`GET /api/v1/registry` — capped at its install-ranked head (see [API reference](api.md)).
+`GET /api/v1/registry` — capped at its install-ranked head (see the
+[API reference](https://github.com/imsai-sh/dsh1024-oss/blob/main/docs/api.md)).
 
 ## Data model
 
@@ -79,23 +82,9 @@ test, compatibility guarantee, quality rating, or security review.
 
 ## Deployment and operations
 
-The configured D1 database is `dsh-store-star-history`; it stores both star history and the
-primary catalog. Apply migrations before deploying:
-
-```bash
-npm ci
-npm run typecheck
-npm test
-npx wrangler d1 export CATALOG_DB --remote --output=catalog-backup-$(date +%Y%m%d-%H%M).sql
-npm run db:migrate:remote --workspace @dsh-1024store/web
-npm run deploy
-```
-
-Nothing deploys on a push: publishing is this local sequence, run deliberately.
-
-Take the export before every migration and check that it restores (`sqlite3 tmp.db < backup.sql`).
-It is the only way back: a Worker cannot read a schema it predates, so rolling one back means
-rolling back both.
-
-`GITHUB_TOKEN` must be a Cloudflare Worker secret, never a Wrangler plaintext variable or a
-committed `.dev.vars` value; the plugin detail endpoint uses it to read repository metadata.
+The Worker, its D1 migrations, and the deploy runbook live in
+[imsai-sh/dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss) — see
+[docs/deployment.md](https://github.com/imsai-sh/dsh1024-oss/blob/main/docs/deployment.md)
+there. Nothing deploys on a push from either repository. This repository only feeds the
+catalog: the catalog-sync workflow POSTs curated entries to the deployed Worker's
+`POST /api/v1/catalog/sync` endpoint.

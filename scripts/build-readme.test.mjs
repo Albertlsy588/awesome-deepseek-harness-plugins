@@ -166,7 +166,7 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   assert.match(zh, /<summary><strong>待分类<\/strong> · 1 个插件<\/summary>/)
   assert.doesNotMatch(zh, /stars?:? \d/i)
   assert.match(zh, /<strong>DSH插件社区<\/strong>/)
-  assert.match(zh, /<img src="apps\/web\/public\/wechat-group\.jpg" alt="DSH插件社区微信二维码" width="280">/)
+  assert.match(zh, /<img src="docs\/assets\/wechat-group\.jpg" alt="DSH插件社区微信二维码" width="280">/)
   assert.ok(zh.indexOf('DSH插件社区') < zh.indexOf('## 项目亮点'), 'community QR must be visible before the project details')
 
   assert.match(en, /DSH 1024Store/)
@@ -212,9 +212,12 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   const zh = files['README.md']
   const en = files['catalog/README.md']
 
-  // The four things this repository ships beyond the list itself.
+  // The four things this project ships beyond the list itself. The site and CLI
+  // live in the sibling dsh1024-oss repository; deploys are explicit local acts.
   assert.match(zh, /deepseek1024\.com/)
-  assert.match(zh, /CLOUDFLARE_API_TOKEN/)
+  assert.match(zh, /github\.com\/imsai-sh\/dsh1024-oss/)
+  assert.match(zh, /npm run deploy/)
+  assert.doesNotMatch(zh, /CLOUDFLARE_API_TOKEN/)
   assert.match(zh, /dsh plugin --profile web add dsh1024@latest/)
   assert.match(zh, /定时收集/)
   assert.match(zh, /格式校验/)
@@ -227,7 +230,8 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   assert.match(zh, /\/pulls\)/)
   assert.match(zh, /\/fork\)/)
 
-  assert.match(en, /CLOUDFLARE_API_TOKEN/)
+  assert.match(en, /github\.com\/imsai-sh\/dsh1024-oss/)
+  assert.doesNotMatch(en, /CLOUDFLARE_API_TOKEN/)
   assert.match(en, /dsh plugin --profile web add dsh1024@latest/)
   assert.match(en, /never installing dependencies or executing repository code/)
   assert.match(en, /api\.deepseek1024\.com\/v1\/plugins\/search/)
@@ -240,9 +244,11 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   assert.match(zh, /维护者人工审核/)
   assert.match(en, /waits for maintainer approval/)
 
-  // Links in catalog/README.md resolve one directory up.
+  // Links in catalog/README.md resolve one directory up; the API reference moved
+  // to the dsh1024-oss repository and must be an absolute URL.
   assert.match(en, /\]\(\.\.\/CONTRIBUTING\.md\)/)
-  assert.match(en, /\]\(\.\.\/docs\/api\.md\)/)
+  assert.match(en, /\]\(https:\/\/github\.com\/imsai-sh\/dsh1024-oss\/blob\/main\/docs\/api\.md\)/)
+  assert.doesNotMatch(en, /\]\(\.\.\/docs\/api\.md\)/)
 })
 
 test('lists every category that fits and caps only the bucket that overflows', async () => {

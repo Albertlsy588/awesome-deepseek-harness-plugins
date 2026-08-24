@@ -9,7 +9,7 @@ description: 验证并提交 DeepSeek Harness 插件到 imsai-sh/awesome-deepsee
 
 ## 安全与范围
 
-- 不得在插件提交 PR 中编辑 `README.md`、`catalog/README.md`、工作流或应用代码。两个 README 是 bot 生成的目录投影，合并后由 CI 自动刷新。
+- 不得在插件提交 PR 中编辑 `README.md`、`catalog/README.md`、工作流或脚本。两个 README 是 bot 生成的目录投影，合并后由 CI 自动刷新。
 - 不得仅为了检查插件而安装依赖、运行生命周期脚本、构建或执行插件代码。运行作者代码前必须先征得同意。
 - 保留所有无关的本地改动。如果目录仓库工作区不干净，应停止操作；除非用户指定一个干净 worktree，或明确界定现有改动的范围。
 - 将“准备”或“起草”理解为仅做本地修改。只有用户明确要求“提交”“推送”或“创建 PR”时，才视为已授权在展示准确目标后执行 fork、push 和创建 PR。
@@ -113,8 +113,7 @@ catalog: add owner/repository/packages/foo
 推送前，说明 fork、分支、上游仓库和唯一暂存的文件。只有获得授权后才可推送并创建 PR。
 
 使用 [references/submission-reference.md](references/submission-reference.md) 中的模板编写 PR，填写真实的测试命令和结果，并保持“允许维护者修改”开启。
-仓库根 PR 模板还包含仅供维护者应用/API 变更使用的 `Maintainer API compatibility` 清单；
-目录投稿不得勾选或填写该段，仍只完成插件与目录提交确认。
+仓库根 PR 模板只包含插件与目录提交确认清单，逐项如实完成即可。
 
 ## 7. 跟进自动检查
 

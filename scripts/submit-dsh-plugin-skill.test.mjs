@@ -235,12 +235,15 @@ test('keeps the maintainer API checklist out of catalog submission instructions'
   const skill = await readFile(path.join(root, 'skills/submit-dsh-plugin/SKILL.md'), 'utf8')
   const reference = await readFile(path.join(root, 'skills/submit-dsh-plugin/references/submission-reference.md'), 'utf8')
 
-  assert.match(pullRequestTemplate, /Maintainer API compatibility/)
-  assert.match(pullRequestTemplate, /Catalog-only plugin submissions leave this section unchecked/)
-  assert.match(skill, /Maintainer API compatibility/)
-  assert.match(skill, /目录投稿不得勾选或填写该段/)
-  assert.match(reference, /Maintainer API compatibility/)
-  assert.match(reference, /插件目录投稿保持该段全部未勾选/)
+  // The maintainer API checklist moved to the dsh1024-oss repository with the
+  // Worker; the catalog PR template carries only the submission checklist, and
+  // the skill docs must not resurrect the removed section.
+  assert.doesNotMatch(pullRequestTemplate, /Maintainer API compatibility/)
+  assert.match(pullRequestTemplate, /Catalog submissions/)
+  assert.doesNotMatch(skill, /Maintainer API compatibility/)
+  assert.match(skill, /只包含插件与目录提交确认清单/)
+  assert.doesNotMatch(reference, /Maintainer API compatibility/)
+  assert.match(reference, /只包含插件与目录提交清单/)
 })
 
 test('documents the subdirectory plugin id contract consistently', async () => {

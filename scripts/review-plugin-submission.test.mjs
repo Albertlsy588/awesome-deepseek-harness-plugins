@@ -280,8 +280,8 @@ test('rejects unrelated files', () => {
 
 test('rejects pull requests touching only non-catalog files', () => {
   assert.throws(() => validateSubmissionChanges([
-    { status: 'M', file: 'apps/web/src/App.tsx' },
-  ]), /unexpected change: M apps\/web\/src\/App\.tsx/)
+    { status: 'M', file: 'scripts/build-readme.mjs' },
+  ]), /unexpected change: M scripts\/build-readme\.mjs/)
 })
 
 test('rejects plugin JSON files in nested catalog directories', () => {
@@ -293,8 +293,8 @@ test('rejects plugin JSON files in nested catalog directories', () => {
 test('rejects changes to generated projections', () => {
   assert.throws(() => validateSubmissionChanges([
     { status: 'A', file: 'catalog/plugins/owner--plugin.json' },
-    { status: 'M', file: 'apps/web/public/plugins.json' },
-  ]), /unexpected change: M apps\/web\/public\/plugins\.json/)
+    { status: 'M', file: 'catalog/README.md' },
+  ]), /unexpected change: M catalog\/README\.md/)
 })
 
 test('accepts a root package with an existing bundle patch', async () => {
