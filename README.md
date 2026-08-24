@@ -2,11 +2,11 @@
 
 <!-- 本文件由 scripts/build-readme.mjs 从 deepseek1024.com 目录 API 自动生成，请勿手工编辑。 -->
 
-面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **10396** 个插件（含 PR 收录与 GitHub `dsh-plugin` topic 自动发现），目录数据更新于 2026-08-24。
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **10400** 个插件（含 PR 收录与 GitHub `dsh-plugin` topic 自动发现），目录数据更新于 2026-08-24。
 
 **但这个仓库不只是一份 awesome list。** 这里开源了一个在线插件市场、一个把市场装进 `dsh` 本体的插件、经静态校验的 PR 收录流水线，以及一套免费的公开查询 API；目录数据另有自动收集服务持续喂入。代码采用 MIT 协议，fork 之后就能部署成你自己的插件市场。
 
-[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.zh.png?v=12fece132122)](https://deepseek1024.com/)
+[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.zh.png?v=cc611952b42c)](https://deepseek1024.com/)
 
 [在线网站](https://deepseek1024.com/) · [API 文档](docs/api.md) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md)
 
@@ -165,12 +165,12 @@ npx wrangler deploy --secrets-file .dev.vars
 - [记忆](#memory) (294)
 - [工具与能力](#tools) (3007)
 - [技能包](#skill) (852)
-- [工作流与自动化](#workflow) (493)
+- [工作流与自动化](#workflow) (494)
 - [通知与集成](#notify) (369)
 - [模型与账号接入](#model) (565)
 - [开发与运行时](#dev) (1071)
 - [娱乐](#fun) (423)
-- [待分类](#unclassified) (537)
+- [待分类](#unclassified) (540)
 
 <a id="ui"></a>
 
@@ -1803,7 +1803,7 @@ npx wrangler deploy --secrets-file .dev.vars
 <a id="workflow"></a>
 
 <details>
-<summary><strong>工作流与自动化</strong> · 显示 254 / 共 493 个</summary>
+<summary><strong>工作流与自动化</strong> · 显示 254 / 共 494 个</summary>
 
 - [agent-governance](https://github.com/EnglandTong/governance-multi-agent-harness/tree/HEAD/packages/bundle/agent-governance) — 多代理工作流的治理捆绑包，提供监督与协调。
 - [agent-jit](https://github.com/sybolization/agent-jit) — DeepSeek Harness (dsh) 插件：把 LLM agent loop 中确定性的执行路径编译成 DSL 程序并直接执行，显著降低 token、往返轮次与上下文暴露。A DeepSeek Harness plugin that compiles deterministic agent paths into DSL programs.
@@ -1997,6 +1997,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-fleet](https://github.com/scriptsnet/dsh-fleet) — ⚡ DSH 多机算力组网：把朋友间/局域网/云上 ECS 的闲置算力汇聚成分布式 AI 算力池，一台机调用整个团队的算力。一个人掌控多台 Harness 并行开发研究。
 - [dsh-flomo-report](https://github.com/zhengjy01/dsh-flomo-report) — 生成 AI 叙述的日/周/月会话摘要，并同步到浮墨笔记，可配置标签。
 - [dsh-forge](https://github.com/activeing123/dsh-forge) — 监控会话轨迹，识别重复成功任务并自动锻造为可复用技能。
+- [dsh-freecanvas](https://github.com/JustinQiuck/dsh-freecanvas/tree/HEAD/plugins/dsh-freecanvas) — 将 AI 无限画布作为自包含 DSH bundle 集成，内置 Web 资源、本地 Canvas Agent 连接、生图与视频工作台及可视化内容编排。
 - [dsh-generation](https://github.com/goecho/dsh-generation) — 分叉Agent预设并在下一代运行任务，实现多步编排。
 - [dsh-git-push](https://github.com/EIGHTfs/dsh-git-push) — DSH git 自动提交推送插件：扫描仓库 + 一键 commit/push（工具 + HTTP API）
 - [dsh-git-workflow](https://github.com/yangyongzhen/dsh-git-workflow) — 自动化 Git 工作流，处理提交、分支和版本控制任务。
@@ -2058,8 +2059,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-offpeak-send](https://github.com/Ricketts-Guo/dsh-off-peak-message/tree/HEAD/dsh-offpeak-send) — 将消息排队至谷时自动发送，节省 API 费用，并提供原生外观输入条和快捷键。
 - [dsh-oi-workbench](https://github.com/muyangplus/dsh-oi-workbench) — 提供竞赛编程工作台，支持 Python 执行和界面集成。
 - [dsh-omni-router](https://github.com/qwe225380/dsh-omni-router) — 自动路由任务：简单任务直接执行，复杂任务触发规划并需审批。
-- [dsh-open-a2a-net](https://github.com/NelsonLongxiang/dsh-open-a2a-net) — 支持去中心化节点发现和模型工具的直接路由，构建开放网络。
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 239 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 240 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
@@ -3184,9 +3184,9 @@ npx wrangler deploy --secrets-file .dev.vars
 <a id="unclassified"></a>
 
 <details>
-<summary><strong>待分类</strong> · 显示 0 / 共 537 个</summary>
+<summary><strong>待分类</strong> · 显示 0 / 共 540 个</summary>
 
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 537 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 540 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
