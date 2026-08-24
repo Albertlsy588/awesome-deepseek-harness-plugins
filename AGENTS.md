@@ -3,7 +3,7 @@
 This repository is the **plugin catalog**: the awesome list (`catalog/plugins/*.json`),
 the plugin submission review/merge workflow, and the generated README directories. The
 DSH 1024Store application — the deepseek1024.com site, its Worker, and the `dsh1024` npm
-package — lives in [imsai-sh/dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss).
+package — lives in [imsai-sh/dsh-1024store](https://github.com/imsai-sh/dsh-1024store).
 
 ## The submission gate is the product
 
@@ -33,25 +33,25 @@ package — lives in [imsai-sh/dsh1024-oss](https://github.com/imsai-sh/dsh1024-
 
 ## Cross-repo contracts (no CI spans both repositories)
 
-The deployed Worker's source lives in dsh1024-oss; these pairs drift silently, so check
+The deployed Worker's source lives in dsh-1024store; these pairs drift silently, so check
 the other repo whenever you touch one side:
 
 - `scripts/lib/catalog-entry.mjs` id validation ↔ `apps/web/worker/lib/plugin-id.ts` and
-  the sync endpoint's `ENTRY_ID`/`ENTRY_KEYS` in `apps/web/worker/app.ts` (dsh1024-oss).
+  the sync endpoint's `ENTRY_ID`/`ENTRY_KEYS` in `apps/web/worker/app.ts` (dsh-1024store).
   Drift means a PR passes review here but the sync endpoint rejects it there.
-- `catalog/categories.json` here is the source of truth; dsh1024-oss carries a vendored
+- `catalog/categories.json` here is the source of truth; dsh-1024store carries a vendored
   mirror bundled into the Worker. A category change lands in both repositories and only
   reaches the site when that Worker is redeployed.
 - `scripts/review-plugin-submission.mjs` `classifyGitInstall` ↔
-  `apps/web/worker/lib/install-methods.ts` (dsh1024-oss).
+  `apps/web/worker/lib/install-methods.ts` (dsh-1024store).
 - `scripts/build-readme.mjs`'s unclassified label ↔ `UNCLASSIFIED_CATEGORY` in
-  `apps/web/worker/lib/categories.ts` (dsh1024-oss).
+  `apps/web/worker/lib/categories.ts` (dsh-1024store).
 - `scripts/sync-catalog.mjs` POSTs to `https://deepseek1024.com/api/v1/catalog/sync` with
   `Bearer CATALOG_SYNC_TOKEN`. The token value must match between this repo's Actions
-  secret and the Worker secret in dsh1024-oss; rotating it is a coordinated change.
+  secret and the Worker secret in dsh-1024store; rotating it is a coordinated change.
 - This repo's CI (catalog-sync) reads the live site: `npm run readme:build` pages
   `/api/v2/plugins`, and the screenshot step captures the deployed homepage. A bad deploy
-  from dsh1024-oss turns catalog-sync red or stale — that is expected, not a bug here.
+  from dsh-1024store turns catalog-sync red or stale — that is expected, not a bug here.
 
 ## Permanent URLs
 

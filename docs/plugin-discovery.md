@@ -11,7 +11,7 @@ The catalog in production D1 is fed from two directions:
   git/npm inspection results that back install verification. These are maintained by
   out-of-band collection jobs operated by the maintainer; **none of that tooling runs inside
   the Worker** (whose source lives in
-  [imsai-sh/dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss)), which is why it exports
+  [imsai-sh/dsh-1024store](https://github.com/imsai-sh/dsh-1024store)), which is why it exports
   no scheduled tasks and its Wrangler configuration declares no Cron Triggers. The jobs
   write to the same D1 database directly.
 
@@ -25,7 +25,7 @@ Nothing is bundled into the Worker: reads serve the KV snapshot, fresh or stale,
 touching D1 — the snapshot is rebuilt only by the catalog-sync endpoint, or once on a cold
 start when the KV namespace is empty. Stale KV is the only degradation mode. External consumers read the same D1-backed catalog through
 `GET /api/v1/registry` — capped at its install-ranked head (see the
-[API reference](https://github.com/imsai-sh/dsh1024-oss/blob/main/docs/api.md)).
+[API reference](https://github.com/imsai-sh/dsh-1024store/blob/main/docs/api.md)).
 
 ## Data model
 
@@ -83,8 +83,8 @@ test, compatibility guarantee, quality rating, or security review.
 ## Deployment and operations
 
 The Worker, its D1 migrations, and the deploy runbook live in
-[imsai-sh/dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss) — see
-[docs/deployment.md](https://github.com/imsai-sh/dsh1024-oss/blob/main/docs/deployment.md)
+[imsai-sh/dsh-1024store](https://github.com/imsai-sh/dsh-1024store) — see
+[docs/deployment.md](https://github.com/imsai-sh/dsh-1024store/blob/main/docs/deployment.md)
 there. Nothing deploys on a push from either repository. This repository only feeds the
 catalog: the catalog-sync workflow POSTs curated entries to the deployed Worker's
 `POST /api/v1/catalog/sync` endpoint.

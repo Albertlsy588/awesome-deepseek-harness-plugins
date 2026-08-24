@@ -213,9 +213,9 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   const en = files['catalog/README.md']
 
   // The four things this project ships beyond the list itself. The site and CLI
-  // live in the sibling dsh1024-oss repository; deploys are explicit local acts.
+  // live in the sibling dsh-1024store repository; deploys are explicit local acts.
   assert.match(zh, /deepseek1024\.com/)
-  assert.match(zh, /github\.com\/imsai-sh\/dsh1024-oss/)
+  assert.match(zh, /github\.com\/imsai-sh\/dsh-1024store/)
   assert.match(zh, /npm run deploy/)
   assert.doesNotMatch(zh, /CLOUDFLARE_API_TOKEN/)
   assert.match(zh, /dsh plugin --profile web add dsh1024@latest/)
@@ -230,7 +230,7 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   assert.match(zh, /\/pulls\)/)
   assert.match(zh, /\/fork\)/)
 
-  assert.match(en, /github\.com\/imsai-sh\/dsh1024-oss/)
+  assert.match(en, /github\.com\/imsai-sh\/dsh-1024store/)
   assert.doesNotMatch(en, /CLOUDFLARE_API_TOKEN/)
   assert.match(en, /dsh plugin --profile web add dsh1024@latest/)
   assert.match(en, /never installing dependencies or executing repository code/)
@@ -245,9 +245,9 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   assert.match(en, /waits for maintainer approval/)
 
   // Links in catalog/README.md resolve one directory up; the API reference moved
-  // to the dsh1024-oss repository and must be an absolute URL.
+  // to the dsh-1024store repository and must be an absolute URL.
   assert.match(en, /\]\(\.\.\/CONTRIBUTING\.md\)/)
-  assert.match(en, /\]\(https:\/\/github\.com\/imsai-sh\/dsh1024-oss\/blob\/main\/docs\/api\.md\)/)
+  assert.match(en, /\]\(https:\/\/github\.com\/imsai-sh\/dsh-1024store\/blob\/main\/docs\/api\.md\)/)
   assert.doesNotMatch(en, /\]\(\.\.\/docs\/api\.md\)/)
 })
 

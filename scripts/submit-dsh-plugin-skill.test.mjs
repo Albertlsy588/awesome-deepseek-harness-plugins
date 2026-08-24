@@ -235,7 +235,7 @@ test('keeps the maintainer API checklist out of catalog submission instructions'
   const skill = await readFile(path.join(root, 'skills/submit-dsh-plugin/SKILL.md'), 'utf8')
   const reference = await readFile(path.join(root, 'skills/submit-dsh-plugin/references/submission-reference.md'), 'utf8')
 
-  // The maintainer API checklist moved to the dsh1024-oss repository with the
+  // The maintainer API checklist moved to the dsh-1024store repository with the
   // Worker; the catalog PR template carries only the submission checklist, and
   // the skill docs must not resurrect the removed section.
   assert.doesNotMatch(pullRequestTemplate, /Maintainer API compatibility/)

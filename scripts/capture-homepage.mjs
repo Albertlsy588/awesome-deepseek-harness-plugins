@@ -22,7 +22,7 @@ export const defaultUrl = 'https://deepseek1024.com/'
 export const viewport = { width: 1280, height: 940 }
 export const scale = 1
 // The site picks its language from navigator.language (apps/web/src/lib/i18n.tsx
-// in the dsh1024-oss repository), which is en-US on a CI runner. Each projection
+// in the dsh-1024store repository), which is en-US on a CI runner. Each projection
 // gets a capture in its own language.
 export const locales = { zh: 'zh-CN', en: 'en-US' }
 // A blank or error page compresses to a few KB at this size; a real render of the

@@ -4,11 +4,11 @@
 
 面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **10215** 个插件（含 PR 收录与 GitHub `dsh-plugin` topic 自动发现），目录数据更新于 2026-08-24。
 
-**但这个项目不只是一份 awesome list。** 它还包括一个在线插件市场、一个把市场装进 `dsh` 本体的插件，以及一套免费的公开查询 API——这些应用代码开源在姊妹仓库 [dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss)；本仓库专注目录本身：经静态校验的 PR 收录流水线与自动生成的目录 README，目录数据另有自动收集服务持续喂入。全部代码 MIT 协议，fork 之后就能部署成你自己的插件市场。
+**但这个项目不只是一份 awesome list。** 它还包括一个在线插件市场、一个把市场装进 `dsh` 本体的插件，以及一套免费的公开查询 API——这些应用代码开源在姊妹仓库 [dsh-1024store](https://github.com/imsai-sh/dsh-1024store)；本仓库专注目录本身：经静态校验的 PR 收录流水线与自动生成的目录 README，目录数据另有自动收集服务持续喂入。全部代码 MIT 协议，fork 之后就能部署成你自己的插件市场。
 
 [![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.zh.png?v=15511fd6ebf2)](https://deepseek1024.com/)
 
-[在线网站](https://deepseek1024.com/) · [API 文档](https://github.com/imsai-sh/dsh1024-oss/blob/main/docs/api.md) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md) · [网站与 CLI 源码](https://github.com/imsai-sh/dsh1024-oss)
+[在线网站](https://deepseek1024.com/) · [API 文档](https://github.com/imsai-sh/dsh-1024store/blob/main/docs/api.md) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md) · [网站与 CLI 源码](https://github.com/imsai-sh/dsh-1024store)
 
 [![GitHub Stars](https://img.shields.io/github/stars/imsai-sh/awesome-deepseek-harness-plugins?style=social)](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)
 
@@ -21,9 +21,9 @@
 
 ### 在线插件市场（开源 · 可一键自部署）
 
-[deepseek1024.com](https://deepseek1024.com/) 提供搜索、分类筛选、安装排行榜、插件详情与 GitHub 活跃度数据。整站跑在 Cloudflare Workers + D1 + KV 上，源码在 [dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss) 的 [`apps/web`](https://github.com/imsai-sh/dsh1024-oss/tree/main/apps/web)。
+[deepseek1024.com](https://deepseek1024.com/) 提供搜索、分类筛选、安装排行榜、插件详情与 GitHub 活跃度数据。整站跑在 Cloudflare Workers + D1 + KV 上，源码在 [dsh-1024store](https://github.com/imsai-sh/dsh-1024store) 的 [`apps/web`](https://github.com/imsai-sh/dsh-1024store/tree/main/apps/web)。
 
-想要一个完全属于自己的插件市场：fork [dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss)，把 `apps/web/wrangler.jsonc` 里的 `routes` 换成你自己的域名，创建 D1 数据库与 KV 命名空间，配齐 `secrets.required` 列出的 Worker secret，然后本地执行 `npm run db:migrate:remote` 和 `npm run deploy` 完成部署（部署是显式的本地操作，push 不会自动上线）。完整步骤见该仓库的[部署文档](https://github.com/imsai-sh/dsh1024-oss/blob/main/docs/deployment.md)。
+想要一个完全属于自己的插件市场：fork [dsh-1024store](https://github.com/imsai-sh/dsh-1024store)，把 `apps/web/wrangler.jsonc` 里的 `routes` 换成你自己的域名，创建 D1 数据库与 KV 命名空间，配齐 `secrets.required` 列出的 Worker secret，然后本地执行 `npm run db:migrate:remote` 和 `npm run deploy` 完成部署（部署是显式的本地操作，push 不会自动上线）。完整步骤见该仓库的[部署文档](https://github.com/imsai-sh/dsh-1024store/blob/main/docs/deployment.md)。
 
 ### 把插件市场装进 dsh 本体
 
@@ -33,7 +33,7 @@
 dsh plugin --profile web add dsh1024@latest
 ```
 
-重启后「设置」里会出现独立的 **1024 Store** 入口，「设置 → 插件」下也会多出一个 **1024 Store（数量）** 标签页，可以直接搜索目录、按分类筛选、识别已安装状态、安装与卸载，并显示操作进度。安装器只接受目录 API 返回并通过严格语法校验的结构化目标：优先使用已发布 npm 包，否则使用与插件 ID、仓库 URL 一致的 GitHub 源码规格；展示命令不会被直接执行。源码见 [`packages/dsh1024`](https://github.com/imsai-sh/dsh1024-oss/tree/main/packages/dsh1024)。
+重启后「设置」里会出现独立的 **1024 Store** 入口，「设置 → 插件」下也会多出一个 **1024 Store（数量）** 标签页，可以直接搜索目录、按分类筛选、识别已安装状态、安装与卸载，并显示操作进度。安装器只接受目录 API 返回并通过严格语法校验的结构化目标：优先使用已发布 npm 包，否则使用与插件 ID、仓库 URL 一致的 GitHub 源码规格；展示命令不会被直接执行。源码见 [`packages/dsh1024`](https://github.com/imsai-sh/dsh-1024store/tree/main/packages/dsh1024)。
 
 ### 定时自动收集 + 格式校验
 
@@ -53,7 +53,7 @@ dsh plugin --profile web add dsh1024@latest
 curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'
 ```
 
-匿名调用每天 50 次、每分钟 10 次；用 GitHub 账号登录网站创建 API Key 后提升到每天 500 次、每分钟 30 次。另有 `/api/v1/registry` 返回按安装热度排序的精简目录快照（至多 500 条）。完整端点、参数与错误码见 [API 参考](https://github.com/imsai-sh/dsh1024-oss/blob/main/docs/api.md)。
+匿名调用每天 50 次、每分钟 10 次；用 GitHub 账号登录网站创建 API Key 后提升到每天 500 次、每分钟 30 次。另有 `/api/v1/registry` 返回按安装热度排序的精简目录快照（至多 500 条）。完整端点、参数与错误码见 [API 参考](https://github.com/imsai-sh/dsh-1024store/blob/main/docs/api.md)。
 
 ## 参与进来
 
@@ -61,8 +61,8 @@ curl 'https://api.deepseek1024.com/v1/plugins/search?q=memory'
 
 - **点个 Star** — [Star 本仓库](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/stargazers)是成本最低、帮助最大的支持，能让更多 DeepSeek Harness 用户找到这里。
 - **提 Issue** — 插件信息有误、分类不合理、网站或 API 有问题、想要新功能，都欢迎[提 Issue](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/issues/new)。
-- **发 PR** — [提交你自己的插件](CONTRIBUTING.md)或改进目录流水线，欢迎直接发 [Pull Request](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/pulls)；网站、CLI 与市场插件的改进请发到 [dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss)。
-- **Fork 自建** — 想要自己的插件市场，[Fork dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss/fork) 之后按上面的步骤配置即可，MIT 协议，随便改。
+- **发 PR** — [提交你自己的插件](CONTRIBUTING.md)或改进目录流水线，欢迎直接发 [Pull Request](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/pulls)；网站、CLI 与市场插件的改进请发到 [dsh-1024store](https://github.com/imsai-sh/dsh-1024store)。
+- **Fork 自建** — 想要自己的插件市场，[Fork dsh-1024store](https://github.com/imsai-sh/dsh-1024store/fork) 之后按上面的步骤配置即可，MIT 协议，随便改。
 
 ## 安装插件并计入统计
 
@@ -76,7 +76,7 @@ dsh1024 plugin --profile web add <npm-package>
 
 monorepo 子目录插件的标识形如 `owner/repo/packages/foo`，每个子包发布并安装自己的 npm 包，同仓库的兄弟插件各自独立计数。
 
-统计身份是保存在 `$DSH_HOME/.dsh-1024store/` 的随机安装实例 ID，不是实名用户或账号。CLI 不上传命令输出、路径、用户名、环境变量、会话内容或原始错误；可用 `npx dsh1024 telemetry disable`、`DO_NOT_TRACK=1` 或 `DSH1024_TELEMETRY=0`（旧变量名 `DSH_1024STORE_TELEMETRY` 仍兼容）关闭。直接使用官方 `dsh plugin` 命令仍然可用，但不会计入 DSH 1024Store 安装统计。详细字段、口径、存储和部署方式见 [安装统计设计](https://github.com/imsai-sh/dsh1024-oss/blob/main/docs/install-analytics.md)，CLI 源码见 [`packages/dsh1024`](https://github.com/imsai-sh/dsh1024-oss/tree/main/packages/dsh1024)。
+统计身份是保存在 `$DSH_HOME/.dsh-1024store/` 的随机安装实例 ID，不是实名用户或账号。CLI 不上传命令输出、路径、用户名、环境变量、会话内容或原始错误；可用 `npx dsh1024 telemetry disable`、`DO_NOT_TRACK=1` 或 `DSH1024_TELEMETRY=0`（旧变量名 `DSH_1024STORE_TELEMETRY` 仍兼容）关闭。直接使用官方 `dsh plugin` 命令仍然可用，但不会计入 DSH 1024Store 安装统计。详细字段、口径、存储和部署方式见 [安装统计设计](https://github.com/imsai-sh/dsh-1024store/blob/main/docs/install-analytics.md)，CLI 源码见 [`packages/dsh1024`](https://github.com/imsai-sh/dsh-1024store/tree/main/packages/dsh1024)。
 
 ## 提交插件
 
@@ -117,11 +117,11 @@ scripts/            提交审查、目录同步与 README 生成脚本
 docs/               目录数据模型文档
 ```
 
-网站与 CLI 的源码（`apps/web` 与 `packages/dsh1024`）在姊妹仓库 [dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss)。线上目录数据的唯一信源是 Cloudflare D1；本 README 与 [catalog/README.md](catalog/README.md) 由 CI 从目录 API 全量生成，职责划分见 [仓库布局](docs/repository-layout.md)。
+网站与 CLI 的源码（`apps/web` 与 `packages/dsh1024`）在姊妹仓库 [dsh-1024store](https://github.com/imsai-sh/dsh-1024store)。线上目录数据的唯一信源是 Cloudflare D1；本 README 与 [catalog/README.md](catalog/README.md) 由 CI 从目录 API 全量生成，职责划分见 [仓库布局](docs/repository-layout.md)。
 
 ## 网站与 CLI 的本地运行与部署
 
-网站与 CLI 的本地开发、D1 迁移与 Cloudflare 部署流程都在 [dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss)：见其 [README](https://github.com/imsai-sh/dsh1024-oss#readme) 与[部署文档](https://github.com/imsai-sh/dsh1024-oss/blob/main/docs/deployment.md)。本仓库只需要 Node.js 22+ 与 `npm ci && npm test` 即可参与目录流水线开发。
+网站与 CLI 的本地开发、D1 迁移与 Cloudflare 部署流程都在 [dsh-1024store](https://github.com/imsai-sh/dsh-1024store)：见其 [README](https://github.com/imsai-sh/dsh-1024store#readme) 与[部署文档](https://github.com/imsai-sh/dsh-1024store/blob/main/docs/deployment.md)。本仓库只需要 Node.js 22+ 与 `npm ci && npm test` 即可参与目录流水线开发。
 
 ## 致谢
 
@@ -3174,7 +3174,7 @@ docs/               目录数据模型文档
 
 本仓库采用分区许可：
 
-- 目录自动化与脚本等源代码采用 [MIT License](LICENSE)（网站与 CLI 源码在 [dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss)，同为 MIT）。
+- 目录自动化与脚本等源代码采用 [MIT License](LICENSE)（网站与 CLI 源码在 [dsh-1024store](https://github.com/imsai-sh/dsh-1024store)，同为 MIT）。
 - `catalog/` 下的插件目录元数据采用 [CC0-1.0](catalog/LICENSE)。
 - 初始目录数据导入自 `awesome-dsh-plugin`，来源和导入提交见 [catalog/ATTRIBUTION.md](catalog/ATTRIBUTION.md)。
 

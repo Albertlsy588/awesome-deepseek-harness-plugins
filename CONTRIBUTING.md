@@ -52,7 +52,7 @@ Every pull request receives one deliberately narrow static gate. The workflow re
 
 The trusted workflow comments on the pull request with the exact failure reason. A failed review leaves the pull request open so the author can push a correction — the workflow never closes a pull request. A non-draft pull request that passes `Plugin submission review / static-review` with exactly one new entry is squash-merged automatically; GitHub then records it as merged (and therefore no longer open). Draft pull requests are validated but remain open until marked ready for review. A pull request that updates or removes existing entries passes the same static review (the check turns green), but it is never merged automatically: the bot comments that maintainer review is required, and a maintainer inspects the change set and merges it manually.
 
-After the merge everything is automated — there is no maintainer step. The catalog-sync workflow pushes all `catalog/plugins/*.json` entries to the website's `POST /api/v1/catalog/sync` endpoint, so the plugin is synced automatically into the production D1 catalog, and then rebuilds `README.md` and `catalog/README.md` from the live catalog API, committing any changes as `github-actions[bot]`. Your plugin appears on [deepseek1024.com](https://deepseek1024.com/) and in both README directories without further action. See the [API reference](https://github.com/imsai-sh/dsh1024-oss/blob/main/docs/api.md) in the site's source repository for the endpoint contract.
+After the merge everything is automated — there is no maintainer step. The catalog-sync workflow pushes all `catalog/plugins/*.json` entries to the website's `POST /api/v1/catalog/sync` endpoint, so the plugin is synced automatically into the production D1 catalog, and then rebuilds `README.md` and `catalog/README.md` from the live catalog API, committing any changes as `github-actions[bot]`. Your plugin appears on [deepseek1024.com](https://deepseek1024.com/) and in both README directories without further action. See the [API reference](https://github.com/imsai-sh/dsh-1024store/blob/main/docs/api.md) in the site's source repository for the endpoint contract.
 
 Repository owners must protect `main` in GitHub Rules or branch protection:
 
@@ -68,7 +68,7 @@ Catalog metadata contributions are provided under CC0-1.0. Code contributions ar
 
 ## Maintainer changes
 
-Non-catalog changes are rejected by the public pull request gate. Maintainers use the explicit emergency ruleset bypass for trusted repository maintenance, including workflows and scripts. (The website and CLI live in [imsai-sh/dsh1024-oss](https://github.com/imsai-sh/dsh1024-oss); changes there follow that repository's process.) Community pull requests that update or remove catalog entries need no bypass: once their static review is green, a maintainer reviews the change set and merges through the normal pull request UI.
+Non-catalog changes are rejected by the public pull request gate. Maintainers use the explicit emergency ruleset bypass for trusted repository maintenance, including workflows and scripts. (The website and CLI live in [imsai-sh/dsh-1024store](https://github.com/imsai-sh/dsh-1024store); changes there follow that repository's process.) Community pull requests that update or remove catalog entries need no bypass: once their static review is green, a maintainer reviews the change set and merges through the normal pull request UI.
 
 1. Create a focused maintenance branch from `main`.
 2. Run `npm test` (the catalog script suites).
