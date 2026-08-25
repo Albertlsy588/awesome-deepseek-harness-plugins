@@ -4,8 +4,8 @@
 
 This repository holds the **plugin catalog only**: the awesome list, the plugin submission
 review/merge workflow, and the generated README directories. The DSH 1024Store
-**application** — the deepseek1024.com site + Worker (`apps/web`) and the publishable
-`dsh1024` npm package (`packages/dsh1024`) — was split out to
+**application** — the deepseek1024.com site + Worker (`web`) and the publishable
+`dsh1024` npm package (`plugin`) — was split out to
 [imsai-sh/dsh-1024store](https://github.com/imsai-sh/dsh-1024store) on 2026-08-25 so each
 repository has one clear responsibility.
 
@@ -14,7 +14,7 @@ repository has one clear responsibility.
 | Path | Responsibility | Generated? |
 | --- | --- | --- |
 | `catalog/plugins/*.json` | One curated entry per plugin; the submission form of record | No — contributed via PR |
-| `catalog/categories.json` | Category definitions: ids, order, bilingual labels (source of truth; dsh-1024store carries a vendored mirror) | No |
+| `catalog/categories.json` | Category definitions: ids, order, bilingual labels (source of truth; pushed to the Worker as data by catalog-sync) | No |
 | `catalog/schema/plugin.schema.json` | The JSON Schema submissions validate against | No |
 | `catalog/README.md` | English directory projection | Yes — `npm run readme:build` |
 | `README.md` | Chinese directory projection | Yes — `npm run readme:build` |
@@ -29,7 +29,7 @@ repository has one clear responsibility.
 | Data | Source of truth |
 | --- | --- |
 | Curated plugin entries | `catalog/plugins/*.json` here |
-| Category definitions | `catalog/categories.json` here (mirrored into the Worker in dsh-1024store) |
+| Category definitions | `catalog/categories.json` here (synced into production D1 by this repo's catalog-sync workflow) |
 | Live catalog | Production D1, fed by this repo's catalog-sync workflow plus the maintainer's out-of-band collection jobs |
 | Directory READMEs | Generated from the live catalog API — never hand-edited |
 | Site, API, CLI code | [imsai-sh/dsh-1024store](https://github.com/imsai-sh/dsh-1024store) |

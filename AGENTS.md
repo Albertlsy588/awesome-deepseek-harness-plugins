@@ -36,16 +36,19 @@ package — lives in [imsai-sh/dsh-1024store](https://github.com/imsai-sh/dsh-10
 The deployed Worker's source lives in dsh-1024store; these pairs drift silently, so check
 the other repo whenever you touch one side:
 
-- `scripts/lib/catalog-entry.mjs` id validation ↔ `apps/web/worker/lib/plugin-id.ts` and
-  the sync endpoint's `ENTRY_ID`/`ENTRY_KEYS` in `apps/web/worker/app.ts` (dsh-1024store).
+- `scripts/lib/catalog-entry.mjs` id validation ↔ `web/worker/lib/plugin-id.ts` and
+  the sync endpoint's `ENTRY_ID`/`ENTRY_KEYS` in `web/worker/app.ts` (dsh-1024store).
   Drift means a PR passes review here but the sync endpoint rejects it there.
-- `catalog/categories.json` here is the source of truth; dsh-1024store carries a vendored
-  mirror bundled into the Worker. A category change lands in both repositories and only
-  reaches the site when that Worker is redeployed.
+- Categories are data, not vendored code. `catalog/categories.json` here stays the human
+  source of truth — submission validation and README generation read it — and the
+  catalog-sync workflow posts the full ordered list to the Worker in the `categories`
+  field of `POST /api/v1/catalog/sync`, which reconciles its `catalog_categories` D1 table
+  to exactly that list. A category change ships from this repository alone; no coordinated
+  deploy of dsh-1024store is needed.
 - `scripts/review-plugin-submission.mjs` `classifyGitInstall` ↔
-  `apps/web/worker/lib/install-methods.ts` (dsh-1024store).
+  `web/worker/lib/install-methods.ts` (dsh-1024store).
 - `scripts/build-readme.mjs`'s unclassified label ↔ `UNCLASSIFIED_CATEGORY` in
-  `apps/web/worker/lib/categories.ts` (dsh-1024store).
+  `web/worker/lib/categories.ts` (dsh-1024store).
 - `scripts/sync-catalog.mjs` POSTs to `https://deepseek1024.com/api/v1/catalog/sync` with
   `Bearer CATALOG_SYNC_TOKEN`. The token value must match between this repo's Actions
   secret and the Worker secret in dsh-1024store; rotating it is a coordinated change.

@@ -245,10 +245,20 @@ test('leads with the marketplace, in-app plugin, scheduled validation, API and c
   assert.match(en, /waits for maintainer approval/)
 
   // Links in catalog/README.md resolve one directory up; the API reference moved
-  // to the dsh-1024store repository and must be an absolute URL.
+  // to the dsh-1024store repository, under its web/ directory, and must be an
+  // absolute URL.
   assert.match(en, /\]\(\.\.\/CONTRIBUTING\.md\)/)
-  assert.match(en, /\]\(https:\/\/github\.com\/imsai-sh\/dsh-1024store\/blob\/main\/docs\/api\.md\)/)
+  assert.match(en, /\]\(https:\/\/github\.com\/imsai-sh\/dsh-1024store\/blob\/main\/web\/docs\/api\.md\)/)
   assert.doesNotMatch(en, /\]\(\.\.\/docs\/api\.md\)/)
+  assert.doesNotMatch(en, /dsh-1024store\/blob\/main\/docs\//)
+  assert.doesNotMatch(zh, /dsh-1024store\/blob\/main\/docs\//)
+
+  // The application repository keeps the site under web/ and the npm package under
+  // plugin/; the old apps/web and packages/dsh1024 paths must not resurface.
+  assert.match(en, /\]\(https:\/\/github\.com\/imsai-sh\/dsh-1024store\/tree\/main\/web\)/)
+  assert.match(en, /\]\(https:\/\/github\.com\/imsai-sh\/dsh-1024store\/tree\/main\/plugin\)/)
+  assert.doesNotMatch(zh, /apps\/web|packages\/dsh1024/)
+  assert.doesNotMatch(en, /apps\/web|packages\/dsh1024/)
 })
 
 test('lists every category that fits and caps only the bucket that overflows', async () => {

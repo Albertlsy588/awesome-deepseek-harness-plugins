@@ -1,5 +1,7 @@
-# Pushes catalog/plugins/*.json to the production Worker (POST /api/v1/catalog/sync)
-# and refreshes the README projections from the live catalog API.
+# Pushes catalog/plugins/*.json and the catalog/categories.json list to the
+# production Worker (POST /api/v1/catalog/sync) and refreshes the README
+# projections from the live catalog API. Categories travel as data in that request,
+# so a category change ships from this repository without a Worker redeploy.
 #
 # It also owns the `assets` branch, which holds nothing but the README hero
 # screenshot (homepage.png). That branch is never merged and has no history worth

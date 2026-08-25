@@ -21,7 +21,7 @@ export const defaultUrl = 'https://deepseek1024.com/'
 // a visitor would use, which also gets more of the ranking list into the frame.
 export const viewport = { width: 1280, height: 940 }
 export const scale = 1
-// The site picks its language from navigator.language (apps/web/src/lib/i18n.tsx
+// The site picks its language from navigator.language (web/src/lib/i18n.tsx
 // in the dsh-1024store repository), which is en-US on a CI runner. Each projection
 // gets a capture in its own language.
 export const locales = { zh: 'zh-CN', en: 'en-US' }

@@ -60,7 +60,7 @@ export function repositoryUrl(id) {
  * The repository for a repository-level plugin, the subdirectory tree for a
  * monorepo subpackage — otherwise every package of one monorepo links to the
  * same repository root and the README cannot tell them apart. Mirrors
- * pluginSourceUrl in apps/web/worker/lib/plugin-id.ts of the dsh-1024store
+ * pluginSourceUrl in web/worker/lib/plugin-id.ts of the dsh-1024store
  * repository (no CI spans the two repos — keep them aligned by hand).
  */
 export function sourceUrl(id) {
@@ -85,7 +85,7 @@ export function validateCatalogEntry(entry, file, categoryIds) {
   assertExactKeys(entry, ['$schema', 'id', 'name', 'repository', 'category', 'description', 'added'], label)
   assert(entry.$schema === schemaReference, `${label} must reference ${schemaReference}`)
   // The 201-character cap mirrors the catalog sync endpoint's id bound in
-  // apps/web/worker/app.ts (ENTRY_ID) and install-metrics.ts (PLUGIN_ID) of
+  // web/worker/app.ts (ENTRY_ID) and install-metrics.ts (PLUGIN_ID) of
   // the dsh-1024store repository. Drift means a submission passes review here
   // but the sync endpoint rejects it there.
   assert(typeof entry.id === 'string' && entry.id.length <= 201 && isValidPluginId(entry.id), `${label} has an invalid id`)

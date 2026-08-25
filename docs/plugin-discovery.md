@@ -25,7 +25,7 @@ Nothing is bundled into the Worker: reads serve the KV snapshot, fresh or stale,
 touching D1 — the snapshot is rebuilt only by the catalog-sync endpoint, or once on a cold
 start when the KV namespace is empty. Stale KV is the only degradation mode. External consumers read the same D1-backed catalog through
 `GET /api/v1/registry` — capped at its install-ranked head (see the
-[API reference](https://github.com/imsai-sh/dsh-1024store/blob/main/docs/api.md)).
+[API reference](https://github.com/imsai-sh/dsh-1024store/blob/main/web/docs/api.md)).
 
 ## Data model
 
@@ -84,7 +84,7 @@ test, compatibility guarantee, quality rating, or security review.
 
 The Worker, its D1 migrations, and the deploy runbook live in
 [imsai-sh/dsh-1024store](https://github.com/imsai-sh/dsh-1024store) — see
-[docs/deployment.md](https://github.com/imsai-sh/dsh-1024store/blob/main/docs/deployment.md)
+[web/docs/deployment.md](https://github.com/imsai-sh/dsh-1024store/blob/main/web/docs/deployment.md)
 there. Nothing deploys on a push from either repository. This repository only feeds the
 catalog: the catalog-sync workflow POSTs curated entries to the deployed Worker's
 `POST /api/v1/catalog/sync` endpoint.

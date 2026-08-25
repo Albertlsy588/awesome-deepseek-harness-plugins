@@ -3,26 +3,46 @@
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { assert, categoryIdSet, loadCatalogEntries, readCategories } from './lib/catalog-entry.mjs'
+import { assert, categoryIdSet, isObject, loadCatalogEntries, readCategories } from './lib/catalog-entry.mjs'
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 export const defaultSyncUrl = 'https://deepseek1024.com/api/v1/catalog/sync'
 
-export function buildSyncBody(entries) {
-  return {
-    source: 'github_ci',
-    entries: entries.map(entry => ({
-      id: entry.id,
-      name: entry.name,
-      repository: entry.repository,
-      category: entry.category,
-      description: {
-        en: entry.description.en,
-        zh: entry.description.zh,
-      },
-      added: entry.added,
-    })),
+/**
+ * Categories travel to the Worker as data, not as vendored code.
+ *
+ * catalog/categories.json stays the human source of truth here (submission
+ * validation and README generation read it); the sync endpoint reconciles the
+ * `catalog_categories` D1 table to exactly the list posted below, so a category
+ * change reaches the site through this workflow instead of a coordinated deploy
+ * of the dsh-1024store Worker.
+ */
+function syncCategory(category) {
+  assert(isObject(category), 'catalog/categories.json entries must be objects')
+  assert(typeof category.id === 'string' && category.id.length > 0, 'a category is missing its id')
+  assert(Number.isInteger(category.order), `category ${category.id} is missing an integer order`)
+  assert(isObject(category.label), `category ${category.id} is missing its label object`)
+  for (const locale of ['en', 'zh']) {
+    assert(typeof category.label[locale] === 'string' && category.label[locale].length > 0, `category ${category.id} is missing its ${locale} label`)
   }
+  return { id: category.id, order: category.order, label: { en: category.label.en, zh: category.label.zh } }
+}
+
+export function buildSyncBody(entries, categories) {
+  const body = { source: 'github_ci' }
+  if (categories !== undefined) body.categories = categories.map(syncCategory)
+  body.entries = entries.map(entry => ({
+    id: entry.id,
+    name: entry.name,
+    repository: entry.repository,
+    category: entry.category,
+    description: {
+      en: entry.description.en,
+      zh: entry.description.zh,
+    },
+    added: entry.added,
+  }))
+  return body
 }
 
 export function resolveSyncConfig(env, options = {}) {
@@ -83,11 +103,13 @@ export function parseArguments(argv) {
 function usage() {
   return `Usage: npm run catalog:sync [-- options]
 
-Pushes every catalog/plugins/*.json entry to POST /api/v1/catalog/sync so the
-production D1 catalog stays the single source of truth.
+Pushes every catalog/plugins/*.json entry plus the ordered catalog/categories.json
+list to POST /api/v1/catalog/sync so the production D1 catalog stays the single
+source of truth. The endpoint reconciles its category table to exactly the posted
+list, so category changes need no Worker redeploy.
 
 Options:
-  --dry-run       Validate entries and print the request body without sending it
+  --dry-run       Validate the payload and print the request body without sending it
   --root <path>   Repository root containing catalog/ (default: this repository)
   --help          Show this help
 
@@ -104,15 +126,16 @@ async function main() {
   }
   const categories = await readCategories(options.root)
   const entries = await loadCatalogEntries(options.root, categoryIdSet(categories))
-  const body = buildSyncBody(entries)
+  const body = buildSyncBody(entries, categories)
   if (options.dryRun) {
     process.stdout.write(`${JSON.stringify(body, null, 2)}\n`)
-    console.error(`Dry run: validated ${entries.length} entries; nothing was sent.`)
+    console.error(`Dry run: validated ${entries.length} entries and ${categories.length} categories; nothing was sent.`)
     return
   }
   const { url, token } = resolveSyncConfig(process.env)
   const result = await postCatalogSync({ url, token, body })
-  console.log(`Synced ${entries.length} catalog entries to ${url}: total=${result.total ?? 'unknown'}, removedSources=${result.removedSources ?? 'unknown'}`)
+  const acknowledgedCategories = result.categories === undefined ? '' : `, categories=${result.categories}`
+  console.log(`Synced ${entries.length} catalog entries and ${categories.length} categories to ${url}: total=${result.total ?? 'unknown'}${acknowledgedCategories}, removedSources=${result.removedSources ?? 'unknown'}`)
 }
 
 if (process.argv[1] !== undefined && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {

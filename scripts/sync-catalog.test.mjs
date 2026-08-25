@@ -87,32 +87,56 @@ test('builds the sync body without $schema and with a github_ci source', () => {
     }],
   })
   assert.equal('$schema' in body.entries[0], false)
+  assert.equal('categories' in body, false)
+})
+
+test('carries the ordered category list through the sync body', async t => {
+  const directory = await fixture([[fileName('owner/plugin'), entry('owner/plugin')]])
+  t.after(() => rm(directory, { recursive: true, force: true }))
+
+  const body = buildSyncBody([entry('owner/plugin')], await readCategories(directory))
+  assert.deepEqual(body.categories, [
+    { id: 'tools', order: 10, label: { en: 'Tools', zh: '工具' } },
+    { id: 'fun', order: 20, label: { en: 'Just for Fun', zh: '娱乐' } },
+  ])
+  assert.equal(body.source, 'github_ci')
+  assert.deepEqual(body.entries.map(value => value.id), ['owner/plugin'])
+})
+
+test('rejects a category that is missing its order or labels', () => {
+  assert.throws(() => buildSyncBody([], [{ order: 10, label: { en: 'Tools', zh: '工具' } }]), /missing its id/)
+  assert.throws(() => buildSyncBody([], [{ id: 'tools', label: { en: 'Tools', zh: '工具' } }]), /category tools is missing an integer order/)
+  assert.throws(() => buildSyncBody([], [{ id: 'tools', order: 10, label: { en: 'Tools' } }]), /category tools is missing its zh label/)
 })
 
 test('posts the body with a bearer token and parses the acknowledgement', async () => {
   const calls = []
+  const body = buildSyncBody([entry('owner/plugin')], categories.categories)
   const result = await postCatalogSync({
     url: 'https://example.test/api/v1/catalog/sync',
     token: 'secret-token',
-    body: { source: 'github_ci', entries: [] },
+    body,
     async fetchImplementation(url, options) {
       calls.push({ url, options })
       return {
         ok: true,
         status: 200,
         async text() {
-          return JSON.stringify({ ok: true, total: 264, removedSources: 2 })
+          return JSON.stringify({ ok: true, total: 264, categories: 2, removedSources: 2 })
         },
       }
     },
   })
-  assert.deepEqual(result, { ok: true, total: 264, removedSources: 2 })
+  assert.deepEqual(result, { ok: true, total: 264, categories: 2, removedSources: 2 })
   assert.equal(calls.length, 1)
   assert.equal(calls[0].url, 'https://example.test/api/v1/catalog/sync')
   assert.equal(calls[0].options.method, 'POST')
   assert.equal(calls[0].options.headers.Authorization, 'Bearer secret-token')
   assert.equal(calls[0].options.headers['Content-Type'], 'application/json')
-  assert.deepEqual(JSON.parse(calls[0].options.body), { source: 'github_ci', entries: [] })
+  const sent = JSON.parse(calls[0].options.body)
+  assert.equal(sent.source, 'github_ci')
+  assert.deepEqual(sent.entries.map(value => value.id), ['owner/plugin'])
+  assert.deepEqual(sent.categories, categories.categories)
 })
 
 test('fails loudly on an unauthorized response', async () => {
@@ -160,7 +184,8 @@ test('dry-run prints the request body without needing a token or network', async
   const body = JSON.parse(result.stdout)
   assert.equal(body.source, 'github_ci')
   assert.deepEqual(body.entries.map(value => value.id), ['owner/plugin'])
-  assert.match(result.stderr, /Dry run: validated 1 entries/)
+  assert.deepEqual(body.categories, categories.categories)
+  assert.match(result.stderr, /Dry run: validated 1 entries and 2 categories/)
 })
 
 test('fails without a token when not dry-running', async t => {
