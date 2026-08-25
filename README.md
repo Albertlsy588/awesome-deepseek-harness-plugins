@@ -2,11 +2,11 @@
 
 <!-- 本文件由 scripts/build-readme.mjs 从 deepseek1024.com 目录 API 自动生成，请勿手工编辑。 -->
 
-面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **10476** 个插件（含 PR 收录与 GitHub `dsh-plugin` topic 自动发现），目录数据更新于 2026-08-25。
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（`dsh`）生态的社区插件目录，共收录 **10484** 个插件（含 PR 收录与 GitHub `dsh-plugin` topic 自动发现），目录数据更新于 2026-08-25。
 
 **但这个仓库不只是一份 awesome list。** 这里开源了一个在线插件市场、一个把市场装进 `dsh` 本体的插件、经静态校验的 PR 收录流水线，以及一套免费的公开查询 API；目录数据另有自动收集服务持续喂入。代码采用 MIT 协议，fork 之后就能部署成你自己的插件市场。
 
-[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.zh.png?v=e51a56c67163)](https://deepseek1024.com/)
+[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.zh.png?v=c2c2db33ddcc)](https://deepseek1024.com/)
 
 [在线网站](https://deepseek1024.com/) · [API 文档](docs/api.md) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md)
 
@@ -159,22 +159,22 @@ npx wrangler deploy --secrets-file .dev.vars
 
 分组默认折叠，点开即可展开。GitHub 对单个文件的渲染长度有上限，条目较多的分类只列出其中一部分（分类标题会写明列出了多少），完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。
 
-- [UI 增强](#ui) (1970)
+- [UI 增强](#ui) (1973)
 - [主题与外观](#theme) (380)
-- [会话与消息](#session) (630)
-- [记忆](#memory) (310)
+- [会话与消息](#session) (631)
+- [记忆](#memory) (311)
 - [工具与能力](#tools) (3151)
 - [技能包](#skill) (890)
-- [工作流与自动化](#workflow) (529)
+- [工作流与自动化](#workflow) (530)
 - [通知与集成](#notify) (398)
 - [模型与账号接入](#model) (606)
-- [开发与运行时](#dev) (1164)
+- [开发与运行时](#dev) (1166)
 - [娱乐](#fun) (448)
 
 <a id="ui"></a>
 
 <details>
-<summary><strong>UI 增强</strong> · 显示 241 / 共 1970 个</summary>
+<summary><strong>UI 增强</strong> · 显示 239 / 共 1973 个</summary>
 
 - [01_content](https://github.com/Aisland-SJL/dsh-worktable/tree/HEAD/01_content) — 为控制台增加侧边栏应用抽屉和可停靠拆分工作区，形成项目实时控制台。
 - [a2ui-render-in-dsh](https://github.com/baihui-ai/a2ui-render-in-dsh) — 在聊天中内联渲染交互式卡片，支持测验、表单、图表等并回传操作。
@@ -368,6 +368,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-approval-mode](https://github.com/NEVSTOP-LAB/dsh-approval-mode) — DSH 审批模式插件，在 DSH 窗口的权限下拉框（Read Only / Workspace Write / Full Access）旁边加一个「审批模式」按钮，在 Workspace Write 模式下工具调用自动放行
 - [dsh-approval-translator](https://github.com/xiyuepcl/dsh-translator) — 将审批对话框原因翻译成中文，提供本地化用户体验。
 - [dsh-archive-manager](https://github.com/Ycet/dsh-archive-manager) — DSH 设置新增「归档」页：按工作区分组查看已归档会话，支持筛选/排序、取消归档、二次确认彻底删除。Add an Archive page to DSH Settings: view archived sessions grouped by workspace, filter/sort, unarchive, and permanently delete one or all with confirmation.
+- [dsh-ark-balance](https://github.com/key8023lala/dsh-ark-balance) — 在 DSH Web 界面以可拖拽挂件展示火山引擎方舟协作奖励计划各模型的免费推理与数据权限资源包余量（总量/已用/剩余），支持类型与厂商筛选、排序和 60 秒自动刷新。数据来自官方 arkcli 命令，插件复用其登录态，不保存任何凭据。
 - [dsh-artifact](https://github.com/sumarilkkxx/dsh-artifact) — 在对话中内联渲染 ECharts 可视化图表。
 - [dsh-artifact-preview](https://github.com/nirvanaslash/dsh-artifact-preview) — 对话内产物文件行（含图片缩略图）与可拖宽的分屏侧边预览面板，支持 Markdown、源代码、CSV、JSON、图片与 HTML 渲染。
 - [dsh-artifact-viewer](https://github.com/wang-junjian/dsh-artifact-viewer) — DeepSeek Harness 插件：产物浏览器
@@ -414,10 +415,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-balance-window](https://github.com/sixtysevenlf/dsh-balance-window) — dsh 左下角余额悬浮窗：实时显示 DeepSeek 官方 API 余额与预计剩余 token，可拖动、自动刷新
 - [dsh-ballute](https://github.com/Zlyraz/dsh-ballute) — 为界面增加气球式交互元素。
 - [DSH-Basic-Right-Sidebar](https://github.com/xinspark/DSH-Basic-Right-Sidebar) — 添加右侧边栏，包含导航、会话概览、日志下载和轨迹视图。
-- [dsh-Basics-Panel](https://github.com/yxsj245/dsh-Basics-Panel) — DSH Web 插件「基础能力面板」：在 DSH 设置中可视化并管理 MCP 服务器、技能 与 规则。采用模块化 feature 注册表，后续的 DSH 可视化功能只需新增一个 feature 目录并在注册表加一行即可，无需改动面板骨架。
-- [dsh-better-at](https://github.com/Ruiming-cn/dsh-better-at) — 缓存文件和会话引用，加速 @ 引用菜单的响应。
-- [dsh-better-input](https://github.com/DIAG5/dsh-better-input) — 增强输入体验，支持语音、AI 润色、PDF 转 Markdown 和图片输入。
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 1729 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 1734 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
@@ -691,7 +689,7 @@ npx wrangler deploy --secrets-file .dev.vars
 <a id="session"></a>
 
 <details>
-<summary><strong>会话与消息</strong> · 显示 258 / 共 630 个</summary>
+<summary><strong>会话与消息</strong> · 显示 258 / 共 631 个</summary>
 
 - [agent-board](https://github.com/meisam2236/agent-board) — 使用持久化的工作区看板跟踪和管理 DeepSeek Harness 中的 AI 代理。
 - [agent-mode-switcher](https://github.com/my-dsh-plugin/agent-mode-switcher) — 在模型回答后切换当前会话的代理预设，以不同模式继续对话。
@@ -951,14 +949,14 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-migrate](https://github.com/kkkkkkkkki/dsh-migrate) — 从其他 AI 代理导入聊天记录到 DSH。
 - [dsh-migrate-on-429](https://github.com/minyang2020/dsh-migrate-on-429) — 会话遇 429 限流时取消旧会话、总结并新开继续。
 - [dsh-minimal-first-turn](https://github.com/ZRui-C/dsh-minimal-first-turn) — 最小化会话首轮的内容，可能用于减少 token 消耗或噪音。
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 372 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 373 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
 <a id="memory"></a>
 
 <details>
-<summary><strong>记忆</strong> · 显示 255 / 共 310 个</summary>
+<summary><strong>记忆</strong> · 显示 255 / 共 311 个</summary>
 
 - [adapter](https://github.com/DecarbonizedGlucose/dsh-memory-note/tree/HEAD/adapter) — 在本地存储轻量笔记，帮助代理跨会话保留信息。
 - [agent-teams](https://github.com/zhujunpeng12/dsh-memory-system/tree/HEAD/plugins/agent-teams) — 实现本地优先持久化记忆，含热启动、中文 BM25 冷召回、租约锁写入与治理。
@@ -1215,7 +1213,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-statecore](https://github.com/yul761/dsh-statecore) — 原生记忆插件，通过 StateCore 存储带证据链的可审计事实。
 - [dsh-task-memory](https://github.com/wangyihao0001-oss/dsh-task-memory) — DSH任务隔离的长期记忆，记忆和检索仅在任务边界内。
 - [dsh-tdai-memory](https://github.com/Scorp1o117/dsh-tdai-memory) — 为代理提供持久记忆，存储并回顾跨会话的信息。
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 55 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 56 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
@@ -1792,7 +1790,7 @@ npx wrangler deploy --secrets-file .dev.vars
 <a id="workflow"></a>
 
 <details>
-<summary><strong>工作流与自动化</strong> · 显示 256 / 共 529 个</summary>
+<summary><strong>工作流与自动化</strong> · 显示 256 / 共 530 个</summary>
 
 - [agent-governance](https://github.com/EnglandTong/governance-multi-agent-harness/tree/HEAD/packages/bundle/agent-governance) — 多代理工作流的治理捆绑包，提供监督与协调。
 - [agent-jit](https://github.com/sybolization/agent-jit) — DeepSeek Harness (dsh) 插件：把 LLM agent loop 中确定性的执行路径编译成 DSL 程序并直接执行，显著降低 token、往返轮次与上下文暴露。A DeepSeek Harness plugin that compiles deterministic agent paths into DSL programs.
@@ -2050,7 +2048,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-model-failover](https://github.com/Letter2025/dsh-model-failover) — 两级模型熔断与回退：模型或平台连续失败后自动熔断，并把下一个请求路由到配置好的备用模型。
 - [dsh-modernize-code](https://github.com/988hj7tczd-oss/dsh-modernize-code) — 通过预检、评估、映射和转换的结构化流程自动化旧代码现代化，并包含测试。
 - [dsh-monorepo](https://github.com/satan9394/dsh-monorepo) — DSH skill: Monorepo 管理, workspace 依赖与增量构建（受 wshobson/agents 38k★ 启发）
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 273 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 274 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
@@ -2595,7 +2593,7 @@ npx wrangler deploy --secrets-file .dev.vars
 <a id="dev"></a>
 
 <details>
-<summary><strong>开发与运行时</strong> · 显示 262 / 共 1164 个</summary>
+<summary><strong>开发与运行时</strong> · 显示 262 / 共 1166 个</summary>
 
 - [_skeleton-client](https://github.com/XJungit/omdp/tree/HEAD/_skeleton-client) — 用于在仓库中构建新插件包的骨架客户端模板。
 - [_template](https://github.com/messiahyl/dsh-plugins/tree/HEAD/packages/_template) — 提供 DSH 插件开发的 monorepo 模板，包含安装源和第三方目录。
@@ -2847,6 +2845,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-deepseek-usage](https://github.com/AzureHalcyon/dsh-deepseek-usage) — DSH 插件：极简的 DeepSeek 余额/用量面板，无任何多余窗口，极简配置
 - [dsh-default-workspace-plugin](https://github.com/fenxin-fx/dsh-default-workspace-plugin) — 提供 DeepSeek Harness 插件的默认工作区配置与开发结构。
 - [dsh-defend](https://github.com/PerryLink/dsh-defend) — 通过模式检测防御提示注入和机密泄露，支持可配置拦截策略。
+- [dsh-degen-heal](https://github.com/KakaruHayate/dsh-degen-heal) — 检测并自动修复代理会话中的重复输出循环，保持回复质量。
 - [dsh-dejaview](https://github.com/jiang4wqy/dsh-dejaview) — 在开发前检查 awesome-dsh-plugin 注册表和 GitHub 主题，判断是否已有相似插件。
 - [dsh-dep-audit](https://github.com/zoahdev/dsh-dep-audit) — 审计依赖供应链卫生：peer-range可解析性、失效dist-tag、陈旧或缺失许可证依赖、已装与声明差异。
 - [dsh-dependency-firewall](https://github.com/MkaliezZ/dsh-dependency-firewall) — 通过将包管理器命令分类为允许、询问或阻止，保护依赖安装。
@@ -2858,8 +2857,7 @@ npx wrangler deploy --secrets-file .dev.vars
 - [dsh-desktop-safe-market](https://github.com/bruc3van/dsh-desktop-safe-market) — 唯一主打安全，提倡先审查再安装的 DSH 市场 (review-before-install DSH marketplace)
 - [dsh-dev-actions](https://github.com/skitse/dsh-dev-actions) — 将重复的开发命令和习惯转化为一键执行的操作。
 - [dsh-dev-sandbox](https://github.com/zp-home/dsh-dev-sandbox) — 提供沙箱环境，通过生成隔离的镜像实例来开发测试 DSH 插件。
-- [dsh-dev-server](https://github.com/MkaliezZ/dsh-dev-server) — 提供长时间运行的开发服务器生命周期原语，并阻止复合 shell 使用。
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 902 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 904 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
