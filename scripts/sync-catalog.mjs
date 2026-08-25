@@ -17,20 +17,33 @@ export const defaultSyncUrl = 'https://deepseek1024.com/api/v1/catalog/sync'
  * change reaches the site through this workflow instead of a coordinated deploy
  * of the dsh-1024store Worker.
  */
+// Mirrors parseSyncCategories in web/worker/app.ts of the dsh-1024store
+// repository — the endpoint rejects the WHOLE sync on any violation, so a
+// malformed categories.json must fail loudly here instead of turning the
+// daily sync red. Keep the two validators aligned by hand (no CI spans the
+// repos): ids /^[a-z][a-z0-9-]{0,39}$/ and unique, `unclassified` reserved,
+// order an integer in [0, 1000000], labels 1..120 chars, list 1..200 items.
+const CATEGORY_ID = /^[a-z][a-z0-9-]{0,39}$/
+
 function syncCategory(category) {
   assert(isObject(category), 'catalog/categories.json entries must be objects')
-  assert(typeof category.id === 'string' && category.id.length > 0, 'a category is missing its id')
-  assert(Number.isInteger(category.order), `category ${category.id} is missing an integer order`)
+  assert(typeof category.id === 'string' && CATEGORY_ID.test(category.id), `category id ${String(category.id)} must match ${CATEGORY_ID}`)
+  assert(category.id !== 'unclassified', 'the unclassified id is reserved for the synthetic bucket')
+  assert(Number.isInteger(category.order) && category.order >= 0 && category.order <= 1_000_000, `category ${category.id} needs an integer order in [0, 1000000]`)
   assert(isObject(category.label), `category ${category.id} is missing its label object`)
   for (const locale of ['en', 'zh']) {
-    assert(typeof category.label[locale] === 'string' && category.label[locale].length > 0, `category ${category.id} is missing its ${locale} label`)
+    assert(typeof category.label[locale] === 'string' && category.label[locale].length > 0 && category.label[locale].length <= 120, `category ${category.id} needs a 1-120 character ${locale} label`)
   }
   return { id: category.id, order: category.order, label: { en: category.label.en, zh: category.label.zh } }
 }
 
 export function buildSyncBody(entries, categories) {
   const body = { source: 'github_ci' }
-  if (categories !== undefined) body.categories = categories.map(syncCategory)
+  if (categories !== undefined) {
+    assert(Array.isArray(categories) && categories.length > 0 && categories.length <= 200, 'categories must be a list of 1 to 200 entries')
+    body.categories = categories.map(syncCategory)
+    assert(new Set(body.categories.map(category => category.id)).size === body.categories.length, 'category ids must be unique')
+  }
   body.entries = entries.map(entry => ({
     id: entry.id,
     name: entry.name,

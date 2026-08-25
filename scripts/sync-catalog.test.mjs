@@ -104,9 +104,23 @@ test('carries the ordered category list through the sync body', async t => {
 })
 
 test('rejects a category that is missing its order or labels', () => {
-  assert.throws(() => buildSyncBody([], [{ order: 10, label: { en: 'Tools', zh: '工具' } }]), /missing its id/)
-  assert.throws(() => buildSyncBody([], [{ id: 'tools', label: { en: 'Tools', zh: '工具' } }]), /category tools is missing an integer order/)
-  assert.throws(() => buildSyncBody([], [{ id: 'tools', order: 10, label: { en: 'Tools' } }]), /category tools is missing its zh label/)
+  assert.throws(() => buildSyncBody([], [{ order: 10, label: { en: 'Tools', zh: '工具' } }]), /must match/)
+  assert.throws(() => buildSyncBody([], [{ id: 'tools', label: { en: 'Tools', zh: '工具' } }]), /category tools needs an integer order in \[0, 1000000\]/)
+  assert.throws(() => buildSyncBody([], [{ id: 'tools', order: 10, label: { en: 'Tools' } }]), /category tools needs a 1-120 character zh label/)
+})
+
+// Mirrors parseSyncCategories in web/worker/app.ts of dsh-1024store: the
+// endpoint rejects the whole sync on any of these, so they must fail locally.
+test('rejects ids the Worker would refuse, duplicates, and out-of-range lists', () => {
+  assert.throws(() => buildSyncBody([], [{ id: 'UI', order: 10, label: { en: 'x', zh: 'y' } }]), /must match/)
+  assert.throws(() => buildSyncBody([], [{ id: 'unclassified', order: 1000, label: { en: 'x', zh: 'y' } }]), /reserved/)
+  assert.throws(() => buildSyncBody([], [{ id: 'tools', order: -1, label: { en: 'x', zh: 'y' } }]), /integer order in \[0, 1000000\]/)
+  assert.throws(() => buildSyncBody([], [{ id: 'tools', order: 10, label: { en: 'x'.repeat(121), zh: 'y' } }]), /1-120 character en label/)
+  assert.throws(() => buildSyncBody([], [
+    { id: 'tools', order: 10, label: { en: 'x', zh: 'y' } },
+    { id: 'tools', order: 20, label: { en: 'x2', zh: 'y2' } },
+  ]), /unique/)
+  assert.throws(() => buildSyncBody([], []), /1 to 200/)
 })
 
 test('posts the body with a bearer token and parses the acknowledgement', async () => {
