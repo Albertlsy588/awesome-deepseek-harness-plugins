@@ -8,3 +8,7 @@ node_modules/
 *.log
 *.cpuprofile
 .DS_Store
+/apps/web/dist
+/apps/web/.wrangler
+apps/web/tsconfig.app.tsbuildinfo
+apps/web/tsconfig.worker.tsbuildinfo
