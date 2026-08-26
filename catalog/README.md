@@ -4,6 +4,8 @@
 
 The **DSH 1024Store** community catalog for [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) plugins: **11164** plugins, updated 2026-08-26.
 
+> 📦 **Repository split**: as of 2026-08-25, the deepseek1024.com site and the `dsh1024` CLI live in their own repository, [imsai-sh/dsh-1024store](https://github.com/imsai-sh/dsh-1024store). This repository is now the plugin catalog (the awesome list) and its submission pipeline only; file site/CLI issues and PRs over there — plugin submissions still happen here.
+
 **This project is more than an awesome list.** It also ships a hosted plugin marketplace, a plugin that puts that marketplace inside `dsh` itself, and a free public query API — that application code lives in the sibling repository [dsh-1024store](https://github.com/imsai-sh/dsh-1024store); this repository is the catalog itself: a statically validated PR submission pipeline and the generated directory READMEs, with an automated collection service feeding the data. Everything is MIT licensed, so you can fork it and run your own marketplace.
 
 [![The DSH 1024Store plugin marketplace homepage](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.en.png?v=6e3b6766fc08)](https://deepseek1024.com/)
@@ -799,7 +801,7 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 <a id="memory"></a>
 
 <details>
-<summary><strong>Memory</strong> · showing 228 of 335</summary>
+<summary><strong>Memory</strong> · showing 227 of 335</summary>
 
 - [adapter](https://github.com/DecarbonizedGlucose/dsh-memory-note/tree/HEAD/adapter) — Stores lightweight notes locally to retain information across sessions for the agent.
 - [agent-teams](https://github.com/zhujunpeng12/dsh-memory-system/tree/HEAD/plugins/agent-teams) — Implements local-first persistent memory with hot bootstrap, Chinese-BM25 cold recall, lease-lock writes, and governance.
@@ -1028,8 +1030,7 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 - [dsh-plugin](https://github.com/plur-ai/dsh-plugin) — PLUR memory for DeepSeek Harness — engrams injected into the system prompt, no tool call required. Local-first, Apache-2.0.
 - [dsh-plugin](https://github.com/xiaohj233/dsh-magic-context/tree/HEAD/packages/dsh-plugin) — Shares a SQLite memory store across harnesses with row isolation.
 - [dsh-plugin](https://github.com/xinchen03/minta/tree/HEAD/dsh-plugin) — Implements a self-checking memory layer with lifecycle governance and calibrated confidence for agents.
-- [dsh-plugin-asmemory](https://github.com/Xplore-LAB/dsh-plugin-asmemory) — Action-state time memory: record typed states and actions, then analyze trends, anomalies, and causality.
-- *GitHub only renders so much of one file, so 107 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
+- *GitHub only renders so much of one file, so 108 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
 
 </details>
 
@@ -1564,7 +1565,7 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 <a id="workflow"></a>
 
 <details>
-<summary><strong>Workflow &amp; Automation</strong> · showing 232 of 579</summary>
+<summary><strong>Workflow &amp; Automation</strong> · showing 231 of 579</summary>
 
 - [agent-governance](https://github.com/EnglandTong/governance-multi-agent-harness/tree/HEAD/packages/bundle/agent-governance) — Governance bundle for multi-agent workflows, providing oversight and coordination for agent interactions.
 - [agent-jit](https://github.com/sybolization/agent-jit) — Compiles deterministic agent execution paths into DSL programs for direct execution, reducing token usage.
@@ -1797,8 +1798,7 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 - [dsh-habit](https://github.com/Max-Null/dsh-habit) — Self-learning habit engine for the DeepSeek Harness - correction signals, threshold judgment, two-level human gate
 - [dsh-handoff](https://github.com/margbug01/dsh-ma-plugins/tree/HEAD/dsh-handoff) — Provides a handoff command to transfer tasks between agents or sessions in a workflow.
 - [dsh-harness-ally](https://github.com/BaronCyrus/dsh-harness-ally) — Orchestrates multiple AI models in alliance mode, preserving native agent lifecycles.
-- [dsh-harness-updater](https://github.com/leonardoxr/dsh-harness-updater) — Claude Code / Codex CLI update detection, prompting, and one-click channel updates for DeepSeek Harness
-- *GitHub only renders so much of one file, so 347 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
+- *GitHub only renders so much of one file, so 348 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
 
 </details>
 
@@ -2060,7 +2060,7 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 <a id="model"></a>
 
 <details>
-<summary><strong>Models &amp; Providers</strong> · showing 233 of 636</summary>
+<summary><strong>Models &amp; Providers</strong> · showing 232 of 636</summary>
 
 - [all](https://github.com/DamonBao/dsh-codex-suite/tree/HEAD/packages/all) — Provides a suite of plugins including an OpenAI Codex provider with ChatGPT OAuth and account usage tracking.
 - [auth](https://github.com/daifuyang/dsh-plugin/tree/HEAD/plugins/auth) — Handles authentication and login flows for DeepSeek Harness, bundling user credentials and session management.
@@ -2294,15 +2294,14 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 - [dsh-iris](https://github.com/RangeKing/dsh-iris) — Progressive capability routing for DeepSeek Harness
 - [dsh-kernel-mesh](https://github.com/oppnc/dsh-kernel-mesh) — Harness-kernel mesh for DeepSeek Harness: kimi/grok/codex/minimax model routes (L1), distilled subagent recipes (L2) and kernel_run/kernel_status/kernel_switch tools.
 - [dsh-key-fallback](https://github.com/XJungit/omdp/tree/HEAD/dsh-key-fallback) — Provides fallback logic for API key failures in DeepSeek Harness.
-- [dsh-key-rotation](https://github.com/GooDAnDReaDY/dsh-key-rotation) — Keeps a pool of API keys per provider and switches to the next key on quota or rate-limit errors, with the key pools and cooldown editable in Settings.
-- *GitHub only renders so much of one file, so 403 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
+- *GitHub only renders so much of one file, so 404 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
 
 </details>
 
 <a id="dev"></a>
 
 <details>
-<summary><strong>Development &amp; Runtime</strong> · showing 234 of 1251</summary>
+<summary><strong>Development &amp; Runtime</strong> · showing 233 of 1251</summary>
 
 - [_skeleton-client](https://github.com/XJungit/omdp/tree/HEAD/_skeleton-client) — A skeleton client template for building new plugin bundles in the monorepo.
 - [_template](https://github.com/messiahyl/dsh-plugins/tree/HEAD/packages/_template) — Provides a monorepo template for developing DSH plugins, with installation sources and third-party directory.
@@ -2537,15 +2536,14 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 - [dsh-codegraph](https://github.com/jiangzhenguo/dsh-codegraph) — Provides code graph visualization and analysis tools for developers within DeepSeek Harness.
 - [dsh-codex-appserver](https://github.com/seriousz158/dsh-codex-use/tree/HEAD/packages/dsh-codex-appserver) — Provides an app server component for the DSH Codex use case, based on the monorepo package path.
 - [dsh-codex-project](https://github.com/luoxunhao/deepseek-harness-plugins/tree/HEAD/dsh-codex-project) — Manages codex project configurations for DeepSeek Harness, likely aiding development workflows.
-- [dsh-commandcode-usage](https://github.com/XingPeng-Pixel/dsh-commandcode-usage) — A commandcode plan usage monitor for DSH deekseep harness
-- *GitHub only renders so much of one file, so 1017 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
+- *GitHub only renders so much of one file, so 1018 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
 
 </details>
 
 <a id="fun"></a>
 
 <details>
-<summary><strong>Just for Fun</strong> · showing 273 of 462</summary>
+<summary><strong>Just for Fun</strong> · showing 272 of 462</summary>
 
 - [7d7d](https://github.com/omdsh-dev/7d7d) — A mysterious plugin with no description, likely a playful or decorative addition to the harness.
 - [Acidmoon-DIzzy-DSH](https://github.com/hezi2020/dsh-plugin-wiki/tree/HEAD/plugins/Acidmoon-DIzzy-DSH) — Adds dizzying visual effects and playful animations to the interface for entertainment.
@@ -2819,8 +2817,7 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 - [dsh-pet-remielle](https://github.com/Gin-7/dsh-pet-remielle) — Adds an interactive virtual pet to the client UI, bringing playful companionship and entertainment to the DeepSeek Harness interface.
 - [dsh-pet-shura](https://github.com/brittanistrehlowll-oss/dsh-pet-shura) — 修罗小脑斧 — animated desktop pet for the DeepSeek Harness (DSH) web surface: v2 spritesheet animation, drag & drop, look-at-mouse, settings panel
 - [dsh-pet-sprite](https://github.com/BlackBearCC/dsh-pet-sprite) — A playable pixel companion plugin for DeepSeek Harness (DSH): platform-jumps over chat messages, WASD controllable, with a full nurture system fed by your agent's real token usage.
-- [dsh-pet-whale](https://github.com/nzl153/dsh-pet-whale) — A desktop pet whale that switches animations based on agent status, built with pure DOM and no dependencies for the web UI.
-- *GitHub only renders so much of one file, so 189 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
+- *GitHub only renders so much of one file, so 190 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
 
 </details>
 
