@@ -144,7 +144,10 @@ test('renders bilingual lists with language fallback and no volatile metrics', a
   const zh = files['README.md']
   const en = files['catalog/README.md']
 
-  assert.match(zh, /# DSH 1024Store/)
+  assert.match(zh, /# Awesome DeepSeek Harness Plugins/)
+  // The application repo owns the "DSH 1024Store" headline now; the catalog
+  // README keeps the brand only in prose.
+  assert.match(zh, /DSH 1024Store/)
   assert.match(zh, /共收录 \*\*5\*\* 个插件/)
   assert.match(zh, /2026-08-15/)
   // The store installs from npm only; the generated README must not teach the

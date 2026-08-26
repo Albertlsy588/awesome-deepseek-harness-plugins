@@ -1,4 +1,4 @@
-# DSH 1024Store
+# Awesome DeepSeek Harness Plugins
 
 <!-- 本文件由 scripts/build-readme.mjs 从 deepseek1024.com 目录 API 自动生成，请勿手工编辑。 -->
 

@@ -409,7 +409,7 @@ function categorySections(prepared, locale) {
 
 function chineseReadme(registry, groups, prepared) {
   const total = registry.plugins.length
-  return `# DSH 1024Store
+  return `# Awesome DeepSeek Harness Plugins
 
 ${generatedNotice.zh}
 
