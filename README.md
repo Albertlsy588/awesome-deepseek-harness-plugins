@@ -8,7 +8,7 @@
 
 **但这个项目不只是一份 awesome list。** 它还包括一个在线插件市场、一个把市场装进 `dsh` 本体的插件，以及一套免费的公开查询 API——这些应用代码开源在姊妹仓库 [dsh-1024store](https://github.com/imsai-sh/dsh-1024store)；本仓库专注目录本身：经静态校验的 PR 收录流水线与自动生成的目录 README，目录数据另有自动收集服务持续喂入。全部代码 MIT 协议，fork 之后就能部署成你自己的插件市场。
 
-[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.zh.png?v=27bb48a85f15)](https://deepseek1024.com/)
+[![DSH 1024Store 插件市场首页](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.zh.png?v=60c74dd44799)](https://deepseek1024.com/)
 
 [在线网站](https://deepseek1024.com/) · [API 文档](https://github.com/imsai-sh/dsh-1024store/blob/main/web/docs/api.md) · [英文目录](catalog/README.md) · [提交插件](CONTRIBUTING.md) · [网站与 CLI 源码](https://github.com/imsai-sh/dsh-1024store)
 
@@ -140,12 +140,12 @@ docs/               目录数据模型文档
 - [主题与外观](#theme) (413)
 - [会话与消息](#session) (675)
 - [记忆](#memory) (346)
-- [工具与能力](#tools) (3359)
+- [工具与能力](#tools) (3358)
 - [技能包](#skill) (947)
 - [工作流与自动化](#workflow) (613)
 - [通知与集成](#notify) (423)
 - [模型与账号接入](#model) (651)
-- [开发与运行时](#dev) (1313)
+- [开发与运行时](#dev) (1314)
 - [娱乐](#fun) (476)
 
 <a id="ui"></a>
@@ -1188,7 +1188,7 @@ docs/               目录数据模型文档
 <a id="tools"></a>
 
 <details>
-<summary><strong>工具与能力</strong> · 显示 258 / 共 3359 个</summary>
+<summary><strong>工具与能力</strong> · 显示 258 / 共 3358 个</summary>
 
 - [@zhaoolee/dsh-notes](https://github.com/zhaoolee/notes) — 将 DSH 对话导出为锤子便签风格 PNG，或在配置的账号工作区中新建和更新 Markdown 便签。
 - [88API Image Studio](https://github.com/blackdm666/dsh-plugin-88api-image) — 统一接入 Image2 与 Nano Banana 四款模型，覆盖文生图、多参考图编辑、2K/4K 输出、顺序批量任务、默认模型持久化和脱敏 Key 配置。
@@ -1448,7 +1448,7 @@ docs/               目录数据模型文档
 - [dsh-all-search](https://github.com/RealAlexandreAI/dsh-all-search) — 通过 AnySearch 提供商为 DSH 增加网页搜索能力，集成于 ctx.web。
 - [dsh-aloof](https://github.com/gaochonggeng/dsh-aloof) — 把 Aloof 的办公审批接成 DeepSeek Harness（dsh）的原生工具：查待办、列模板、读表单、提单。写操作过 dsh 审批闸门，也是一份可运行的 dsh 插件样板。
 - [dsh-altitude](https://github.com/uckkk/dsh-altitude) — 海拔高反
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 3101 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 3100 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 
@@ -2571,7 +2571,7 @@ docs/               目录数据模型文档
 <a id="dev"></a>
 
 <details>
-<summary><strong>开发与运行时</strong> · 显示 263 / 共 1313 个</summary>
+<summary><strong>开发与运行时</strong> · 显示 263 / 共 1314 个</summary>
 
 - [_skeleton-client](https://github.com/XJungit/omdp/tree/HEAD/_skeleton-client) — 用于在仓库中构建新插件包的骨架客户端模板。
 - [_template](https://github.com/messiahyl/dsh-plugins/tree/HEAD/packages/_template) — 提供 DSH 插件开发的 monorepo 模板，包含安装源和第三方目录。
@@ -2836,7 +2836,7 @@ docs/               目录数据模型文档
 - [dsh-conversation-cost](https://github.com/Uersx/dsh-conversation-cost) — 跟踪并显示对话成本，帮助预算管理。
 - [dsh-cordis-devtools](https://github.com/wang-kaopu/dsh-cordis-devtools) — 为 Cordis 生态提供开发工具，辅助 DeepSeek Harness 插件的创建与调试。
 - [dsh-cordis-plugin-kit](https://github.com/hinayoung23/dsh-cordis-plugin-kit) — 为插件开发者提供离线标准、脚手架、静态检查、运行时调试和性能门槛。
-- *GitHub 单个文件能渲染的长度有上限，本分类还有 1050 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
+- *GitHub 单个文件能渲染的长度有上限，本分类还有 1051 个插件没能列在这里；完整目录请在[在线网站](https://deepseek1024.com/)搜索浏览。*
 
 </details>
 

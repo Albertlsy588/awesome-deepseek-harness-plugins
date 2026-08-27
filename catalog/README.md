@@ -8,7 +8,7 @@ The **DSH 1024Store** community catalog for [DeepSeek Harness](https://github.co
 
 **This project is more than an awesome list.** It also ships a hosted plugin marketplace, a plugin that puts that marketplace inside `dsh` itself, and a free public query API — that application code lives in the sibling repository [dsh-1024store](https://github.com/imsai-sh/dsh-1024store); this repository is the catalog itself: a statically validated PR submission pipeline and the generated directory READMEs, with an automated collection service feeding the data. Everything is MIT licensed, so you can fork it and run your own marketplace.
 
-[![The DSH 1024Store plugin marketplace homepage](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.en.png?v=27bb48a85f15)](https://deepseek1024.com/)
+[![The DSH 1024Store plugin marketplace homepage](https://raw.githubusercontent.com/imsai-sh/awesome-deepseek-harness-plugins/assets/homepage.en.png?v=60c74dd44799)](https://deepseek1024.com/)
 
 [Live website](https://deepseek1024.com/) · [API reference](https://github.com/imsai-sh/dsh-1024store/blob/main/web/docs/api.md) · [中文目录](../README.md) · [Submit a plugin](../CONTRIBUTING.md) · [Site & CLI source](https://github.com/imsai-sh/dsh-1024store)
 
@@ -45,12 +45,12 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 - [Themes & Appearance](#theme) (413)
 - [Sessions & Messages](#session) (675)
 - [Memory](#memory) (346)
-- [Tools & Capabilities](#tools) (3359)
+- [Tools & Capabilities](#tools) (3358)
 - [Skills](#skill) (947)
 - [Workflow & Automation](#workflow) (613)
 - [Notifications & Integrations](#notify) (423)
 - [Models & Providers](#model) (651)
-- [Development & Runtime](#dev) (1313)
+- [Development & Runtime](#dev) (1314)
 - [Just for Fun](#fun) (476)
 
 <a id="ui"></a>
@@ -1038,7 +1038,7 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 <a id="tools"></a>
 
 <details>
-<summary><strong>Tools &amp; Capabilities</strong> · showing 237 of 3359</summary>
+<summary><strong>Tools &amp; Capabilities</strong> · showing 237 of 3358</summary>
 
 - [@zhaoolee/dsh-notes](https://github.com/zhaoolee/notes) — Export DSH conversations as Smartisan Notes-style PNGs, or create and update Markdown notes in a configured account-scoped workspace.
 - [88API Image Studio](https://github.com/blackdm666/dsh-plugin-88api-image) — A conversational image studio for DSH with four Image2 and Nano Banana models, text-to-image, multi-reference editing, 2K/4K output, sequential batches, persistent defaults, and masked Key setup.
@@ -1277,7 +1277,7 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 - [dsh-agentvalet](https://github.com/AgentValet/dsh-agentvalet) — Governed platform access for DeepSeek Harness. Brokered credentials, owner-side approval, no API keys on the machine.
 - [dsh-agfs](https://github.com/openAGFS/dsh-agfs) — Agent FileBrowser for DeepSeek Harness
 - [dsh-agnes](https://github.com/chaoliu615/dsh-agnes) — Integrates Agnes AI's free image and video generation features into DeepSeek Harness.
-- *GitHub only renders so much of one file, so 3122 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
+- *GitHub only renders so much of one file, so 3121 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
 
 </details>
 
@@ -2303,7 +2303,7 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 <a id="dev"></a>
 
 <details>
-<summary><strong>Development &amp; Runtime</strong> · showing 234 of 1313</summary>
+<summary><strong>Development &amp; Runtime</strong> · showing 234 of 1314</summary>
 
 - [_skeleton-client](https://github.com/XJungit/omdp/tree/HEAD/_skeleton-client) — A skeleton client template for building new plugin bundles in the monorepo.
 - [_template](https://github.com/messiahyl/dsh-plugins/tree/HEAD/packages/_template) — Provides a monorepo template for developing DSH plugins, with installation sources and third-party directory.
@@ -2539,7 +2539,7 @@ Groups are collapsed by default. GitHub renders only so much of a single file, s
 - [dsh-client-ui-training-guardian](https://github.com/Washington5533/guarftrain/tree/HEAD/dsh-plugin/dsh-client-ui-training-guardian) — Provides GPU monitoring, crash recovery, OOM self-rescue, and dashboard for training scripts.
 - [dsh-cmd-starter](https://github.com/PandaColour/dsh-cmd-starter) — Command-line launcher adding Claude-style commands like append-prompt and resume to DSH.
 - [dsh-co-authored-by](https://github.com/shelken/dsh-co-authored-by) — dsh plugin: auto-inject Co-Authored-By and Generated-By trailers on git commit
-- *GitHub only renders so much of one file, so 1079 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
+- *GitHub only renders so much of one file, so 1080 more plugins in this category did not fit here — search or browse the full catalog on the [live website](https://deepseek1024.com/).*
 
 </details>
 
