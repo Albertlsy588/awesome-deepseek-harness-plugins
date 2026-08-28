@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "Albertlsy588/dsh-shipgate",
+  "name": "dsh-shipgate",
+  "repository": "https://github.com/Albertlsy588/dsh-shipgate",
+  "category": "git",
+  "description": {
+    "en": "Generates deterministic JSON and Markdown pre-merge delivery receipts from an explicit Git comparison and caller-supplied check evidence.",
+    "zh": "根据明确的 Git 对比和调用方提供的检查证据，生成确定性的预合并 JSON 与 Markdown 交付凭证。"
+  },
+  "added": "2026-08-28"
+}
